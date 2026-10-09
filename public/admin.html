@@ -1,0 +1,211 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Administracao - Park Place</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      &#9881;&#65039; Park Place <span class="sub">&middot; Administracao</span>
+    </div>
+    <div class="user-area">
+      <span id="nome-usuario"></span>
+      <button class="secundario mini" onclick="logout()">Sair</button>
+    </div>
+  </div>
+
+  <div id="demo-banner" class="hidden" style="background:#fef3cd; color:#8a6d1a; text-align:center; padding:8px; font-size:13px;">
+    Modo demonstracao ativo (dados ficticios, salvos so no seu navegador).
+    <button class="secundario mini" onclick="demoReset()">Reiniciar dados</button>
+  </div>
+
+  <div class="container">
+    <!-- Resumo -->
+    <div class="grid grid-4" style="margin-bottom:18px;">
+      <div class="stat"><div class="num" id="st-moradores">-</div><div class="label">Moradores</div></div>
+      <div class="stat"><div class="num" id="st-porteiros">-</div><div class="label">Porteiros</div></div>
+      <div class="stat"><div class="num" id="st-presentes">-</div><div class="label">No condominio agora</div></div>
+      <div class="stat"><div class="num" id="st-avisos">-</div><div class="label">Visitas previstas</div></div>
+    </div>
+
+    <div class="grid grid-2">
+      <!-- Cadastro de usuario -->
+      <div class="card">
+        <h2>Cadastrar usuario</h2>
+        <form id="form-usuario">
+          <label for="nome">Nome completo *</label>
+          <input type="text" id="nome" required />
+
+          <label for="tipo">Perfil *</label>
+          <select id="tipo" onchange="toggleCamposMorador()">
+            <option value="morador">Morador</option>
+            <option value="porteiro">Porteiro</option>
+            <option value="admin">Administrador</option>
+          </select>
+
+          <div id="campos-morador">
+            <div class="grid grid-2">
+              <div>
+                <label for="bloco">Bloco</label>
+                <input type="text" id="bloco" placeholder="Ex: Bloco A" />
+              </div>
+              <div>
+                <label for="apartamento">Apartamento</label>
+                <input type="text" id="apartamento" placeholder="Ex: 102" />
+              </div>
+            </div>
+          </div>
+
+          <label for="telefone">Telefone</label>
+          <input type="text" id="telefone" />
+
+          <label for="email">E-mail (login) *</label>
+          <input type="email" id="email" required />
+
+          <label for="password">Senha inicial *</label>
+          <input type="text" id="password" placeholder="Minimo 6 caracteres" required />
+
+          <button type="submit" class="block" id="btn-usuario">Cadastrar</button>
+        </form>
+        <div id="msg-usuario" class="msg hidden"></div>
+      </div>
+
+      <!-- Lista de usuarios -->
+      <div class="card">
+        <h2>Usuarios cadastrados</h2>
+        <div id="lista-usuarios"><p class="vazio">Carregando...</p></div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/demo.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    let perfil = null;
+
+    (async () => {
+      perfil = await protegerPagina('admin');
+      if (!perfil) return;
+      if (window.PP_DEMO) document.getElementById('demo-banner').classList.remove('hidden');
+      document.getElementById('nome-usuario').textContent = perfil.nome;
+      carregarResumo();
+      carregarUsuarios();
+    })();
+
+    function toggleCamposMorador() {
+      const tipo = document.getElementById('tipo').value;
+      document.getElementById('campos-morador').classList.toggle('hidden', tipo !== 'morador');
+    }
+
+    async function carregarResumo() {
+      try {
+        const r = await api('/api/admin/resumo');
+        document.getElementById('st-moradores').textContent = r.totalMoradores;
+        document.getElementById('st-porteiros').textContent = r.totalPorteiros;
+        document.getElementById('st-presentes').textContent = r.presentes;
+        document.getElementById('st-avisos').textContent = r.avisosPendentes;
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    const formUsuario = document.getElementById('form-usuario');
+    const msgUsuario = document.getElementById('msg-usuario');
+    const btnUsuario = document.getElementById('btn-usuario');
+
+    formUsuario.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msgUsuario.classList.add('hidden');
+      btnUsuario.disabled = true;
+      btnUsuario.textContent = 'Cadastrando...';
+      try {
+        await api('/api/admin/usuarios', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome: document.getElementById('nome').value.trim(),
+            tipo: document.getElementById('tipo').value,
+            bloco: document.getElementById('bloco').value.trim(),
+            apartamento: document.getElementById('apartamento').value.trim(),
+            telefone: document.getElementById('telefone').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        formUsuario.reset();
+        toggleCamposMorador();
+        msgUsuario.textContent = 'Usuario cadastrado com sucesso.';
+        msgUsuario.className = 'msg ok';
+        carregarUsuarios();
+        carregarResumo();
+      } catch (err) {
+        msgUsuario.textContent = err.message;
+        msgUsuario.className = 'msg erro';
+      } finally {
+        btnUsuario.disabled = false;
+        btnUsuario.textContent = 'Cadastrar';
+      }
+    });
+
+    async function carregarUsuarios() {
+      const alvo = document.getElementById('lista-usuarios');
+      try {
+        const { usuarios } = await api('/api/admin/usuarios');
+        if (!usuarios.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhum usuario cadastrado.</p>';
+          return;
+        }
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${usuarios.map((u) => {
+                const local = [u.bloco, u.apartamento].filter(Boolean).join(' ') || '-';
+                return `
+                  <tr>
+                    <td>${escapeHtml(u.nome)}</td>
+                    <td><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
+                    <td>${escapeHtml(local)}</td>
+                    <td>${u.ativo ? '<span class="badge entrada">Ativo</span>' : '<span class="badge cancelada">Inativo</span>'}</td>
+                    <td class="row-inline">
+                      <button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>
+                      <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
+                    </td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function toggleAtivo(id, ativo) {
+      try {
+        await api(`/api/admin/usuarios/${id}/toggle`, {
+          method: 'POST',
+          body: JSON.stringify({ ativo }),
+        });
+        carregarUsuarios();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function removerUsuario(id) {
+      if (!confirm('Remover definitivamente este usuario?')) return;
+      try {
+        await api(`/api/admin/usuarios/${id}`, { method: 'DELETE' });
+        carregarUsuarios();
+        carregarResumo();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  </script>
+</body>
+</html>

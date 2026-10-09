@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Painel do Morador - Park Place</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      &#127968; Park Place <span class="sub">&middot; Area do Morador</span>
+    </div>
+    <div class="user-area">
+      <span id="nome-usuario"></span>
+      <button class="secundario mini" onclick="logout()">Sair</button>
+    </div>
+  </div>
+
+  <div id="demo-banner" class="hidden" style="background:#fef3cd; color:#8a6d1a; text-align:center; padding:8px; font-size:13px;">
+    Modo demonstracao ativo (dados ficticios, salvos so no seu navegador).
+    <button class="secundario mini" onclick="demoReset()">Reiniciar dados</button>
+  </div>
+
+  <div class="container grid grid-2">
+    <!-- Formulario de aviso -->
+    <div class="card">
+      <h2>Avisar a portaria sobre uma visita</h2>
+      <form id="form-aviso">
+        <label for="nome_visitante">Nome do visitante *</label>
+        <input type="text" id="nome_visitante" required />
+
+        <label for="tipo">Tipo</label>
+        <select id="tipo">
+          <option value="Visitante">Visitante</option>
+          <option value="Prestador">Prestador de servico</option>
+          <option value="Entregador">Entregador</option>
+          <option value="Outro">Outro</option>
+        </select>
+
+        <label for="documento_visitante">Documento (RG/CPF)</label>
+        <input type="text" id="documento_visitante" />
+
+        <label for="veiculo_placa">Veiculo / placa</label>
+        <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" />
+
+        <label for="data_prevista">Data/hora prevista</label>
+        <input type="datetime-local" id="data_prevista" />
+
+        <label for="observacao">Observacao</label>
+        <textarea id="observacao" placeholder="Alguma informacao extra para a portaria"></textarea>
+
+        <button type="submit" class="block" id="btn-salvar">Enviar aviso</button>
+      </form>
+      <div id="msg" class="msg hidden"></div>
+    </div>
+
+    <!-- Lista de avisos -->
+    <div class="card">
+      <h2>Minhas visitas avisadas</h2>
+      <div id="lista-avisos">
+        <p class="vazio">Carregando...</p>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/demo.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    let perfil = null;
+
+    (async () => {
+      perfil = await protegerPagina('morador');
+      if (!perfil) return;
+      if (window.PP_DEMO) document.getElementById('demo-banner').classList.remove('hidden');
+      document.getElementById('nome-usuario').textContent =
+        perfil.nome + (perfil.bloco ? ` (${perfil.bloco} ${perfil.apartamento || ''})` : '');
+      carregarAvisos();
+    })();
+
+    const form = document.getElementById('form-aviso');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btn-salvar');
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      try {
+        const dt = document.getElementById('data_prevista').value;
+        await api('/api/morador/avisos', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_visitante: document.getElementById('nome_visitante').value.trim(),
+            tipo: document.getElementById('tipo').value,
+            documento_visitante: document.getElementById('documento_visitante').value.trim(),
+            veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
+            data_prevista: dt ? new Date(dt).toISOString() : null,
+            observacao: document.getElementById('observacao').value.trim(),
+          }),
+        });
+        form.reset();
+        msg.textContent = 'Aviso enviado! A portaria ja pode ver.';
+        msg.className = 'msg ok';
+        carregarAvisos();
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar aviso';
+      }
+    });
+
+    async function carregarAvisos() {
+      const alvo = document.getElementById('lista-avisos');
+      try {
+        const { avisos } = await api('/api/morador/avisos');
+        if (!avisos.length) {
+          alvo.innerHTML = '<p class="vazio">Voce ainda nao avisou nenhuma visita.</p>';
+          return;
+        }
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Visitante</th><th>Tipo</th><th>Previsto</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${avisos.map((a) => `
+                <tr>
+                  <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
+                  <td>${escapeHtml(a.tipo)}</td>
+                  <td>${formatarData(a.data_prevista)}</td>
+                  <td>${badgeStatus(a.status)}</td>
+                  <td>${
+                    ['Pendente', 'Autorizada'].includes(a.status)
+                      ? `<button class="perigo mini" onclick="cancelar(${a.id})">Cancelar</button>`
+                      : ''
+                  }</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function cancelar(id) {
+      if (!confirm('Cancelar este aviso de visita?')) return;
+      try {
+        await api(`/api/morador/avisos/${id}/cancelar`, { method: 'POST' });
+        carregarAvisos();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+  </script>
+</body>
+</html>

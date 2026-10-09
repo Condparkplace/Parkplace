@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Park Place Residencial - Portaria</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="logo">
+        <span class="login-badge">&#127970;</span>
+        <h1>Park Place Residencial</h1>
+        <p>Sistema de Controle de Portaria</p>
+      </div>
+
+      <form id="form-login">
+        <label for="email">E-mail</label>
+        <input type="email" id="email" placeholder="seu@email.com" autocomplete="username" required />
+
+        <label for="password">Senha</label>
+        <input type="password" id="password" placeholder="Sua senha" autocomplete="current-password" required />
+
+        <button type="submit" class="block" id="btn-entrar">Entrar</button>
+      </form>
+
+      <div id="msg" class="msg hidden"></div>
+      <p class="text-muted" style="text-align:center; margin-top:18px;">
+        Acesso para administracao, portaria e moradores.
+      </p>
+
+      <!-- Acesso rapido do modo demonstracao (aparece so quando ?demo=1) -->
+      <div id="demo-box" class="hidden" style="margin-top:16px; border-top:1px solid var(--cinza-borda); padding-top:14px;">
+        <p class="text-muted" style="text-align:center; margin:0 0 10px;">
+          &#129520; Modo demonstracao (sem Supabase)
+        </p>
+        <div class="row-inline" style="justify-content:center;">
+          <button type="button" class="secundario mini" onclick="demoLoginRapido('admin')">Entrar como Admin</button>
+          <button type="button" class="secundario mini" onclick="demoLoginRapido('porteiro')">Entrar como Porteiro</button>
+          <button type="button" class="secundario mini" onclick="demoLoginRapido('morador')">Entrar como Morador</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/demo.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    const form = document.getElementById('form-login');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btn-entrar');
+
+    // Mostra o painel de acesso rapido quando o modo demo esta ativo.
+    if (window.PP_DEMO) {
+      document.getElementById('demo-box').classList.remove('hidden');
+    }
+
+    // Se ja estiver logado, redireciona direto.
+    (async () => {
+      try {
+        const { perfil } = await api('/api/me');
+        redirecionarPorTipo(perfil.tipo);
+      } catch {}
+    })();
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.classList.add('hidden');
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+      try {
+        const { perfil } = await api('/api/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value,
+          }),
+        });
+        redirecionarPorTipo(perfil.tipo);
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        btn.disabled = false;
+        btn.textContent = 'Entrar';
+      }
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Portaria - Park Place</title>
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="topbar">
+    <div class="brand">
+      &#128682; Park Place <span class="sub">&middot; Portaria</span>
+    </div>
+    <div class="user-area">
+      <span id="nome-usuario"></span>
+      <button class="secundario mini" onclick="logout()">Sair</button>
+    </div>
+  </div>
+
+  <div id="demo-banner" class="hidden" style="background:#fef3cd; color:#8a6d1a; text-align:center; padding:8px; font-size:13px;">
+    Modo demonstracao ativo (dados ficticios, salvos so no seu navegador).
+    <button class="secundario mini" onclick="demoReset()">Reiniciar dados</button>
+  </div>
+
+  <div class="container">
+    <div class="tabs">
+      <button class="ativo" data-tab="previstas" onclick="trocarAba('previstas')">Visitas previstas</button>
+      <button data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
+      <button data-tab="presentes" onclick="trocarAba('presentes')">No condominio</button>
+      <button data-tab="historico" onclick="trocarAba('historico')">Historico</button>
+    </div>
+
+    <!-- Visitas previstas -->
+    <section id="tab-previstas" class="card">
+      <h2>Visitas avisadas pelos moradores</h2>
+      <div id="lista-previstas"><p class="vazio">Carregando...</p></div>
+    </section>
+
+    <!-- Registrar entrada avulsa -->
+    <section id="tab-entrada" class="card hidden">
+      <h2>Registrar entrada</h2>
+
+      <!-- Busca rapida por documento -->
+      <div style="background:var(--verde-claro); border-radius:8px; padding:14px; margin-bottom:18px;">
+        <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automatico se ja tiver cadastro)</label>
+        <div class="row-inline" style="align-items:center;">
+          <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" style="flex:1; min-width:200px;" />
+          <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
+          <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
+        </div>
+        <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
+      </div>
+
+      <form id="form-entrada">
+        <div class="grid grid-2">
+          <div>
+            <label for="nome_pessoa">Nome *</label>
+            <input type="text" id="nome_pessoa" required />
+          </div>
+          <div>
+            <label for="tipo">Tipo</label>
+            <select id="tipo">
+              <option value="Visitante">Visitante</option>
+              <option value="Prestador">Prestador de servico</option>
+              <option value="Entregador">Entregador</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+          <div>
+            <label for="documento">Documento</label>
+            <input type="text" id="documento" />
+          </div>
+          <div>
+            <label for="veiculo_placa">Veiculo / placa</label>
+            <input type="text" id="veiculo_placa" />
+          </div>
+          <div>
+            <label for="destino_bloco">Bloco de destino</label>
+            <input type="text" id="destino_bloco" placeholder="Ex: Bloco A" />
+          </div>
+          <div>
+            <label for="destino_apto">Apartamento</label>
+            <input type="text" id="destino_apto" placeholder="Ex: 102" />
+          </div>
+        </div>
+
+        <!-- Endereco do visitante (busca por CEP) -->
+        <h3 style="margin:18px 0 4px;">Endereco do visitante</h3>
+        <div class="grid grid-2">
+          <div>
+            <label for="cep">CEP</label>
+            <div class="row-inline" style="align-items:center;">
+              <input type="text" id="cep" placeholder="00000-000" maxlength="9" style="flex:1; min-width:120px;" />
+              <button type="button" class="mini" id="btn-buscar-cep" onclick="buscarPorCep()">Buscar CEP</button>
+            </div>
+            <span id="msg-cep" class="text-muted"></span>
+          </div>
+          <div>
+            <label for="end_numero">Numero</label>
+            <input type="text" id="end_numero" placeholder="Ex: 123" />
+          </div>
+          <div>
+            <label for="end_logradouro">Logradouro</label>
+            <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
+          </div>
+          <div>
+            <label for="end_complemento">Complemento</label>
+            <input type="text" id="end_complemento" placeholder="Apto, bloco, referencia" />
+          </div>
+          <div>
+            <label for="end_bairro">Bairro</label>
+            <input type="text" id="end_bairro" />
+          </div>
+          <div>
+            <label for="end_cidade">Cidade / UF</label>
+            <div class="row-inline">
+              <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
+              <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+            </div>
+          </div>
+        </div>
+
+        <label for="observacao">Observacao</label>
+        <textarea id="observacao"></textarea>
+        <input type="hidden" id="aviso_id" />
+        <button type="submit" class="block" id="btn-entrada">Confirmar entrada</button>
+      </form>
+      <div id="msg-entrada" class="msg hidden"></div>
+    </section>
+
+    <!-- Presentes -->
+    <section id="tab-presentes" class="card hidden">
+      <h2>Pessoas atualmente no condominio</h2>
+      <div id="lista-presentes"><p class="vazio">Carregando...</p></div>
+    </section>
+
+    <!-- Historico -->
+    <section id="tab-historico" class="card hidden">
+      <h2>Historico de acessos</h2>
+      <div class="row-inline" style="margin-bottom:14px;">
+        <div>
+          <label for="de">De</label>
+          <input type="date" id="de" />
+        </div>
+        <div>
+          <label for="ate">Ate</label>
+          <input type="date" id="ate" />
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <button class="mini" onclick="carregarHistorico()">Filtrar</button>
+        </div>
+      </div>
+      <div id="lista-historico"><p class="vazio">Carregando...</p></div>
+    </section>
+  </div>
+
+  <script src="/js/demo.js"></script>
+  <script src="/js/api.js"></script>
+  <script>
+    let perfil = null;
+
+    (async () => {
+      perfil = await protegerPagina('porteiro');
+      if (!perfil) return;
+      if (window.PP_DEMO) document.getElementById('demo-banner').classList.remove('hidden');
+      document.getElementById('nome-usuario').textContent = perfil.nome;
+      carregarPrevistas();
+    })();
+
+    function trocarAba(aba) {
+      document.querySelectorAll('.tabs button').forEach((b) =>
+        b.classList.toggle('ativo', b.dataset.tab === aba)
+      );
+      ['previstas', 'entrada', 'presentes', 'historico'].forEach((t) =>
+        document.getElementById('tab-' + t).classList.toggle('hidden', t !== aba)
+      );
+      if (aba === 'previstas') carregarPrevistas();
+      if (aba === 'presentes') carregarPresentes();
+      if (aba === 'historico') carregarHistorico();
+    }
+
+    // ---------- Visitas previstas ----------
+    async function carregarPrevistas() {
+      const alvo = document.getElementById('lista-previstas');
+      try {
+        const { avisos } = await api('/api/portaria/avisos');
+        if (!avisos.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhuma visita prevista no momento.</p>';
+          return;
+        }
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Visitante</th><th>Tipo</th><th>Morador / destino</th><th>Previsto</th><th>Status</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${avisos.map((a) => {
+                const m = a.morador || {};
+                const destino = [m.bloco, m.apartamento].filter(Boolean).join(' ');
+                return `
+                  <tr>
+                    <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
+                    <td>${escapeHtml(a.tipo)}</td>
+                    <td>${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}</span></td>
+                    <td>${formatarData(a.data_prevista)}</td>
+                    <td>${badgeStatus(a.status)}</td>
+                    <td><button class="mini" onclick='registrarDeAviso(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Registrar entrada</button></td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function registrarDeAviso(aviso) {
+      const m = aviso.morador || {};
+      document.getElementById('nome_pessoa').value = aviso.nome_visitante || '';
+      document.getElementById('tipo').value = aviso.tipo || 'Visitante';
+      document.getElementById('documento').value = aviso.documento_visitante || '';
+      document.getElementById('veiculo_placa').value = aviso.veiculo_placa || '';
+      document.getElementById('destino_bloco').value = m.bloco || '';
+      document.getElementById('destino_apto').value = m.apartamento || '';
+      document.getElementById('aviso_id').value = aviso.id || '';
+      trocarAba('entrada');
+    }
+
+    // ---------- Busca por documento ----------
+    async function buscarPorDocumento() {
+      const doc = document.getElementById('busca-doc').value.trim();
+      const msg = document.getElementById('msg-busca');
+      const btn = document.getElementById('btn-buscar-doc');
+      msg.classList.add('hidden');
+      if (!doc) {
+        msg.textContent = 'Digite um documento para buscar.';
+        msg.className = 'msg erro';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Buscando...';
+      try {
+        const r = await api('/api/portaria/buscar?documento=' + encodeURIComponent(doc));
+        if (!r.encontrado) {
+          msg.textContent = 'Nenhum cadastro encontrado para este documento. Preencha os dados manualmente.';
+          msg.className = 'msg erro';
+          document.getElementById('documento').value = doc;
+          document.getElementById('nome_pessoa').focus();
+          return;
+        }
+        const p = r.pessoa;
+        document.getElementById('nome_pessoa').value = p.nome_pessoa || '';
+        document.getElementById('tipo').value = p.tipo || 'Visitante';
+        document.getElementById('documento').value = p.documento || doc;
+        document.getElementById('veiculo_placa').value = p.veiculo_placa || '';
+        document.getElementById('destino_bloco').value = p.destino_bloco || '';
+        document.getElementById('destino_apto').value = p.destino_apto || '';
+        if (p.cep_visitante) document.getElementById('cep').value = p.cep_visitante;
+        if (p.endereco_visitante) {
+          document.getElementById('msg-cep').textContent = 'Endereco do cadastro anterior: ' + p.endereco_visitante;
+          document.getElementById('msg-cep').style.color = 'var(--verde-escuro)';
+        }
+        const fonte = r.origem === 'aviso' ? 'aviso de visita do morador' : 'visita anterior';
+        msg.textContent = 'Cadastro encontrado (' + fonte + '). Confira os dados e confirme a entrada.';
+        msg.className = 'msg ok';
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar';
+      }
+    }
+
+    function limparFormEntrada() {
+      formEntrada.reset();
+      document.getElementById('aviso_id').value = '';
+      document.getElementById('busca-doc').value = '';
+      document.getElementById('msg-busca').classList.add('hidden');
+      document.getElementById('msg-cep').textContent = '';
+    }
+
+    // Busca ao pressionar Enter no campo de documento
+    document.getElementById('busca-doc').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); buscarPorDocumento(); }
+    });
+
+    // ---------- Busca por CEP (ViaCEP) ----------
+    const campoCep = document.getElementById('cep');
+
+    // Mascara simples 00000-000
+    campoCep.addEventListener('input', () => {
+      let v = campoCep.value.replace(/\D/g, '').slice(0, 8);
+      if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+      campoCep.value = v;
+    });
+
+    // Busca automatica ao sair do campo (se tiver 8 digitos) e com Enter.
+    campoCep.addEventListener('blur', () => {
+      if (campoCep.value.replace(/\D/g, '').length === 8) buscarPorCep();
+    });
+    campoCep.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); buscarPorCep(); }
+    });
+
+    async function buscarPorCep() {
+      const msg = document.getElementById('msg-cep');
+      const btn = document.getElementById('btn-buscar-cep');
+      const cep = campoCep.value.replace(/\D/g, '');
+      msg.textContent = '';
+      msg.style.color = '';
+      if (cep.length !== 8) {
+        msg.textContent = 'Digite um CEP com 8 digitos.';
+        msg.style.color = 'var(--vermelho)';
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Buscando...';
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await resp.json();
+        if (dados.erro) {
+          msg.textContent = 'CEP nao encontrado.';
+          msg.style.color = 'var(--vermelho)';
+          return;
+        }
+        document.getElementById('end_logradouro').value = dados.logradouro || '';
+        document.getElementById('end_bairro').value = dados.bairro || '';
+        document.getElementById('end_cidade').value = dados.localidade || '';
+        document.getElementById('end_uf').value = dados.uf || '';
+        if (dados.complemento) {
+          document.getElementById('end_complemento').value = dados.complemento;
+        }
+        msg.textContent = 'Endereco preenchido. Informe o numero.';
+        msg.style.color = 'var(--verde-escuro)';
+        document.getElementById('end_numero').focus();
+      } catch (err) {
+        msg.textContent = 'Nao foi possivel consultar o CEP (verifique a internet).';
+        msg.style.color = 'var(--vermelho)';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Buscar CEP';
+      }
+    }
+
+    // Monta o endereco completo em uma string para salvar no registro.
+    function montarEnderecoVisitante() {
+      const cep = document.getElementById('cep').value.trim();
+      const log = document.getElementById('end_logradouro').value.trim();
+      const num = document.getElementById('end_numero').value.trim();
+      const comp = document.getElementById('end_complemento').value.trim();
+      const bairro = document.getElementById('end_bairro').value.trim();
+      const cidade = document.getElementById('end_cidade').value.trim();
+      const uf = document.getElementById('end_uf').value.trim().toUpperCase();
+
+      if (!log && !cidade && !cep) return null;
+      let linha = log;
+      if (num) linha += ', ' + num;
+      if (comp) linha += ' - ' + comp;
+      const partes = [linha, bairro, [cidade, uf].filter(Boolean).join('/')]
+        .filter(Boolean).join(', ');
+      return (partes + (cep ? ' - CEP ' + cep : '')).trim();
+    }
+
+    // ---------- Registrar entrada ----------
+    const formEntrada = document.getElementById('form-entrada');
+    const msgEntrada = document.getElementById('msg-entrada');
+    formEntrada.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msgEntrada.classList.add('hidden');
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            aviso_id: document.getElementById('aviso_id').value || null,
+            nome_pessoa: document.getElementById('nome_pessoa').value.trim(),
+            tipo: document.getElementById('tipo').value,
+            documento: document.getElementById('documento').value.trim(),
+            veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
+            destino_bloco: document.getElementById('destino_bloco').value.trim(),
+            destino_apto: document.getElementById('destino_apto').value.trim(),
+            endereco_visitante: montarEnderecoVisitante(),
+            cep_visitante: document.getElementById('cep').value.trim() || null,
+            observacao: document.getElementById('observacao').value.trim(),
+          }),
+        });
+        formEntrada.reset();
+        document.getElementById('aviso_id').value = '';
+        document.getElementById('msg-cep').textContent = '';
+        msgEntrada.textContent = 'Entrada registrada com sucesso.';
+        msgEntrada.className = 'msg ok';
+      } catch (err) {
+        msgEntrada.textContent = err.message;
+        msgEntrada.className = 'msg erro';
+      }
+    });
+
+    // ---------- Presentes ----------
+    async function carregarPresentes() {
+      const alvo = document.getElementById('lista-presentes');
+      try {
+        const { presentes } = await api('/api/portaria/presentes');
+        if (!presentes.length) {
+          alvo.innerHTML = '<p class="vazio">Ninguem registrado dentro do condominio agora.</p>';
+          return;
+        }
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${presentes.map((r) => {
+                const destino = [r.destino_bloco, r.destino_apto].filter(Boolean).join(' ');
+                return `
+                  <tr>
+                    <td>${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
+                    <td>${escapeHtml(r.tipo)}</td>
+                    <td>${escapeHtml(destino || '-')}</td>
+                    <td>${formatarData(r.entrada)}</td>
+                    <td><button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saida</button></td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function registrarSaida(id) {
+      try {
+        await api(`/api/portaria/saida/${id}`, { method: 'POST' });
+        carregarPresentes();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // ---------- Historico ----------
+    async function carregarHistorico() {
+      const alvo = document.getElementById('lista-historico');
+      const de = document.getElementById('de').value;
+      const ate = document.getElementById('ate').value;
+      const params = new URLSearchParams();
+      if (de) params.set('de', new Date(de + 'T00:00:00').toISOString());
+      if (ate) params.set('ate', new Date(ate + 'T23:59:59').toISOString());
+      try {
+        const { registros } = await api('/api/portaria/historico?' + params.toString());
+        if (!registros.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhum registro no periodo.</p>';
+          return;
+        }
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saida</th></tr>
+            </thead>
+            <tbody>
+              ${registros.map((r) => {
+                const destino = [r.destino_bloco, r.destino_apto].filter(Boolean).join(' ');
+                return `
+                  <tr>
+                    <td>${escapeHtml(r.nome_pessoa)}</td>
+                    <td>${escapeHtml(r.tipo)}</td>
+                    <td>${escapeHtml(destino || '-')}</td>
+                    <td>${formatarData(r.entrada)}</td>
+                    <td>${r.saida ? formatarData(r.saida) : '<span class="badge entrada">No local</span>'}</td>
+                  </tr>`;
+              }).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+  </script>
+</body>
+</html>

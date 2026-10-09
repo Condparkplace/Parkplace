@@ -1,0 +1,189 @@
+:root {
+  --verde: #1f7a4d;
+  --verde-escuro: #155c39;
+  --verde-claro: #e7f3ec;
+  --cinza: #f0f2f5;
+  --cinza-borda: #d8dee5;
+  --texto: #1f2a33;
+  --texto-suave: #5a6b78;
+  --vermelho: #c0392b;
+  --amarelo: #c08a1e;
+  --azul: #2b6cb0;
+  --sombra: 0 4px 16px rgba(0, 0, 0, 0.08);
+  --radius: 10px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: "Segoe UI", Roboto, Arial, sans-serif;
+  background: var(--cinza);
+  color: var(--texto);
+  line-height: 1.5;
+}
+
+/* ---------- Login ---------- */
+.login-wrap {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, var(--verde) 0%, var(--verde-escuro) 100%);
+  padding: 20px;
+}
+.login-card {
+  background: #fff;
+  padding: 36px 32px;
+  border-radius: 14px;
+  box-shadow: var(--sombra);
+  width: 100%;
+  max-width: 380px;
+}
+.login-card .logo {
+  text-align: center;
+  margin-bottom: 8px;
+}
+.login-card .logo h1 {
+  font-size: 22px;
+  margin: 10px 0 2px;
+  color: var(--verde-escuro);
+}
+.login-card .logo p {
+  margin: 0 0 20px;
+  color: var(--texto-suave);
+  font-size: 14px;
+  text-align: center;
+}
+.login-badge {
+  width: 56px; height: 56px;
+  border-radius: 50%;
+  background: var(--verde-claro);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+}
+
+/* ---------- Topbar ---------- */
+.topbar {
+  background: var(--verde-escuro);
+  color: #fff;
+  padding: 12px 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: var(--sombra);
+}
+.topbar .brand { font-weight: 600; display: flex; align-items: center; gap: 10px; }
+.topbar .brand span.sub { font-weight: 400; opacity: .8; font-size: 13px; }
+.topbar .user-area { display: flex; align-items: center; gap: 14px; font-size: 14px; }
+
+/* ---------- Layout ---------- */
+.container { max-width: 1100px; margin: 24px auto; padding: 0 18px; }
+.grid { display: grid; gap: 18px; }
+.grid-2 { grid-template-columns: 1fr 1fr; }
+.grid-3 { grid-template-columns: repeat(3, 1fr); }
+.grid-4 { grid-template-columns: repeat(4, 1fr); }
+@media (max-width: 860px) {
+  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+}
+
+.card {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--sombra);
+  padding: 20px;
+}
+.card h2 { margin: 0 0 16px; font-size: 17px; }
+.card h3 { margin: 0 0 12px; font-size: 15px; color: var(--texto-suave); }
+
+/* ---------- Stat cards ---------- */
+.stat {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--sombra);
+  padding: 18px;
+  text-align: center;
+}
+.stat .num { font-size: 30px; font-weight: 700; color: var(--verde-escuro); }
+.stat .label { color: var(--texto-suave); font-size: 13px; margin-top: 4px; }
+
+/* ---------- Form ---------- */
+label { display: block; font-size: 13px; margin: 10px 0 4px; color: var(--texto-suave); }
+input, select, textarea, button {
+  font-family: inherit;
+  font-size: 14px;
+}
+input, select, textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--cinza-borda);
+  border-radius: 8px;
+  background: #fff;
+}
+input:focus, select:focus, textarea:focus {
+  outline: none;
+  border-color: var(--verde);
+  box-shadow: 0 0 0 3px var(--verde-claro);
+}
+textarea { resize: vertical; min-height: 60px; }
+
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 8px;
+  padding: 10px 16px;
+  background: var(--verde);
+  color: #fff;
+  font-weight: 600;
+  transition: background .15s;
+}
+button:hover { background: var(--verde-escuro); }
+button.block { width: 100%; margin-top: 16px; }
+button.secundario { background: #e2e8f0; color: var(--texto); }
+button.secundario:hover { background: #cbd5e0; }
+button.perigo { background: var(--vermelho); }
+button.perigo:hover { background: #a53125; }
+button.mini { padding: 6px 10px; font-size: 12px; }
+
+.row-inline { display: flex; gap: 8px; flex-wrap: wrap; }
+
+/* ---------- Tabela ---------- */
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { text-align: left; padding: 10px 8px; border-bottom: 1px solid var(--cinza-borda); }
+th { color: var(--texto-suave); font-weight: 600; font-size: 12px; text-transform: uppercase; }
+tr:last-child td { border-bottom: none; }
+
+/* ---------- Badges ---------- */
+.badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.badge.pendente { background: #fef3cd; color: var(--amarelo); }
+.badge.autorizada { background: #d6e9f8; color: var(--azul); }
+.badge.entrada { background: var(--verde-claro); color: var(--verde-escuro); }
+.badge.finalizada { background: #e2e8f0; color: var(--texto-suave); }
+.badge.cancelada { background: #fbe3e0; color: var(--vermelho); }
+.badge.admin { background: #e9d8fd; color: #6b46c1; }
+.badge.porteiro { background: #d6e9f8; color: var(--azul); }
+.badge.morador { background: var(--verde-claro); color: var(--verde-escuro); }
+
+/* ---------- Avisos / mensagens ---------- */
+.msg { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-top: 10px; }
+.msg.erro { background: #fbe3e0; color: var(--vermelho); }
+.msg.ok { background: var(--verde-claro); color: var(--verde-escuro); }
+.vazio { color: var(--texto-suave); text-align: center; padding: 20px; font-style: italic; }
+
+.tabs { display: flex; gap: 6px; margin-bottom: 18px; flex-wrap: wrap; }
+.tabs button {
+  background: #fff; color: var(--texto-suave);
+  box-shadow: var(--sombra);
+}
+.tabs button.ativo { background: var(--verde); color: #fff; }
+
+.hidden { display: none !important; }
+.text-muted { color: var(--texto-suave); font-size: 13px; }
