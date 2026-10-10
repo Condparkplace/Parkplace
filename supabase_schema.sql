@@ -15,9 +15,12 @@ begin
     create type tipo_acesso as enum ('Visitante', 'Prestador', 'Entregador', 'Outro');
   end if;
   if not exists (select 1 from pg_type where typname = 'status_visita') then
-    create type status_visita as enum ('Pendente', 'Autorizada', 'Entrada Realizada', 'Finalizada', 'Cancelada');
+    create type status_visita as enum ('Pendente', 'Autorizada', 'Entrada Realizada', 'Finalizada', 'Cancelada', 'Nao compareceu');
   end if;
 end$$;
+
+-- Migracao: garante o valor 'Nao compareceu' caso o enum ja exista.
+alter type status_visita add value if not exists 'Nao compareceu';
 
 -- ------------------------------------------------------------
 -- 2) Tabela de perfis (liga auth.users ao tipo de usuario)
@@ -30,8 +33,12 @@ create table if not exists public.perfis (
   apartamento text,
   telefone    text,
   ativo       boolean not null default true,
+  aprovado    boolean not null default true,
   criado_em   timestamptz not null default now()
 );
+
+-- Migracao: cadastro de morador via link precisa de aprovacao do admin.
+alter table public.perfis add column if not exists aprovado boolean not null default true;
 
 -- ------------------------------------------------------------
 -- 3) Avisos de visita (morador avisa a portaria)
@@ -44,10 +51,16 @@ create table if not exists public.avisos_visitas (
   veiculo_placa       text,
   tipo                tipo_acesso not null default 'Visitante',
   data_prevista       timestamptz,
+  endereco_visitante  text,
+  cep_visitante       text,
   observacao          text,
   status              status_visita not null default 'Pendente',
   criado_em           timestamptz not null default now()
 );
+
+-- Migracao: adiciona colunas de endereco caso a tabela ja exista.
+alter table public.avisos_visitas add column if not exists endereco_visitante text;
+alter table public.avisos_visitas add column if not exists cep_visitante text;
 
 -- ------------------------------------------------------------
 -- 4) Registros de portaria (log real de entrada/saida)
@@ -68,6 +81,13 @@ create table if not exists public.registros_portaria (
   registrado_por uuid references public.perfis(id),
   observacao     text
 );
+
+-- Migracao: porteiro responsavel por cada acao.
+--   registrado_por = quem deu a ENTRADA (ja existia)
+--   saida_por      = quem registrou a SAIDA
+--   nao_veio_por   = quem marcou o aviso como "Nao compareceu"
+alter table public.registros_portaria add column if not exists saida_por uuid references public.perfis(id) on delete set null;
+alter table public.avisos_visitas add column if not exists nao_veio_por uuid references public.perfis(id) on delete set null;
 
 create index if not exists idx_avisos_morador on public.avisos_visitas(morador_id);
 create index if not exists idx_avisos_status on public.avisos_visitas(status);
@@ -155,14 +175,16 @@ security definer
 set search_path = public
 as $$
 begin
-  insert into public.perfis (id, nome, tipo, bloco, apartamento, telefone)
+  insert into public.perfis (id, nome, tipo, bloco, apartamento, telefone, ativo, aprovado)
   values (
     new.id,
     coalesce(new.raw_user_meta_data->>'nome', new.email),
     coalesce((new.raw_user_meta_data->>'tipo')::tipo_perfil, 'morador'),
     new.raw_user_meta_data->>'bloco',
     new.raw_user_meta_data->>'apartamento',
-    new.raw_user_meta_data->>'telefone'
+    new.raw_user_meta_data->>'telefone',
+    coalesce((new.raw_user_meta_data->>'pendente')::boolean, false) = false,
+    coalesce((new.raw_user_meta_data->>'pendente')::boolean, false) = false
   )
   on conflict (id) do nothing;
   return new;

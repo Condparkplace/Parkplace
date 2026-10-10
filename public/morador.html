@@ -13,30 +13,88 @@
     </div>
     <div class="user-area">
       <span id="nome-usuario"></span>
+      <button class="secundario mini" onclick="abrirMeuCadastro()">Meu cadastro</button>
       <button class="secundario mini" onclick="logout()">Sair</button>
     </div>
   </div>
 
-  <div id="demo-banner" class="hidden" style="background:#fef3cd; color:#8a6d1a; text-align:center; padding:8px; font-size:13px;">
-    Modo demonstracao ativo (dados ficticios, salvos so no seu navegador).
-    <button class="secundario mini" onclick="demoReset()">Reiniciar dados</button>
+  <!-- Meu cadastro (edicao dos proprios dados) -->
+  <div class="container hidden" id="area-cadastro">
+    <div class="card" style="max-width:520px;">
+      <h2>Meu cadastro</h2>
+      <form id="form-cadastro">
+        <label for="cad_nome">Nome *</label>
+        <input type="text" id="cad_nome" required />
+
+        <label for="cad_telefone">Telefone</label>
+        <input type="text" id="cad_telefone" placeholder="(11) 90000-0000" />
+
+        <div class="grid grid-2">
+          <div>
+            <label for="cad_bloco">Lote</label>
+            <select id="cad_bloco">
+              <option value="">Selecione o Lote</option>
+              <option value="Lote 01">Lote 01</option>
+              <option value="Lote 02">Lote 02</option>
+              <option value="Lote 03">Lote 03</option>
+              <option value="Lote 04">Lote 04</option>
+              <option value="Lote 05">Lote 05</option>
+              <option value="Lote 06">Lote 06</option>
+              <option value="Lote 07">Lote 07</option>
+              <option value="Lote 08">Lote 08</option>
+              <option value="Lote 09">Lote 09</option>
+              <option value="Lote 10">Lote 10</option>
+              <option value="Lote 11">Lote 11</option>
+              <option value="Lote 12">Lote 12</option>
+              <option value="Lote 13">Lote 13</option>
+              <option value="Lote 14">Lote 14</option>
+              <option value="Lote 15">Lote 15</option>
+              <option value="Lote 16">Lote 16</option>
+              <option value="Lote 17">Lote 17</option>
+              <option value="Lote 18">Lote 18</option>
+              <option value="Lote 19">Lote 19</option>
+              <option value="Lote 20">Lote 20</option>
+              <option value="Lote 21">Lote 21</option>
+              <option value="Lote 22">Lote 22</option>
+              <option value="Lote 23">Lote 23</option>
+              <option value="Lote 24">Lote 24</option>
+              <option value="Lote 25">Lote 25</option>
+              <option value="Lote 26">Lote 26</option>
+              <option value="Lote 27">Lote 27</option>
+              <option value="Lote 28">Lote 28</option>
+            </select>
+          </div>
+        </div>
+
+        <p class="text-muted" style="margin-top:12px;">
+          Tipo de usuario e e-mail nao podem ser alterados aqui. Fale com a administracao se precisar muda-los.
+        </p>
+
+        <button type="submit" class="block" id="btn-cad-salvar">Salvar alteracoes</button>
+        <button type="button" class="block secundario" style="margin-top:10px;" onclick="fecharMeuCadastro()">&#8592; Voltar</button>
+      </form>
+      <div id="msg-cadastro" class="msg hidden"></div>
+    </div>
   </div>
 
-  <div class="container grid grid-2">
+  <div class="container grid grid-2" id="area-visitas">
     <!-- Formulario de aviso -->
     <div class="card">
       <h2>Avisar a portaria sobre uma visita</h2>
-      <form id="form-aviso">
+
+      <div id="botoes-iniciais" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
+        <button id="btn-mostrar-form" class="block" style="padding: 16px; font-size: 1.1em; margin: 0;" onclick="mostrarForm()">+ Cadastrar visita</button>
+        <button id="btn-ifood" class="block" style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #ea1d2c; border-color: #ea1d2c; color: white;" onclick="cadastrarIfood()">+ Cadastrar iFood</button>
+        <button id="btn-prestador" class="block" style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #2b6cb0; border-color: #2b6cb0; color: white;" onclick="mostrarFormPrestador()">+ Cadastrar visita de Prestador</button>
+      </div>
+
+      <form id="form-aviso" class="hidden">
         <label for="nome_visitante">Nome do visitante *</label>
         <input type="text" id="nome_visitante" required />
 
-        <label for="tipo">Tipo</label>
-        <select id="tipo">
-          <option value="Visitante">Visitante</option>
-          <option value="Prestador">Prestador de servico</option>
-          <option value="Entregador">Entregador</option>
-          <option value="Outro">Outro</option>
-        </select>
+        <label for="tipo_label">Tipo</label>
+        <input type="text" id="tipo_label" disabled />
+        <input type="hidden" id="tipo" value="Visitante" />
 
         <label for="documento_visitante">Documento (RG/CPF)</label>
         <input type="text" id="documento_visitante" />
@@ -47,10 +105,43 @@
         <label for="data_prevista">Data/hora prevista</label>
         <input type="datetime-local" id="data_prevista" />
 
+        <!-- Endereco do visitante (busca por CEP) -->
+        <h3 style="margin:18px 0 4px;">Endereco do visitante</h3>
+        <div class="grid grid-2">
+          <div>
+            <label for="cep">CEP</label>
+            <div class="row-inline" style="align-items:center;">
+              <input type="text" id="cep" placeholder="00000-000" maxlength="9" style="flex:1; min-width:120px;" />
+              <button type="button" class="mini" id="btn-buscar-cep" onclick="buscarPorCep()">Buscar CEP</button>
+            </div>
+            <span id="msg-cep" class="text-muted"></span>
+          </div>
+          <div>
+            <label for="end_numero">Numero</label>
+            <input type="text" id="end_numero" placeholder="Ex: 123" />
+          </div>
+          <div>
+            <label for="end_logradouro">Logradouro</label>
+            <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
+          </div>
+          <div>
+            <label for="end_bairro">Bairro</label>
+            <input type="text" id="end_bairro" />
+          </div>
+          <div>
+            <label for="end_cidade">Cidade / UF</label>
+            <div class="row-inline">
+              <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
+              <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+            </div>
+          </div>
+        </div>
+
         <label for="observacao">Observacao</label>
         <textarea id="observacao" placeholder="Alguma informacao extra para a portaria"></textarea>
 
         <button type="submit" class="block" id="btn-salvar">Enviar aviso</button>
+        <button type="button" class="block secundario" style="margin-top:10px;" onclick="voltarCadastros()">&#8592; Voltar aos cadastros</button>
       </form>
       <div id="msg" class="msg hidden"></div>
     </div>
@@ -64,7 +155,6 @@
     </div>
   </div>
 
-  <script src="/js/demo.js"></script>
   <script src="/js/api.js"></script>
   <script>
     let perfil = null;
@@ -72,15 +162,165 @@
     (async () => {
       perfil = await protegerPagina('morador');
       if (!perfil) return;
-      if (window.PP_DEMO) document.getElementById('demo-banner').classList.remove('hidden');
       document.getElementById('nome-usuario').textContent =
-        perfil.nome + (perfil.bloco ? ` (${perfil.bloco} ${perfil.apartamento || ''})` : '');
+        perfil.nome + (perfil.bloco ? ` (${perfil.bloco})` : '');
       carregarAvisos();
     })();
 
     const form = document.getElementById('form-aviso');
     const msg = document.getElementById('msg');
     const btn = document.getElementById('btn-salvar');
+
+    // Rotulos amigaveis de cada tipo (o valor salvo e a chave).
+    const ROTULO_TIPO = {
+      Visitante: 'Visitante',
+      Prestador: 'Prestador de servico',
+      Entregador: 'Entregador',
+      Outro: 'Outro',
+    };
+
+    // Abre o formulario com o tipo fixo definido pelo botao.
+    function abrirForm(tipo) {
+      document.getElementById('botoes-iniciais').classList.add('hidden');
+      form.classList.remove('hidden');
+      msg.classList.add('hidden');
+      document.getElementById('tipo').value = tipo;
+      document.getElementById('tipo_label').value = ROTULO_TIPO[tipo] || tipo;
+      document.getElementById('nome_visitante').focus();
+    }
+
+    function mostrarForm() { abrirForm('Visitante'); }
+    function mostrarFormPrestador() { abrirForm('Prestador'); }
+
+    // Volta para a tela com os botoes de cadastro, sem enviar.
+    function voltarCadastros() {
+      form.reset();
+      document.getElementById('msg-cep').textContent = '';
+      form.classList.add('hidden');
+      document.getElementById('botoes-iniciais').classList.remove('hidden');
+      msg.classList.add('hidden');
+    }
+
+    // ---------- Meu cadastro ----------
+    const formCadastro = document.getElementById('form-cadastro');
+    const msgCadastro = document.getElementById('msg-cadastro');
+
+    function abrirMeuCadastro() {
+      // Preenche com os dados atuais do perfil.
+      document.getElementById('cad_nome').value = perfil?.nome || '';
+      document.getElementById('cad_telefone').value = perfil?.telefone || '';
+      document.getElementById('cad_bloco').value = perfil?.bloco || '';
+      msgCadastro.classList.add('hidden');
+      document.getElementById('area-visitas').classList.add('hidden');
+      document.getElementById('area-cadastro').classList.remove('hidden');
+    }
+
+    function fecharMeuCadastro() {
+      document.getElementById('area-cadastro').classList.add('hidden');
+      document.getElementById('area-visitas').classList.remove('hidden');
+    }
+
+    formCadastro.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btnCad = document.getElementById('btn-cad-salvar');
+      msgCadastro.classList.add('hidden');
+      btnCad.disabled = true;
+      btnCad.textContent = 'Salvando...';
+      try {
+        const { perfil: atualizado } = await api('/api/me', {
+          method: 'PUT',
+          body: JSON.stringify({
+            nome: document.getElementById('cad_nome').value.trim(),
+            telefone: document.getElementById('cad_telefone').value.trim(),
+            bloco: document.getElementById('cad_bloco').value.trim(),
+          }),
+        });
+        perfil = atualizado;
+        // Atualiza o nome exibido na topbar.
+        document.getElementById('nome-usuario').textContent =
+          perfil.nome + (perfil.bloco ? ` (${perfil.bloco})` : '');
+        msgCadastro.textContent = 'Cadastro atualizado com sucesso.';
+        msgCadastro.className = 'msg ok';
+      } catch (err) {
+        msgCadastro.textContent = err.message;
+        msgCadastro.className = 'msg erro';
+      } finally {
+        btnCad.disabled = false;
+        btnCad.textContent = 'Salvar alteracoes';
+      }
+    });
+
+    // ---------- Busca por CEP (ViaCEP) ----------
+    const campoCep = document.getElementById('cep');
+
+    // Mascara simples 00000-000
+    campoCep.addEventListener('input', () => {
+      let v = campoCep.value.replace(/\D/g, '').slice(0, 8);
+      if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+      campoCep.value = v;
+    });
+
+    // Busca automatica ao sair do campo (se tiver 8 digitos) e com Enter.
+    campoCep.addEventListener('blur', () => {
+      if (campoCep.value.replace(/\D/g, '').length === 8) buscarPorCep();
+    });
+    campoCep.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); buscarPorCep(); }
+    });
+
+    async function buscarPorCep() {
+      const msgCep = document.getElementById('msg-cep');
+      const btnCep = document.getElementById('btn-buscar-cep');
+      const cep = campoCep.value.replace(/\D/g, '');
+      msgCep.textContent = '';
+      msgCep.style.color = '';
+      if (cep.length !== 8) {
+        msgCep.textContent = 'Digite um CEP com 8 digitos.';
+        msgCep.style.color = 'var(--vermelho)';
+        return;
+      }
+      btnCep.disabled = true;
+      btnCep.textContent = 'Buscando...';
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await resp.json();
+        if (dados.erro) {
+          msgCep.textContent = 'CEP nao encontrado.';
+          msgCep.style.color = 'var(--vermelho)';
+          return;
+        }
+        document.getElementById('end_logradouro').value = dados.logradouro || '';
+        document.getElementById('end_bairro').value = dados.bairro || '';
+        document.getElementById('end_cidade').value = dados.localidade || '';
+        document.getElementById('end_uf').value = dados.uf || '';
+        msgCep.textContent = 'Endereco preenchido. Informe o numero.';
+        msgCep.style.color = 'var(--verde-escuro)';
+        document.getElementById('end_numero').focus();
+      } catch (err) {
+        msgCep.textContent = 'Nao foi possivel consultar o CEP (verifique a internet).';
+        msgCep.style.color = 'var(--vermelho)';
+      } finally {
+        btnCep.disabled = false;
+        btnCep.textContent = 'Buscar CEP';
+      }
+    }
+
+    // Monta o endereco completo em uma string para salvar no aviso.
+    function montarEnderecoVisitante() {
+      const cep = document.getElementById('cep').value.trim();
+      const log = document.getElementById('end_logradouro').value.trim();
+      const num = document.getElementById('end_numero').value.trim();
+      const bairro = document.getElementById('end_bairro').value.trim();
+      const cidade = document.getElementById('end_cidade').value.trim();
+      const uf = document.getElementById('end_uf').value.trim().toUpperCase();
+
+      if (!log && !cidade && !cep) return null;
+      let linha = log;
+      if (num) linha += ', ' + num;
+      const partes = [linha, bairro, [cidade, uf].filter(Boolean).join('/')]
+        .filter(Boolean).join(', ');
+      return (partes + (cep ? ' - CEP ' + cep : '')).trim();
+    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -97,12 +337,19 @@
             documento_visitante: document.getElementById('documento_visitante').value.trim(),
             veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
             data_prevista: dt ? new Date(dt).toISOString() : null,
+            endereco_visitante: montarEnderecoVisitante(),
+            cep_visitante: document.getElementById('cep').value.trim() || null,
             observacao: document.getElementById('observacao').value.trim(),
           }),
         });
         form.reset();
+        document.getElementById('msg-cep').textContent = '';
         msg.textContent = 'Aviso enviado! A portaria ja pode ver.';
         msg.className = 'msg ok';
+        
+        form.classList.add('hidden');
+        document.getElementById('botoes-iniciais').classList.remove('hidden');
+        
         carregarAvisos();
       } catch (err) {
         msg.textContent = err.message;
@@ -112,6 +359,39 @@
         btn.textContent = 'Enviar aviso';
       }
     });
+
+    async function cadastrarIfood() {
+      const btnIfood = document.getElementById('btn-ifood');
+      btnIfood.disabled = true;
+      btnIfood.textContent = 'Enviando...';
+      msg.classList.add('hidden');
+      try {
+        await api('/api/morador/avisos', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_visitante: 'Entregador iFood',
+            tipo: 'Entregador',
+            documento_visitante: '',
+            veiculo_placa: '',
+            data_prevista: new Date().toISOString(),
+            endereco_visitante: null,
+            cep_visitante: null,
+            observacao: 'Entrega de aplicativo (iFood)',
+          }),
+        });
+        msg.textContent = 'Aviso de iFood enviado! A portaria ja pode ver.';
+        msg.className = 'msg ok';
+        msg.classList.remove('hidden');
+        carregarAvisos();
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btnIfood.disabled = false;
+        btnIfood.textContent = '+ Cadastrar iFood';
+      }
+    }
 
     async function carregarAvisos() {
       const alvo = document.getElementById('lista-avisos');

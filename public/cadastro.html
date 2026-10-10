@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Cadastro de Morador - Park Place Residencial</title>
+  <meta name="description" content="Cadastro de morador do Park Place Residencial. Preencha seus dados e aguarde a aprovacao da administracao." />
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="logo">
+        <span class="login-badge">&#127968;</span>
+        <h1>Cadastro de Morador</h1>
+        <p>Park Place Residencial</p>
+      </div>
+
+      <!-- Passo 1: qual o lote -->
+      <div id="area-lote">
+        <h2 style="text-align:center; margin:4px 0 14px; font-size:20px;">Qual seu Lote?</h2>
+        <select id="bloco" required style="font-size:16px;">
+          <option value="">Selecione o seu Lote</option>
+        </select>
+        <button type="button" class="block" id="btn-continuar" onclick="continuar()" disabled>Continuar</button>
+      </div>
+
+      <!-- Passo 2: demais dados -->
+      <div id="area-form" class="hidden">
+        <div class="msg ok" style="display:flex; justify-content:space-between; align-items:center; margin:0 0 6px;">
+          <span>&#127968; <strong id="lote-escolhido"></strong></span>
+          <a href="#" onclick="trocarLote(); return false;" style="color:var(--verde-escuro); font-size:13px;">trocar</a>
+        </div>
+        <form id="form-cadastro">
+          <label for="nome">Nome completo *</label>
+          <input type="text" id="nome" autocomplete="name" required />
+
+          <label for="telefone">Telefone / WhatsApp *</label>
+          <input type="tel" id="telefone" placeholder="(11) 90000-0000" autocomplete="tel" required />
+
+          <label for="email">E-mail (sera seu login) *</label>
+          <input type="email" id="email" placeholder="seu@email.com" autocomplete="username" required />
+
+          <label for="password">Crie uma senha *</label>
+          <input type="password" id="password" placeholder="Minimo 6 caracteres" autocomplete="new-password" minlength="6" required />
+
+          <label for="password2">Confirme a senha *</label>
+          <input type="password" id="password2" autocomplete="new-password" minlength="6" required />
+
+          <button type="submit" class="block" id="btn-cadastrar">Enviar cadastro</button>
+        </form>
+        <div id="msg" class="msg hidden"></div>
+        <p class="text-muted" style="text-align:center; margin-top:16px; font-size:13px;">
+          Apos o envio, a administracao ira conferir seus dados e liberar o seu acesso.
+        </p>
+      </div>
+
+      <div id="area-sucesso" class="hidden" style="text-align:center;">
+        <div class="msg ok" style="font-size:15px;">
+          &#9989; Cadastro enviado com sucesso!
+        </div>
+        <p class="text-muted" style="margin-top:14px;">
+          Seu cadastro esta <strong>aguardando aprovacao</strong> da administracao.
+          Assim que for aprovado, voce podera entrar com o e-mail e a senha que criou.
+        </p>
+        <a href="/login.html"><button type="button" class="block secundario">Ir para o login</button></a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    // Lote 01 a 28
+    const selLote = document.getElementById('bloco');
+    for (let i = 1; i <= 28; i++) {
+      const v = 'Lote ' + String(i).padStart(2, '0');
+      selLote.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`);
+    }
+
+    const form = document.getElementById('form-cadastro');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btn-cadastrar');
+    const btnContinuar = document.getElementById('btn-continuar');
+
+    selLote.addEventListener('change', () => { btnContinuar.disabled = !selLote.value; });
+
+    function continuar() {
+      if (!selLote.value) return;
+      document.getElementById('lote-escolhido').textContent = selLote.value;
+      document.getElementById('area-lote').classList.add('hidden');
+      document.getElementById('area-form').classList.remove('hidden');
+      document.getElementById('nome').focus();
+    }
+
+    function trocarLote() {
+      document.getElementById('area-form').classList.add('hidden');
+      document.getElementById('area-lote').classList.remove('hidden');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.classList.add('hidden');
+
+      const senha = document.getElementById('password').value;
+      if (senha !== document.getElementById('password2').value) {
+        msg.textContent = 'As senhas nao conferem.';
+        msg.className = 'msg erro';
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      try {
+        await api('/api/public/cadastro', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome: document.getElementById('nome').value.trim(),
+            bloco: selLote.value,
+            telefone: document.getElementById('telefone').value.trim(),
+            email: document.getElementById('email').value.trim(),
+            password: senha,
+          }),
+        });
+        document.getElementById('area-form').classList.add('hidden');
+        document.getElementById('area-sucesso').classList.remove('hidden');
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar cadastro';
+      }
+    });
+  </script>
+</body>
+</html>

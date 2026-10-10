@@ -1,10 +1,6 @@
 // Helpers compartilhados de API e sessao para o frontend.
 
 async function api(path, options = {}) {
-  // Modo demonstracao: responde localmente, sem backend/Supabase.
-  if (window.PP_DEMO && typeof window.__demoApi === 'function') {
-    return window.__demoApi(path, options);
-  }
   const res = await fetch(path, {
     credentials: 'include',
     headers: { 'Content-Type': 'application/json' },
@@ -33,7 +29,7 @@ async function protegerPagina(tipoEsperado) {
     }
     return perfil;
   } catch {
-    window.location.href = '/';
+    window.location.href = '/login.html';
     return null;
   }
 }
@@ -48,7 +44,7 @@ async function logout() {
   try {
     await api('/api/logout', { method: 'POST' });
   } catch {}
-  window.location.href = '/';
+  window.location.href = '/login.html';
 }
 
 function escapeHtml(valor) {
@@ -78,6 +74,7 @@ function badgeStatus(status) {
     'Entrada Realizada': 'entrada',
     'Finalizada': 'finalizada',
     'Cancelada': 'cancelada',
+    'Nao compareceu': 'cancelada',
   };
   const cls = mapa[status] || 'finalizada';
   return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;

@@ -44,6 +44,9 @@ app.post('/api/login', async (req, res) => {
   if (perfilErr || !perfil) {
     return res.status(403).json({ error: 'Perfil nao encontrado.' });
   }
+  if (perfil.aprovado === false) {
+    return res.status(403).json({ error: 'Seu cadastro ainda esta aguardando aprovacao da administracao.' });
+  }
   if (!perfil.ativo) {
     return res.status(403).json({ error: 'Usuario desativado. Procure a administracao.' });
   }
@@ -58,9 +61,73 @@ app.post('/api/logout', (req, res) => {
   res.json({ ok: true });
 });
 
+// Cadastro publico de morador (link enviado pela administracao).
+// O morador fica PENDENTE (inativo) ate o admin aprovar.
+const LOTES_VALIDOS = Array.from({ length: 28 }, (_, i) => 'Lote ' + String(i + 1).padStart(2, '0'));
+
+app.post('/api/public/cadastro', async (req, res) => {
+  const { nome, bloco, telefone, email, password } = req.body || {};
+  if (!nome?.trim() || !bloco || !telefone?.trim() || !email?.trim() || !password) {
+    return res.status(400).json({ error: 'Preencha todos os campos obrigatorios.' });
+  }
+  if (!LOTES_VALIDOS.includes(bloco)) {
+    return res.status(400).json({ error: 'Lote invalido.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'A senha deve ter no minimo 6 caracteres.' });
+  }
+
+  const meta = { nome: nome.trim(), tipo: 'morador', bloco, telefone: telefone.trim(), pendente: true };
+  const { data, error } = await supabaseAdmin.auth.admin.createUser({
+    email: email.trim().toLowerCase(),
+    password,
+    email_confirm: true,
+    user_metadata: meta,
+  });
+  if (error) {
+    const jaExiste = /already|registered|exists/i.test(error.message);
+    return res.status(400).json({ error: jaExiste ? 'Este e-mail ja esta cadastrado.' : error.message });
+  }
+
+  await supabaseAdmin.from('perfis').upsert({
+    id: data.user.id,
+    nome: meta.nome,
+    tipo: 'morador',
+    bloco,
+    telefone: meta.telefone,
+    ativo: false,
+    aprovado: false,
+  });
+
+  res.status(201).json({ ok: true });
+});
+
 // Dados do usuario logado
 app.get('/api/me', requireAuth, (req, res) => {
   res.json({ perfil: req.perfil });
+});
+
+// Atualiza o proprio cadastro (campos que o usuario pode editar)
+app.put('/api/me', requireAuth, async (req, res) => {
+  const { nome, telefone, bloco, apartamento } = req.body || {};
+  if (!nome || !nome.trim()) {
+    return res.status(400).json({ error: 'Informe o nome.' });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('perfis')
+    .update({
+      nome: nome.trim(),
+      telefone: telefone?.trim() || null,
+      bloco: bloco?.trim() || null,
+      apartamento: apartamento?.trim() || null,
+    })
+    .eq('id', req.user.id)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ perfil: data });
 });
 
 // ============================================================
@@ -85,6 +152,8 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador'), async (req,
     veiculo_placa,
     tipo,
     data_prevista,
+    endereco_visitante,
+    cep_visitante,
     observacao,
   } = req.body || {};
 
@@ -101,6 +170,8 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador'), async (req,
       veiculo_placa: veiculo_placa || null,
       tipo: tipo || 'Visitante',
       data_prevista: data_prevista || null,
+      endereco_visitante: endereco_visitante || null,
+      cep_visitante: cep_visitante || null,
       observacao: observacao || null,
       status: 'Pendente',
     })
@@ -139,6 +210,36 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
   res.json({ avisos: data });
 });
 
+// Marca um aviso como "Nao compareceu" (vai direto para o historico, sem entrada)
+app.post('/api/portaria/avisos/:id/nao-veio', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { id } = req.params;
+  const { data, error } = await req.supabase
+    .from('avisos_visitas')
+    .update({ status: 'Nao compareceu', nao_veio_por: req.user.id })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ aviso: data });
+});
+
+// Busca os nomes dos porteiros (por id) para exibir quem fez cada acao.
+async function mapaNomes(ids) {
+  const unicos = [...new Set(ids.filter(Boolean))];
+  if (!unicos.length) return {};
+  const { data } = await supabaseAdmin.from('perfis').select('id, nome').in('id', unicos);
+  return Object.fromEntries((data || []).map((p) => [p.id, p.nome]));
+}
+
+async function comPorteiros(registros) {
+  const nomes = await mapaNomes(registros.flatMap((r) => [r.registrado_por, r.saida_por]));
+  return registros.map((r) => ({
+    ...r,
+    porteiro_entrada: nomes[r.registrado_por] || null,
+    porteiro_saida: nomes[r.saida_por] || null,
+  }));
+}
+
 // Quem esta dentro do condominio agora (saida nula)
 app.get('/api/portaria/presentes', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const { data, error } = await req.supabase
@@ -147,10 +248,11 @@ app.get('/api/portaria/presentes', requireAuth, requireRole('porteiro', 'admin')
     .is('saida', null)
     .order('entrada', { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ presentes: data });
+  res.json({ presentes: await comPorteiros(data || []) });
 });
 
-// Historico completo (com filtro opcional por data)
+// Historico completo (com filtro opcional por data).
+// Inclui os registros de entrada/saida E os avisos marcados como "Nao compareceu".
 app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   let query = req.supabase
     .from('registros_portaria')
@@ -163,7 +265,40 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
 
   const { data, error } = await query;
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ registros: data });
+
+  // Avisos que nao compareceram, no mesmo intervalo de data (por data_prevista).
+  let qAvisos = req.supabase
+    .from('avisos_visitas')
+    .select('*, morador:perfis!avisos_visitas_morador_id_fkey(bloco, apartamento)')
+    .eq('status', 'Nao compareceu')
+    .limit(500);
+  if (req.query.de) qAvisos = qAvisos.gte('data_prevista', req.query.de);
+  if (req.query.ate) qAvisos = qAvisos.lte('data_prevista', req.query.ate);
+
+  const { data: avisos, error: errAv } = await qAvisos;
+  if (errAv) return res.status(400).json({ error: errAv.message });
+
+  // Normaliza os avisos "nao compareceu" para o mesmo formato do historico.
+  const nomesNaoVeio = await mapaNomes((avisos || []).map((a) => a.nao_veio_por));
+  const naoCompareceu = (avisos || []).map((a) => {
+    const m = a.morador || {};
+    return {
+      id: 'aviso-' + a.id,
+      nome_pessoa: a.nome_visitante,
+      tipo: a.tipo,
+      destino_bloco: m.bloco || null,
+      destino_apto: m.apartamento || null,
+      entrada: a.data_prevista || a.criado_em,
+      saida: null,
+      status: 'Nao compareceu',
+      porteiro_nao_veio: nomesNaoVeio[a.nao_veio_por] || null,
+    };
+  });
+
+  const registros = [...(await comPorteiros(data || [])), ...naoCompareceu].sort(
+    (x, y) => new Date(y.entrada) - new Date(x.entrada)
+  );
+  res.json({ registros });
 });
 
 // Busca o cadastro mais recente de uma pessoa pelo documento (CPF/RG).
@@ -228,6 +363,8 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
         veiculo_placa: achoAviso.veiculo_placa,
         destino_bloco: m.bloco || null,
         destino_apto: m.apartamento || null,
+        endereco_visitante: achoAviso.endereco_visitante || null,
+        cep_visitante: achoAviso.cep_visitante || null,
       },
     });
   }
@@ -290,7 +427,7 @@ app.post('/api/portaria/saida/:id', requireAuth, requireRole('porteiro', 'admin'
   const { id } = req.params;
   const { data, error } = await req.supabase
     .from('registros_portaria')
-    .update({ saida: new Date().toISOString() })
+    .update({ saida: new Date().toISOString(), saida_por: req.user.id })
     .eq('id', id)
     .select()
     .single();
@@ -322,7 +459,7 @@ app.get('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, re
 
 // Cria um novo usuario (porteiro ou morador)
 app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
-  const { email, password, nome, tipo, bloco, apartamento, telefone } = req.body || {};
+  const { email, password, nome, tipo, bloco, telefone } = req.body || {};
 
   if (!email || !password || !nome || !tipo) {
     return res.status(400).json({ error: 'Preencha e-mail, senha, nome e tipo.' });
@@ -335,7 +472,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     email,
     password,
     email_confirm: true,
-    user_metadata: { nome, tipo, bloco, apartamento, telefone },
+    user_metadata: { nome, tipo, bloco, telefone },
   });
 
   if (error) return res.status(400).json({ error: error.message });
@@ -346,11 +483,48 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     nome,
     tipo,
     bloco: bloco || null,
-    apartamento: apartamento || null,
     telefone: telefone || null,
   });
 
   res.status(201).json({ id: data.user.id });
+});
+
+// Atualiza usuario existente
+app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { nome, tipo, bloco, telefone } = req.body || {};
+
+  if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
+    return res.status(400).json({ error: 'Tipo invalido.' });
+  }
+
+  // Atualiza metadados no Auth
+  await supabaseAdmin.auth.admin.updateUserById(id, {
+    user_metadata: { nome, tipo, bloco, telefone }
+  });
+
+  const { data, error } = await supabaseAdmin
+    .from('perfis')
+    .update({ nome, tipo, bloco: bloco || null, telefone: telefone || null })
+    .eq('id', id)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ perfil: data });
+});
+
+// Aprova o cadastro de um morador (libera o acesso)
+app.post('/api/admin/usuarios/:id/aprovar', requireAuth, requireRole('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { data, error } = await supabaseAdmin
+    .from('perfis')
+    .update({ aprovado: true, ativo: true })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ perfil: data });
 });
 
 // Ativa/desativa usuario

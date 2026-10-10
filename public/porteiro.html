@@ -17,31 +17,22 @@
     </div>
   </div>
 
-  <div id="demo-banner" class="hidden" style="background:#fef3cd; color:#8a6d1a; text-align:center; padding:8px; font-size:13px;">
-    Modo demonstracao ativo (dados ficticios, salvos so no seu navegador).
-    <button class="secundario mini" onclick="demoReset()">Reiniciar dados</button>
-  </div>
-
   <div class="container">
     <div class="tabs">
-      <button class="ativo" data-tab="previstas" onclick="trocarAba('previstas')">Visitas previstas</button>
-      <button data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
+      <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
       <button data-tab="presentes" onclick="trocarAba('presentes')">No condominio</button>
       <button data-tab="historico" onclick="trocarAba('historico')">Historico</button>
     </div>
 
-    <!-- Visitas previstas -->
-    <section id="tab-previstas" class="card">
-      <h2>Visitas avisadas pelos moradores</h2>
-      <div id="lista-previstas"><p class="vazio">Carregando...</p></div>
-    </section>
-
-    <!-- Registrar entrada avulsa -->
-    <section id="tab-entrada" class="card hidden">
-      <h2>Registrar entrada</h2>
+    <!-- Registrar entrada (unificada com busca) -->
+    <section id="tab-entrada" class="card">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
+        <h2 style="margin:0;">Registrar entrada</h2>
+        <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantao: <strong id="porteiro-plantao"></strong></span>
+      </div>
 
       <!-- Busca rapida por documento -->
-      <div style="background:var(--verde-claro); border-radius:8px; padding:14px; margin-bottom:18px;">
+      <div style="background:var(--verde-claro); border-radius:8px; padding:14px; margin:0 0 18px;">
         <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automatico se ja tiver cadastro)</label>
         <div class="row-inline" style="align-items:center;">
           <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" style="flex:1; min-width:200px;" />
@@ -51,7 +42,7 @@
         <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
       </div>
 
-      <form id="form-entrada">
+      <form id="form-entrada" class="hidden">
         <div class="grid grid-2">
           <div>
             <label for="nome_pessoa">Nome *</label>
@@ -75,12 +66,38 @@
             <input type="text" id="veiculo_placa" />
           </div>
           <div>
-            <label for="destino_bloco">Bloco de destino</label>
-            <input type="text" id="destino_bloco" placeholder="Ex: Bloco A" />
-          </div>
-          <div>
-            <label for="destino_apto">Apartamento</label>
-            <input type="text" id="destino_apto" placeholder="Ex: 102" />
+            <label for="destino_bloco">Lote de destino</label>
+            <select id="destino_bloco">
+              <option value="">Selecione o Lote</option>
+              <option value="Lote 01">Lote 01</option>
+              <option value="Lote 02">Lote 02</option>
+              <option value="Lote 03">Lote 03</option>
+              <option value="Lote 04">Lote 04</option>
+              <option value="Lote 05">Lote 05</option>
+              <option value="Lote 06">Lote 06</option>
+              <option value="Lote 07">Lote 07</option>
+              <option value="Lote 08">Lote 08</option>
+              <option value="Lote 09">Lote 09</option>
+              <option value="Lote 10">Lote 10</option>
+              <option value="Lote 11">Lote 11</option>
+              <option value="Lote 12">Lote 12</option>
+              <option value="Lote 13">Lote 13</option>
+              <option value="Lote 14">Lote 14</option>
+              <option value="Lote 15">Lote 15</option>
+              <option value="Lote 16">Lote 16</option>
+              <option value="Lote 17">Lote 17</option>
+              <option value="Lote 18">Lote 18</option>
+              <option value="Lote 19">Lote 19</option>
+              <option value="Lote 20">Lote 20</option>
+              <option value="Lote 21">Lote 21</option>
+              <option value="Lote 22">Lote 22</option>
+              <option value="Lote 23">Lote 23</option>
+              <option value="Lote 24">Lote 24</option>
+              <option value="Lote 25">Lote 25</option>
+              <option value="Lote 26">Lote 26</option>
+              <option value="Lote 27">Lote 27</option>
+              <option value="Lote 28">Lote 28</option>
+            </select>
           </div>
         </div>
 
@@ -104,10 +121,6 @@
             <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
           </div>
           <div>
-            <label for="end_complemento">Complemento</label>
-            <input type="text" id="end_complemento" placeholder="Apto, bloco, referencia" />
-          </div>
-          <div>
             <label for="end_bairro">Bairro</label>
             <input type="text" id="end_bairro" />
           </div>
@@ -126,6 +139,12 @@
         <button type="submit" class="block" id="btn-entrada">Confirmar entrada</button>
       </form>
       <div id="msg-entrada" class="msg hidden"></div>
+
+      <!-- Lista de visitas previstas (sempre visivel) -->
+      <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
+        <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
+        <div id="lista-previstas"><p class="vazio">Carregando...</p></div>
+      </div>
     </section>
 
     <!-- Presentes -->
@@ -154,7 +173,6 @@
     </section>
   </div>
 
-  <script src="/js/demo.js"></script>
   <script src="/js/api.js"></script>
   <script>
     let perfil = null;
@@ -162,8 +180,9 @@
     (async () => {
       perfil = await protegerPagina('porteiro');
       if (!perfil) return;
-      if (window.PP_DEMO) document.getElementById('demo-banner').classList.remove('hidden');
       document.getElementById('nome-usuario').textContent = perfil.nome;
+      document.getElementById('porteiro-plantao').textContent = perfil.nome;
+      document.getElementById('busca-doc').focus();
       carregarPrevistas();
     })();
 
@@ -171,21 +190,51 @@
       document.querySelectorAll('.tabs button').forEach((b) =>
         b.classList.toggle('ativo', b.dataset.tab === aba)
       );
-      ['previstas', 'entrada', 'presentes', 'historico'].forEach((t) =>
+      ['entrada', 'presentes', 'historico'].forEach((t) =>
         document.getElementById('tab-' + t).classList.toggle('hidden', t !== aba)
       );
-      if (aba === 'previstas') carregarPrevistas();
+      if (aba === 'entrada') { document.getElementById('busca-doc').focus(); carregarPrevistas(); }
       if (aba === 'presentes') carregarPresentes();
       if (aba === 'historico') carregarHistorico();
     }
 
+    // Exibe o formulario de entrada (chamado apos buscar ou escolher um aviso).
+    function mostrarFormEntrada() {
+      document.getElementById('form-entrada').classList.remove('hidden');
+    }
+
     // ---------- Visitas previstas ----------
-    async function carregarPrevistas() {
+    let avisosHoje = []; // cache dos avisos previstos para hoje
+
+    // Mantem apenas avisos cuja data prevista seja hoje (ou nula, para mostrar os antigos sem data).
+    function ehHoje(iso) {
+      if (!iso) return true;
+      const d = new Date(iso);
+      const h = new Date();
+      return d.getFullYear() === h.getFullYear()
+        && d.getMonth() === h.getMonth()
+        && d.getDate() === h.getDate();
+    }
+
+    // Renderiza a lista. Se filtroCpf for informado, mostra so a linha daquele CPF.
+    async function carregarPrevistas(filtroCpf) {
       const alvo = document.getElementById('lista-previstas');
       try {
         const { avisos } = await api('/api/portaria/avisos');
-        if (!avisos.length) {
-          alvo.innerHTML = '<p class="vazio">Nenhuma visita prevista no momento.</p>';
+        avisosHoje = (avisos || []).filter((a) => ehHoje(a.data_prevista));
+
+        let lista = avisosHoje;
+        if (filtroCpf) {
+          const alvoCpf = filtroCpf.replace(/\D/g, '');
+          lista = avisosHoje.filter(
+            (a) => (a.documento_visitante || '').replace(/\D/g, '') === alvoCpf
+          );
+        }
+
+        if (!lista.length) {
+          alvo.innerHTML = filtroCpf
+            ? '<p class="vazio">Nenhuma visita prevista para hoje com este documento.</p>'
+            : '<p class="vazio">Nenhuma visita prevista para hoje.</p>';
           return;
         }
         alvo.innerHTML = `
@@ -194,36 +243,101 @@
               <tr><th>Visitante</th><th>Tipo</th><th>Morador / destino</th><th>Previsto</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
-              ${avisos.map((a) => {
+              ${lista.map((a) => {
                 const m = a.morador || {};
-                const destino = [m.bloco, m.apartamento].filter(Boolean).join(' ');
+                const destino = m.bloco || '';
+                
+                let btnStyle = '';
+                if (a.nome_visitante === 'Entregador iFood') {
+                  btnStyle = 'background-color: #ea1d2c; color: white;';
+                } else if (a.tipo === 'Prestador') {
+                  btnStyle = 'background-color: #2b6cb0; color: white;';
+                }
+
                 return `
                   <tr>
                     <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
                     <td>${escapeHtml(a.tipo)}</td>
-                    <td>${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}</span></td>
+                    <td>${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + escapeHtml(m.telefone) : ''}</span></td>
                     <td>${formatarData(a.data_prevista)}</td>
                     <td>${badgeStatus(a.status)}</td>
-                    <td><button class="mini" onclick='registrarDeAviso(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Registrar entrada</button></td>
+                    <td>
+                      <div class="row-inline" style="justify-content: flex-end;">
+                        <button class="mini" style="${btnStyle}" onclick='registrarDeAviso(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Registrar entrada</button>
+                        <button class="secundario mini" onclick="marcarNaoVeio(${a.id})">Nao veio</button>
+                      </div>
+                    </td>
                   </tr>`;
               }).join('')}
             </tbody>
-          </table>`;
+          </table>
+          ${filtroCpf ? '<p class="text-muted" style="margin-top:10px;">Mostrando so a visita prevista para este documento. <a href="#" onclick="limparFiltroPrevistas(event)">Ver todas</a></p>' : ''}`;
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
     }
 
+    // Remove o filtro por CPF da lista de previstas.
+    function limparFiltroPrevistas(ev) {
+      if (ev) ev.preventDefault();
+      carregarPrevistas();
+    }
+
+    async function registrarEntradaRapida(aviso) {
+      const m = aviso.morador || {};
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            aviso_id: aviso.id,
+            nome_pessoa: aviso.nome_visitante,
+            tipo: aviso.tipo,
+            documento: '',
+            veiculo_placa: '',
+            destino_bloco: m.bloco || '',
+            endereco_visitante: null,
+            cep_visitante: null,
+            observacao: aviso.observacao || ''
+          }),
+        });
+        carregarPrevistas();
+        alert('Entrada rápida registrada com sucesso por ' + perfil.nome + '!');
+      } catch (err) {
+        alert('Erro: ' + err.message);
+      }
+    }
+
     function registrarDeAviso(aviso) {
+      if (aviso.nome_visitante === 'Entregador iFood') {
+        registrarEntradaRapida(aviso);
+        return;
+      }
       const m = aviso.morador || {};
       document.getElementById('nome_pessoa').value = aviso.nome_visitante || '';
       document.getElementById('tipo').value = aviso.tipo || 'Visitante';
       document.getElementById('documento').value = aviso.documento_visitante || '';
       document.getElementById('veiculo_placa').value = aviso.veiculo_placa || '';
       document.getElementById('destino_bloco').value = m.bloco || '';
-      document.getElementById('destino_apto').value = m.apartamento || '';
+      if (aviso.cep_visitante) document.getElementById('cep').value = aviso.cep_visitante;
+      if (aviso.endereco_visitante) {
+        document.getElementById('msg-cep').textContent = 'Endereco informado pelo morador: ' + aviso.endereco_visitante;
+        document.getElementById('msg-cep').style.color = 'var(--verde-escuro)';
+      }
       document.getElementById('aviso_id').value = aviso.id || '';
-      trocarAba('entrada');
+      // Revela o formulario preenchido.
+      mostrarFormEntrada();
+      document.getElementById('form-entrada').scrollIntoView({ behavior: 'smooth' });
+    }
+
+    // Marca a visita como "nao compareceu" e manda direto para o historico.
+    async function marcarNaoVeio(id) {
+      if (!confirm('Marcar esta visita como "nao veio"? Ela ira direto para o historico.')) return;
+      try {
+        await api(`/api/portaria/avisos/${id}/nao-veio`, { method: 'POST' });
+        carregarPrevistas();
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     // ---------- Busca por documento ----------
@@ -240,21 +354,46 @@
       btn.disabled = true;
       btn.textContent = 'Buscando...';
       try {
+        const docLimpo = doc.replace(/\D/g, '');
+
+        // OPCAO 1: existe aviso previsto para HOJE com este documento?
+        // Atualiza o cache de previstas e procura nele.
+        await carregarPrevistas();
+        const avisoHoje = avisosHoje.find(
+          (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
+        );
+        if (avisoHoje) {
+          // Mostra so a linha deste documento e NAO abre o formulario.
+          formEntrada.classList.add('hidden');
+          await carregarPrevistas(doc);
+          msg.textContent = 'Visita prevista para hoje encontrada na lista abaixo. Use "Registrar entrada" na linha.';
+          msg.className = 'msg ok';
+          document.getElementById('painel-previstas').scrollIntoView({ behavior: 'smooth' });
+          return;
+        }
+
+        // OPCAO 2 e 3: nao ha aviso hoje -> busca cadastro anterior pelo documento.
         const r = await api('/api/portaria/buscar?documento=' + encodeURIComponent(doc));
         if (!r.encontrado) {
-          msg.textContent = 'Nenhum cadastro encontrado para este documento. Preencha os dados manualmente.';
+          // Nao cadastrado: abre o formulario em branco so com o documento, para cadastrar e dar entrada.
+          formEntrada.reset();
+          document.getElementById('aviso_id').value = '';
+          document.getElementById('msg-cep').textContent = '';
+          mostrarFormEntrada();
+          msg.textContent = 'Nenhum cadastro encontrado. Preencha os dados para cadastrar o visitante e registrar a entrada.';
           msg.className = 'msg erro';
           document.getElementById('documento').value = doc;
           document.getElementById('nome_pessoa').focus();
           return;
         }
+        // Cadastrado: preenche os dados e mostra o formulario para confirmar.
+        mostrarFormEntrada();
         const p = r.pessoa;
         document.getElementById('nome_pessoa').value = p.nome_pessoa || '';
         document.getElementById('tipo').value = p.tipo || 'Visitante';
         document.getElementById('documento').value = p.documento || doc;
         document.getElementById('veiculo_placa').value = p.veiculo_placa || '';
         document.getElementById('destino_bloco').value = p.destino_bloco || '';
-        document.getElementById('destino_apto').value = p.destino_apto || '';
         if (p.cep_visitante) document.getElementById('cep').value = p.cep_visitante;
         if (p.endereco_visitante) {
           document.getElementById('msg-cep').textContent = 'Endereco do cadastro anterior: ' + p.endereco_visitante;
@@ -278,6 +417,9 @@
       document.getElementById('busca-doc').value = '';
       document.getElementById('msg-busca').classList.add('hidden');
       document.getElementById('msg-cep').textContent = '';
+      formEntrada.classList.add('hidden');
+      carregarPrevistas(); // volta a lista completa de hoje
+      document.getElementById('busca-doc').focus();
     }
 
     // Busca ao pressionar Enter no campo de documento
@@ -328,9 +470,6 @@
         document.getElementById('end_bairro').value = dados.bairro || '';
         document.getElementById('end_cidade').value = dados.localidade || '';
         document.getElementById('end_uf').value = dados.uf || '';
-        if (dados.complemento) {
-          document.getElementById('end_complemento').value = dados.complemento;
-        }
         msg.textContent = 'Endereco preenchido. Informe o numero.';
         msg.style.color = 'var(--verde-escuro)';
         document.getElementById('end_numero').focus();
@@ -348,7 +487,6 @@
       const cep = document.getElementById('cep').value.trim();
       const log = document.getElementById('end_logradouro').value.trim();
       const num = document.getElementById('end_numero').value.trim();
-      const comp = document.getElementById('end_complemento').value.trim();
       const bairro = document.getElementById('end_bairro').value.trim();
       const cidade = document.getElementById('end_cidade').value.trim();
       const uf = document.getElementById('end_uf').value.trim().toUpperCase();
@@ -356,7 +494,6 @@
       if (!log && !cidade && !cep) return null;
       let linha = log;
       if (num) linha += ', ' + num;
-      if (comp) linha += ' - ' + comp;
       const partes = [linha, bairro, [cidade, uf].filter(Boolean).join('/')]
         .filter(Boolean).join(', ');
       return (partes + (cep ? ' - CEP ' + cep : '')).trim();
@@ -378,7 +515,6 @@
             documento: document.getElementById('documento').value.trim(),
             veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
             destino_bloco: document.getElementById('destino_bloco').value.trim(),
-            destino_apto: document.getElementById('destino_apto').value.trim(),
             endereco_visitante: montarEnderecoVisitante(),
             cep_visitante: document.getElementById('cep').value.trim() || null,
             observacao: document.getElementById('observacao').value.trim(),
@@ -387,8 +523,13 @@
         formEntrada.reset();
         document.getElementById('aviso_id').value = '';
         document.getElementById('msg-cep').textContent = '';
-        msgEntrada.textContent = 'Entrada registrada com sucesso.';
+        document.getElementById('busca-doc').value = '';
+        document.getElementById('msg-busca').classList.add('hidden');
+        formEntrada.classList.add('hidden');
+        msgEntrada.textContent = 'Entrada registrada com sucesso por ' + perfil.nome + '.';
         msgEntrada.className = 'msg ok';
+        document.getElementById('busca-doc').focus();
+        carregarPrevistas();
       } catch (err) {
         msgEntrada.textContent = err.message;
         msgEntrada.className = 'msg erro';
@@ -407,17 +548,18 @@
         alvo.innerHTML = `
           <table>
             <thead>
-              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th></th></tr>
+              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Porteiro</th><th></th></tr>
             </thead>
             <tbody>
               ${presentes.map((r) => {
-                const destino = [r.destino_bloco, r.destino_apto].filter(Boolean).join(' ');
+                const destino = r.destino_bloco || '-';
                 return `
                   <tr>
                     <td>${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
                     <td>${escapeHtml(r.tipo)}</td>
                     <td>${escapeHtml(destino || '-')}</td>
                     <td>${formatarData(r.entrada)}</td>
+                    <td>${escapeHtml(r.porteiro_entrada || '-')}</td>
                     <td><button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saida</button></td>
                   </tr>`;
               }).join('')}
@@ -454,18 +596,31 @@
         alvo.innerHTML = `
           <table>
             <thead>
-              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saida</th></tr>
+              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saida</th><th>Porteiro</th></tr>
             </thead>
             <tbody>
               ${registros.map((r) => {
-                const destino = [r.destino_bloco, r.destino_apto].filter(Boolean).join(' ');
+                const destino = r.destino_bloco || '-';
+                const naoVeio = r.status === 'Nao compareceu';
+                let saidaCol;
+                if (naoVeio) saidaCol = '<span class="badge cancelada">Nao compareceu</span>';
+                else if (r.saida) saidaCol = formatarData(r.saida);
+                else saidaCol = '<span class="badge entrada">No local</span>';
+                let porteiroCol;
+                if (naoVeio) {
+                  porteiroCol = `<span class="text-muted">Nao veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
+                } else {
+                  porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
+                  if (r.saida) porteiroCol += `<br><span class="text-muted">Saida:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
+                }
                 return `
                   <tr>
                     <td>${escapeHtml(r.nome_pessoa)}</td>
                     <td>${escapeHtml(r.tipo)}</td>
                     <td>${escapeHtml(destino || '-')}</td>
-                    <td>${formatarData(r.entrada)}</td>
-                    <td>${r.saida ? formatarData(r.saida) : '<span class="badge entrada">No local</span>'}</td>
+                    <td>${naoVeio ? '<span class="text-muted">previsto ' + formatarData(r.entrada) + '</span>' : formatarData(r.entrada)}</td>
+                    <td>${saidaCol}</td>
+                    <td style="font-size:13px;">${porteiroCol}</td>
                   </tr>`;
               }).join('')}
             </tbody>

@@ -17,11 +17,6 @@
     </div>
   </div>
 
-  <div id="demo-banner" class="hidden" style="background:#fef3cd; color:#8a6d1a; text-align:center; padding:8px; font-size:13px;">
-    Modo demonstracao ativo (dados ficticios, salvos so no seu navegador).
-    <button class="secundario mini" onclick="demoReset()">Reiniciar dados</button>
-  </div>
-
   <div class="container">
     <!-- Resumo -->
     <div class="grid grid-4" style="margin-bottom:18px;">
@@ -33,6 +28,7 @@
 
     <div class="grid grid-2">
       <!-- Cadastro de usuario -->
+      <div>
       <div class="card">
         <h2>Cadastrar usuario</h2>
         <form id="form-usuario">
@@ -49,12 +45,38 @@
           <div id="campos-morador">
             <div class="grid grid-2">
               <div>
-                <label for="bloco">Bloco</label>
-                <input type="text" id="bloco" placeholder="Ex: Bloco A" />
-              </div>
-              <div>
-                <label for="apartamento">Apartamento</label>
-                <input type="text" id="apartamento" placeholder="Ex: 102" />
+                <label for="bloco">Lote</label>
+                <select id="bloco">
+                  <option value="">Selecione o Lote</option>
+                  <option value="Lote 01">Lote 01</option>
+                  <option value="Lote 02">Lote 02</option>
+                  <option value="Lote 03">Lote 03</option>
+                  <option value="Lote 04">Lote 04</option>
+                  <option value="Lote 05">Lote 05</option>
+                  <option value="Lote 06">Lote 06</option>
+                  <option value="Lote 07">Lote 07</option>
+                  <option value="Lote 08">Lote 08</option>
+                  <option value="Lote 09">Lote 09</option>
+                  <option value="Lote 10">Lote 10</option>
+                  <option value="Lote 11">Lote 11</option>
+                  <option value="Lote 12">Lote 12</option>
+                  <option value="Lote 13">Lote 13</option>
+                  <option value="Lote 14">Lote 14</option>
+                  <option value="Lote 15">Lote 15</option>
+                  <option value="Lote 16">Lote 16</option>
+                  <option value="Lote 17">Lote 17</option>
+                  <option value="Lote 18">Lote 18</option>
+                  <option value="Lote 19">Lote 19</option>
+                  <option value="Lote 20">Lote 20</option>
+                  <option value="Lote 21">Lote 21</option>
+                  <option value="Lote 22">Lote 22</option>
+                  <option value="Lote 23">Lote 23</option>
+                  <option value="Lote 24">Lote 24</option>
+                  <option value="Lote 25">Lote 25</option>
+                  <option value="Lote 26">Lote 26</option>
+                  <option value="Lote 27">Lote 27</option>
+                  <option value="Lote 28">Lote 28</option>
+                </select>
               </div>
             </div>
           </div>
@@ -62,15 +84,34 @@
           <label for="telefone">Telefone</label>
           <input type="text" id="telefone" />
 
-          <label for="email">E-mail (login) *</label>
-          <input type="email" id="email" required />
+          <div id="campos-login">
+            <label for="email">E-mail (login) *</label>
+            <input type="email" id="email" required />
 
-          <label for="password">Senha inicial *</label>
-          <input type="text" id="password" placeholder="Minimo 6 caracteres" required />
+            <label for="password">Senha inicial *</label>
+            <input type="text" id="password" placeholder="Minimo 6 caracteres" required />
+          </div>
 
           <button type="submit" class="block" id="btn-usuario">Cadastrar</button>
+          <button type="button" class="block secundario hidden" id="btn-cancelar-edicao" style="margin-top:10px;" onclick="cancelarEdicao()">Cancelar edicao</button>
         </form>
         <div id="msg-usuario" class="msg hidden"></div>
+      </div>
+
+        <!-- Link de cadastro para moradores -->
+        <div class="card" style="margin-top:18px; border-left:4px solid var(--verde);">
+          <h2>&#128279; Link "Cadastrar morador"</h2>
+          <p class="text-muted" style="margin:0 0 10px; font-size:13px;">
+            Envie este link para o morador fazer o proprio cadastro.
+            O acesso so e liberado depois que voce clicar em <strong>Aprovar</strong>.
+          </p>
+          <input type="text" id="link-cadastro" readonly onclick="this.select()" />
+          <div class="row-inline" style="margin-top:10px;">
+            <button type="button" class="mini" id="btn-copiar-link" onclick="copiarLink()">Copiar link</button>
+            <button type="button" class="mini" style="background:#25d366;" onclick="enviarWhatsApp()">Enviar por WhatsApp</button>
+            <button type="button" class="secundario mini" onclick="window.open(linkCadastro(), '_blank')">Abrir pagina</button>
+          </div>
+        </div>
       </div>
 
       <!-- Lista de usuarios -->
@@ -81,7 +122,6 @@
     </div>
   </div>
 
-  <script src="/js/demo.js"></script>
   <script src="/js/api.js"></script>
   <script>
     let perfil = null;
@@ -89,7 +129,6 @@
     (async () => {
       perfil = await protegerPagina('admin');
       if (!perfil) return;
-      if (window.PP_DEMO) document.getElementById('demo-banner').classList.remove('hidden');
       document.getElementById('nome-usuario').textContent = perfil.nome;
       carregarResumo();
       carregarUsuarios();
@@ -98,6 +137,39 @@
     function toggleCamposMorador() {
       const tipo = document.getElementById('tipo').value;
       document.getElementById('campos-morador').classList.toggle('hidden', tipo !== 'morador');
+    }
+
+    function linkCadastro() {
+      return location.origin + '/cadastro.html';
+    }
+    document.getElementById('link-cadastro').value = linkCadastro();
+
+    async function copiarLink() {
+      const btn = document.getElementById('btn-copiar-link');
+      try {
+        await navigator.clipboard.writeText(linkCadastro());
+      } catch {
+        const inp = document.getElementById('link-cadastro');
+        inp.select();
+        document.execCommand('copy');
+      }
+      btn.textContent = 'Copiado!';
+      setTimeout(() => (btn.textContent = 'Copiar link'), 2000);
+    }
+
+    function enviarWhatsApp() {
+      const texto = 'Ola! Para acessar o sistema da portaria do Park Place Residencial, faca seu cadastro neste link: ' + linkCadastro();
+      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+    }
+
+    async function aprovarUsuario(id) {
+      try {
+        await api(`/api/admin/usuarios/${id}/aprovar`, { method: 'POST' });
+        carregarUsuarios();
+        carregarResumo();
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     async function carregarResumo() {
@@ -116,27 +188,77 @@
     const msgUsuario = document.getElementById('msg-usuario');
     const btnUsuario = document.getElementById('btn-usuario');
 
+    let editandoId = null;
+
+    function editarUsuario(u) {
+      editandoId = u.id;
+      document.getElementById('nome').value = u.nome || '';
+      document.getElementById('tipo').value = u.tipo || 'morador';
+      document.getElementById('bloco').value = u.bloco || '';
+      document.getElementById('telefone').value = u.telefone || '';
+      toggleCamposMorador();
+
+      // E-mail/senha nao sao editaveis por aqui.
+      const login = document.getElementById('campos-login');
+      if (login) login.classList.add('hidden');
+      document.getElementById('email').required = false;
+      document.getElementById('password').required = false;
+
+      document.querySelector('#form-usuario').previousElementSibling.textContent = 'Editar usuario';
+      btnUsuario.textContent = 'Salvar alteracoes';
+      document.getElementById('btn-cancelar-edicao').classList.remove('hidden');
+      msgUsuario.classList.add('hidden');
+      document.getElementById('nome').focus();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    function cancelarEdicao() {
+      editandoId = null;
+      formUsuario.reset();
+      toggleCamposMorador();
+      const login = document.getElementById('campos-login');
+      if (login) login.classList.remove('hidden');
+      document.getElementById('email').required = true;
+      document.getElementById('password').required = true;
+      document.querySelector('#form-usuario').previousElementSibling.textContent = 'Cadastrar usuario';
+      btnUsuario.textContent = 'Cadastrar';
+      document.getElementById('btn-cancelar-edicao').classList.add('hidden');
+      msgUsuario.classList.add('hidden');
+    }
+
     formUsuario.addEventListener('submit', async (e) => {
       e.preventDefault();
       msgUsuario.classList.add('hidden');
       btnUsuario.disabled = true;
-      btnUsuario.textContent = 'Cadastrando...';
+      btnUsuario.textContent = editandoId ? 'Salvando...' : 'Cadastrando...';
       try {
-        await api('/api/admin/usuarios', {
-          method: 'POST',
-          body: JSON.stringify({
-            nome: document.getElementById('nome').value.trim(),
-            tipo: document.getElementById('tipo').value,
-            bloco: document.getElementById('bloco').value.trim(),
-            apartamento: document.getElementById('apartamento').value.trim(),
-            telefone: document.getElementById('telefone').value.trim(),
-            email: document.getElementById('email').value.trim(),
-            password: document.getElementById('password').value,
-          }),
-        });
-        formUsuario.reset();
-        toggleCamposMorador();
-        msgUsuario.textContent = 'Usuario cadastrado com sucesso.';
+        const dados = {
+          nome: document.getElementById('nome').value.trim(),
+          tipo: document.getElementById('tipo').value,
+          bloco: document.getElementById('bloco').value,
+          telefone: document.getElementById('telefone').value.trim(),
+        };
+
+        if (editandoId) {
+          await api(`/api/admin/usuarios/${editandoId}`, {
+            method: 'PUT',
+            body: JSON.stringify(dados),
+          });
+          cancelarEdicao();
+          msgUsuario.textContent = 'Usuario atualizado com sucesso.';
+        } else {
+          await api('/api/admin/usuarios', {
+            method: 'POST',
+            body: JSON.stringify({
+              ...dados,
+              email: document.getElementById('email').value.trim(),
+              password: document.getElementById('password').value,
+            }),
+          });
+          formUsuario.reset();
+          toggleCamposMorador();
+          msgUsuario.textContent = 'Usuario cadastrado com sucesso.';
+        }
         msgUsuario.className = 'msg ok';
         carregarUsuarios();
         carregarResumo();
@@ -145,7 +267,7 @@
         msgUsuario.className = 'msg erro';
       } finally {
         btnUsuario.disabled = false;
-        btnUsuario.textContent = 'Cadastrar';
+        btnUsuario.textContent = editandoId ? 'Salvar alteracoes' : 'Cadastrar';
       }
     });
 
@@ -157,22 +279,36 @@
           alvo.innerHTML = '<p class="vazio">Nenhum usuario cadastrado.</p>';
           return;
         }
+        // Pendentes de aprovacao aparecem primeiro.
+        const pendente = (u) => u.tipo === 'morador' && u.aprovado === false;
+        usuarios.sort((a, b) => pendente(b) - pendente(a));
+        const qtdPendentes = usuarios.filter(pendente).length;
+
         alvo.innerHTML = `
+          ${qtdPendentes ? `<div class="msg" style="background:#fef3cd; color:var(--amarelo); margin:0 0 12px;">&#9203; ${qtdPendentes} morador(es) aguardando aprovacao.</div>` : ''}
           <table>
             <thead>
               <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
               ${usuarios.map((u) => {
-                const local = [u.bloco, u.apartamento].filter(Boolean).join(' ') || '-';
+                const local = u.bloco || '-';
+                const isPend = pendente(u);
+                const status = isPend
+                  ? '<span class="badge pendente">Pendente</span>'
+                  : u.ativo ? '<span class="badge entrada">Ativo</span>' : '<span class="badge cancelada">Inativo</span>';
+                const btnStatus = isPend
+                  ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
+                  : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
                 return `
-                  <tr>
-                    <td>${escapeHtml(u.nome)}</td>
+                  <tr${isPend ? ' style="background:#fffbea;"' : ''}>
+                    <td>${escapeHtml(u.nome)}${isPend && u.telefone ? `<div class="text-muted" style="font-size:12px;">${escapeHtml(u.telefone)}</div>` : ''}</td>
                     <td><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
                     <td>${escapeHtml(local)}</td>
-                    <td>${u.ativo ? '<span class="badge entrada">Ativo</span>' : '<span class="badge cancelada">Inativo</span>'}</td>
+                    <td>${status}</td>
                     <td class="row-inline">
-                      <button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>
+                      <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>
+                      ${btnStatus}
                       <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
                     </td>
                   </tr>`;
