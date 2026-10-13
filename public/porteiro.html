@@ -732,6 +732,8 @@
     // ---------- Registrar entrada ----------
     const formEntrada = document.getElementById('form-entrada');
     const msgEntrada = document.getElementById('msg-entrada');
+    let dadosEntradaPendente = null;
+
     formEntrada.addEventListener('submit', async (e) => {
       e.preventDefault();
       msgEntrada.classList.add('hidden');
@@ -747,21 +749,122 @@
         return;
       }
 
+      const lote = document.getElementById('destino_bloco').value.trim();
+      if (!lote) {
+        msgEntrada.textContent = 'Por favor, informe o Lote de destino.';
+        msgEntrada.className = 'msg erro';
+        msgEntrada.classList.remove('hidden');
+        document.getElementById('destino_bloco').focus();
+        return;
+      }
+
+      dadosEntradaPendente = {
+        aviso_id: document.getElementById('aviso_id').value || null,
+        nome_pessoa: document.getElementById('nome_pessoa').value.trim(),
+        tipo: document.getElementById('tipo').value,
+        documento: document.getElementById('documento').value.trim(),
+        veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
+        destino_bloco: lote,
+        endereco_visitante: montarEnderecoVisitante(),
+        cep_visitante: document.getElementById('cep').value.trim() || null,
+        observacaoOriginal: document.getElementById('observacao').value.trim(),
+      };
+
+      abrirModalSelecionarMorador(lote);
+    });
+
+    async function abrirModalSelecionarMorador(lote) {
+      const modal = document.getElementById('modal-selecionar-morador');
+      const destaqueLote = document.getElementById('modal-morador-lote-destaque');
+      const lista = document.getElementById('modal-morador-lista');
+      const msgModal = document.getElementById('msg-modal-morador');
+      const inputOutro = document.getElementById('modal-morador-outro-nome');
+
+      destaqueLote.textContent = lote;
+      inputOutro.value = '';
+      msgModal.classList.add('hidden');
+      modal.classList.remove('hidden');
+      lista.innerHTML = '<p class="text-muted" style="text-align:center; padding:12px 0;">Buscando moradores do ' + escapeHtml(lote) + '...</p>';
+
+      try {
+        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        if (!moradores || moradores.length === 0) {
+          lista.innerHTML = '<p class="vazio" style="margin:4px 0;">Nenhum morador cadastrado para este lote.</p>';
+          return;
+        }
+
+        lista.innerHTML = moradores.map(m => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:12px 14px; border-radius:8px; border:1px solid var(--cinza-borda); gap:10px; cursor:pointer; transition:all 0.15s ease;"
+               onmouseover="this.style.borderColor='var(--verde)';"
+               onmouseout="this.style.borderColor='var(--cinza-borda)';"
+               onclick="confirmarEntradaFinal('${escapeHtml(m.nome).replace(/'/g, "\\'")}')">
+            <div>
+              <strong style="display:block; font-size:15px; color:var(--texto-escuro);">&#128100; ${escapeHtml(m.nome)}</strong>
+              <span class="text-muted" style="font-size:12px;">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
+            </div>
+            <button type="button" class="mini" style="background-color:var(--verde); color:white; pointer-events:none; font-weight:600;">
+              Selecionar
+            </button>
+          </div>
+        `).join('');
+      } catch (err) {
+        msgModal.textContent = err.message || 'Erro ao carregar moradores.';
+        msgModal.className = 'msg erro';
+        msgModal.classList.remove('hidden');
+        lista.innerHTML = '';
+      }
+    }
+
+    function fecharModalSelecionarMorador() {
+      document.getElementById('modal-selecionar-morador').classList.add('hidden');
+    }
+
+    function confirmarComOutroMorador() {
+      const nomeOutro = document.getElementById('modal-morador-outro-nome').value.trim();
+      if (!nomeOutro) {
+        const msgModal = document.getElementById('msg-modal-morador');
+        msgModal.textContent = 'Digite o nome do morador ou selecione na lista.';
+        msgModal.className = 'msg erro';
+        msgModal.classList.remove('hidden');
+        document.getElementById('modal-morador-outro-nome').focus();
+        return;
+      }
+      confirmarEntradaFinal(nomeOutro);
+    }
+
+    function confirmarSemMorador() {
+      confirmarEntradaFinal(null);
+    }
+
+    async function confirmarEntradaFinal(nomeMorador) {
+      if (!dadosEntradaPendente) return;
+
+      const msgModal = document.getElementById('msg-modal-morador');
+      msgModal.classList.add('hidden');
+
+      let observacaoFinal = dadosEntradaPendente.observacaoOriginal || '';
+      if (nomeMorador) {
+        const tagMorador = `[Falou com: ${nomeMorador}]`;
+        observacaoFinal = observacaoFinal ? `${tagMorador} ${observacaoFinal}` : tagMorador;
+      }
+
       try {
         await api('/api/portaria/entrada', {
           method: 'POST',
           body: JSON.stringify({
-            aviso_id: document.getElementById('aviso_id').value || null,
-            nome_pessoa: document.getElementById('nome_pessoa').value.trim(),
-            tipo: document.getElementById('tipo').value,
-            documento: document.getElementById('documento').value.trim(),
-            veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
-            destino_bloco: document.getElementById('destino_bloco').value.trim(),
-            endereco_visitante: montarEnderecoVisitante(),
-            cep_visitante: document.getElementById('cep').value.trim() || null,
-            observacao: document.getElementById('observacao').value.trim(),
+            aviso_id: dadosEntradaPendente.aviso_id,
+            nome_pessoa: dadosEntradaPendente.nome_pessoa,
+            tipo: dadosEntradaPendente.tipo,
+            documento: dadosEntradaPendente.documento,
+            veiculo_placa: dadosEntradaPendente.veiculo_placa,
+            destino_bloco: dadosEntradaPendente.destino_bloco,
+            endereco_visitante: dadosEntradaPendente.endereco_visitante,
+            cep_visitante: dadosEntradaPendente.cep_visitante,
+            observacao: observacaoFinal,
           }),
         });
+
+        fecharModalSelecionarMorador();
         formEntrada.reset();
         document.getElementById('aviso_id').value = '';
         document.getElementById('msg-cep').textContent = '';
@@ -772,15 +875,20 @@
         const alertaObs = document.getElementById('alerta-obs-visitante');
         if (alertaObs) alertaObs.classList.add('hidden');
         formEntrada.classList.add('hidden');
-        msgEntrada.textContent = 'Entrada registrada com sucesso por ' + perfil.nome + '.';
+
+        const complementoMorador = nomeMorador ? ` (Falou com: ${nomeMorador})` : '';
+        msgEntrada.textContent = `Entrada registrada com sucesso por ${perfil.nome}.${complementoMorador}`;
         msgEntrada.className = 'msg ok';
+        msgEntrada.classList.remove('hidden');
         document.getElementById('busca-doc').focus();
         carregarPrevistas();
+        dadosEntradaPendente = null;
       } catch (err) {
-        msgEntrada.textContent = err.message;
-        msgEntrada.className = 'msg erro';
+        msgModal.textContent = err.message || 'Erro ao registrar entrada.';
+        msgModal.className = 'msg erro';
+        msgModal.classList.remove('hidden');
       }
-    });
+    }
 
     // ---------- Presentes ----------
     async function carregarPresentes() {
@@ -803,7 +911,10 @@
                   <tr>
                     <td data-label="Nome">${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
                     <td data-label="Tipo">${escapeHtml(r.tipo)}</td>
-                    <td data-label="Destino">${escapeHtml(destino || '-')}</td>
+                    <td data-label="Destino">
+                      <strong>${escapeHtml(destino || '-')}</strong>
+                      ${r.observacao ? `<br><small class="text-muted" style="font-size:12px;">${escapeHtml(r.observacao)}</small>` : ''}
+                    </td>
                     <td data-label="Entrada">${formatarData(r.entrada)}</td>
                     <td data-label="Porteiro">${escapeHtml(r.porteiro_entrada || '-')}</td>
                     <td data-label="">
@@ -1088,6 +1199,38 @@
 
       <div class="row-inline" style="justify-content: flex-end; margin-top: 20px;">
         <button class="secundario" onclick="fecharModalRetiradaEncomenda()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Selecionar Morador (Identificar Morador da Entrada) -->
+  <div id="modal-selecionar-morador" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div
+      style="background:#fff; padding:22px; border-radius:12px; width:100%; max-width:440px; box-shadow:0 8px 24px rgba(0,0,0,0.2); max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
+      
+      <div style="border-bottom:1px solid var(--cinza-borda); padding-bottom:12px;">
+        <h3 style="margin:0 0 6px; font-size:18px; color:var(--texto-escuro);">&#128100; Com qual morador vai falar?</h3>
+        <p class="text-muted" style="margin:0; font-size:14px;">
+          Lote de destino: <strong id="modal-morador-lote-destaque" style="color:var(--verde-escuro);"></strong>
+        </p>
+      </div>
+
+      <div id="modal-morador-lista" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+      <div id="modal-morador-outro-container" style="background:var(--fundo-cor); border:1px dashed var(--cinza-borda); border-radius:8px; padding:12px;">
+        <label for="modal-morador-outro-nome" style="font-size:13px; margin:0 0 6px; display:block; font-weight:600;">Outro morador / Não listado:</label>
+        <div class="row-inline" style="gap:8px;">
+          <input type="text" id="modal-morador-outro-nome" placeholder="Digite o nome do morador..." style="flex:1; padding:8px 10px; font-size:14px;" onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarComOutroMorador();}" />
+          <button type="button" class="mini" style="background-color:var(--verde); color:white; white-space:nowrap;" onclick="confirmarComOutroMorador()">Confirmar</button>
+        </div>
+      </div>
+
+      <div id="msg-modal-morador" class="msg hidden"></div>
+
+      <div class="row-inline" style="justify-content:space-between; align-items:center; margin-top:6px; padding-top:12px; border-top:1px solid var(--cinza-borda);">
+        <button type="button" class="secundario" onclick="fecharModalSelecionarMorador()">Voltar / Cancelar</button>
+        <button type="button" class="secundario mini" style="color:var(--texto-muted);" onclick="confirmarSemMorador()">Não especificado</button>
       </div>
     </div>
   </div>

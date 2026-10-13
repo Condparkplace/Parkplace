@@ -1200,28 +1200,30 @@ app.post('/api/portaria/entrada/:id/cancelar', requireAuth, requireRole('porteir
   res.json({ sucesso: true });
 });
 
-// Lista moradores de um lote especifico (usado para entregas rapidas como iFood)
+// Lista moradores de um lote especifico (usado para entregas rapidas como iFood, encomendas e identificacao na portaria)
 app.get('/api/portaria/moradores', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   let lote = req.query.lote;
   if (!lote) return res.status(400).json({ error: 'Lote não informado.' });
 
-  // Se o porteiro digitou apenas um numero, formata para "Lote XX"
-  if (/^\d+$/.test(lote.trim())) {
-    lote = `Lote ${String(lote.trim()).padStart(2, '0')}`;
-  } else if (/^lote\s*\d+$/i.test(lote.trim())) {
-    // Caso tenha digitado "lote 1" vira "Lote 01"
-    const num = lote.replace(/\D/g, '');
-    lote = `Lote ${String(num).padStart(2, '0')}`;
+  const numLote = lote.replace(/\D/g, '');
+  let formats = [lote.trim()];
+  if (numLote) {
+    formats.push(`Lote ${String(numLote).padStart(2, '0')}`);
+    formats.push(`Lote ${String(parseInt(numLote, 10))}`);
+    formats.push(String(parseInt(numLote, 10)));
+    formats.push(String(numLote).padStart(2, '0'));
   }
+  formats = [...new Set(formats)];
 
-  const { data, error } = await req.supabase
+  const { data, error } = await supabaseAdmin
     .from('perfis')
-    .select('id, nome, bloco, telefone')
-    .eq('bloco', lote)
+    .select('id, nome, bloco, telefone, tipo')
+    .in('bloco', formats)
+    .in('tipo', ['morador', 'admin'])
     .order('nome', { ascending: true });
 
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ moradores: data });
+  res.json({ moradores: data || [] });
 });
 
 // ============================================================
