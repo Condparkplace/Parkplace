@@ -172,7 +172,7 @@ app.post('/api/public/cadastro', async (req, res) => {
   });
   if (error) {
     const jaExiste = /already|registered|exists/i.test(error.message);
-    return res.status(400).json({ error: jaExiste ? 'Este e-mail ja esta cadastrado.' : error.message });
+    return res.status(400).json({ error: jaExiste ? 'Este e-mail já está cadastrado.' : error.message });
   }
 
   await supabaseAdmin.from('perfis').upsert({
@@ -912,7 +912,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 
     if (existente && existente.length > 0) {
       return res.status(400).json({
-        error: `Ja existe um porteiro cadastrado com o nome "${nome}". Por favor, utilize um sobrenome ou complemento para identifica-lo (ex: ${nome} Silva).`
+        error: `Já existe um porteiro cadastrado com o nome "${nome}". Por favor, utilize um sobrenome ou complemento para identificá-lo (ex: ${nome} Silva).`
       });
     }
 
@@ -976,7 +976,7 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
 
     if (existente && existente.length > 0) {
       return res.status(400).json({
-        error: `Ja existe outro porteiro cadastrado com o nome "${nomeLimpo}". Escolha um complemento para diferencia-lo.`
+        error: `Já existe outro porteiro cadastrado com o nome "${nomeLimpo}". Escolha um complemento para diferenciá-lo.`
       });
     }
   }
@@ -1061,7 +1061,9 @@ app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res)
 // ============================================================
 // Arquivos estaticos (frontend)
 // ============================================================
-app.use(express.static(path.join(__dirname, 'public')));
+if (typeof __dirname !== 'undefined') {
+  app.use(express.static(path.join(__dirname, 'public')));
+}
 
 module.exports = app;
 

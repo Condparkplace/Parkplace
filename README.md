@@ -70,9 +70,38 @@ npm start
 
 Acesse **http://localhost:3000** e faça login com o administrador. A partir daí, cadastre porteiros e moradores pela própria tela de administração.
 
+## 6. Deploy no Cloudflare
+
+O projeto está totalmente configurado para rodar no **Cloudflare** (Workers com Assets estáticos ou Cloudflare Pages Functions).
+
+### Opção A: Deploy direto via terminal (Wrangler)
+1. Faça login na sua conta do Cloudflare:
+```bash
+npx wrangler login
+```
+2. Faça o deploy:
+```bash
+npm run deploy
+```
+3. No painel da Cloudflare (Workers & Pages > seu projeto > **Settings > Variables and Secrets**), adicione as seguintes variáveis de ambiente:
+   - `SUPABASE_URL`
+   - `SUPABASE_ANON_KEY`
+   - `SUPABASE_SERVICE_ROLE_KEY`
+   - `SESSION_SECRET`
+
+### Opção B: Deploy contínuo via GitHub (Cloudflare Pages)
+1. No painel Cloudflare, vá em **Workers & Pages > Create > Pages > Connect to Git**.
+2. Selecione o repositório do projeto.
+3. Nas configurações de build:
+   - **Framework preset**: `None`
+   - **Build output directory**: `public`
+4. Em **Environment variables**, adicione `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` e `SESSION_SECRET`.
+5. Clique em **Save and Deploy**.
+
 ---
 
 ## Fluxo de uso
+
 
 1. **Admin** cadastra os porteiros e moradores (cada um recebe e-mail e senha).
 2. **Morador** entra, vai em "Avisar a portaria" e registra a visita esperada.

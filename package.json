@@ -6,14 +6,17 @@
   "type": "commonjs",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "deploy": "wrangler deploy",
+    "cf:dev": "wrangler dev"
   },
   "keywords": [
     "portaria",
     "condominio",
     "supabase",
     "node",
-    "express"
+    "express",
+    "cloudflare"
   ],
   "author": "Park Place Residencial",
   "license": "MIT",
@@ -23,5 +26,12 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "wrangler": "^4.150.0"
+  },
+  "overrides": {
+    "iconv-lite": "^0.6.3"
   }
 }
+

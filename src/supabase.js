@@ -6,7 +6,7 @@ const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
   console.warn(
-    '[AVISO] SUPABASE_URL / SUPABASE_ANON_KEY nao configurados. ' +
+    '[AVISO] SUPABASE_URL / SUPABASE_ANON_KEY não configurados. ' +
       'Copie .env.example para .env e preencha as chaves.'
   );
 }
