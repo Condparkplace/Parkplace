@@ -707,21 +707,47 @@ async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
   if (chave && todas.has(chave)) return todas.get(chave);
   if (docLimpo && todas.has(docLimpo)) return todas.get(docLimpo);
   if (nomeNorm && todas.has('nome:' + nomeNorm)) return todas.get('nome:' + nomeNorm);
+
+  const docPuro = (docLimpo || '').replace(/\D/g, '');
+  const chavePura = (chave || '').replace(/\D/g, '');
+
+  for (const item of todas.values()) {
+    const itemDoc = (item.documento || '').replace(/\D/g, '');
+    const itemChave = (item.chave || '').replace(/\D/g, '');
+    if (docPuro && ((itemDoc && itemDoc === docPuro) || (itemChave && itemChave === docPuro))) {
+      return item;
+    }
+    const itemNome = (item.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    if (nomeNorm && itemNome && itemNome === nomeNorm) {
+      return item;
+    }
+  }
   return null;
 }
 
 async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
   const agora = new Date().toISOString();
+  const docLimpo = (documento || '').replace(/\D/g, '');
+  const nomeLimpo = (nome || '').trim();
+  const nomeNorm = nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const finalChave = (chave || '').trim() || docLimpo || ('nome:' + nomeNorm);
+
   const registro = {
-    chave: (chave || '').trim() || ((documento || '').replace(/\D/g, '') || ('nome:' + (nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))),
-    nome: (nome || '').trim(),
+    chave: finalChave,
+    nome: nomeLimpo,
     documento: documento ? (documento || '').trim() : null,
     observacao: (observacao || '').trim(),
     atualizado_em: agora,
     atualizado_por: userId || null,
   };
 
-  cacheObsVisitantes.set(registro.chave, registro);
+  cacheObsVisitantes.set(finalChave, registro);
+  if (docLimpo && docLimpo !== finalChave) {
+    cacheObsVisitantes.set(docLimpo, registro);
+  }
+  if (nomeNorm) {
+    cacheObsVisitantes.set('nome:' + nomeNorm, registro);
+  }
   salvarCacheObsVisitantes();
 
   try {
@@ -784,8 +810,14 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
     (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
   );
 
-  // Busca observação fixa no cadastro do visitante (se existir)
-  const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, null);
+  // Identifica o nome para busca por nome caso necessário
+  const nomeCandidato = moradorEncontrado
+    ? moradorEncontrado.nome
+    : (achoReg ? achoReg.nome_pessoa : (achoAviso ? achoAviso.nome_visitante : null));
+  const nomeNorm = (nomeCandidato || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+  // Busca observação fixa no cadastro (se existir)
+  const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNorm);
   const obsCad = obsVisitante ? (obsVisitante.observacao || '').trim() : '';
 
   // SE FOR MORADOR: Unifica o cadastro pelo perfil oficial do morador
@@ -794,6 +826,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
       encontrado: true,
       eh_morador: true,
       origem: 'morador',
+      observacao_cadastro: obsCad,
       morador: {
         nome: moradorEncontrado.nome,
         bloco: moradorEncontrado.bloco,
@@ -822,6 +855,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
       encontrado: true,
       eh_morador: false,
       origem: 'registro',
+      observacao_cadastro: obsCad,
       pessoa: {
         nome_pessoa: achoReg.nome_pessoa,
         documento: achoReg.documento,
@@ -842,6 +876,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
       encontrado: true,
       eh_morador: false,
       origem: 'aviso',
+      observacao_cadastro: obsCad,
       pessoa: {
         nome_pessoa: achoAviso.nome_visitante,
         documento: achoAviso.documento_visitante,

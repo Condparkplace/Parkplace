@@ -78,15 +78,15 @@
         </div>
       </div>
 
-      <!-- Faixa de aviso para observação cadastral fixa do visitante -->
+      <!-- Segundo aviso: Observação do cadastro (se houver cadastrada) -->
       <div id="alerta-obs-visitante" class="hidden"
-        style="background:#fef9c3; border:2px solid #ca8a04; border-radius:8px; padding:14px 18px; margin:0 0 18px; display:flex; align-items:center; gap:14px; box-shadow:0 3px 10px rgba(202,138,4,0.15);">
+        style="background:#fefce8; border:2px solid #eab308; border-radius:8px; padding:14px 18px; margin:0 0 18px; display:flex; align-items:flex-start; gap:14px; box-shadow:0 3px 10px rgba(234,179,8,0.2);">
         <span style="font-size:30px; line-height:1;">📝</span>
         <div style="flex:1;">
-          <strong style="color:#854d0e; font-size:15px; display:block; margin-bottom:3px;">
-            Observação Cadastral do Visitante:
+          <strong style="color:#854d0e; font-size:15px; display:block; margin-bottom:4px;">
+            OBSERVAÇÃO DO CADASTRO:
           </strong>
-          <span id="alerta-obs-visitante-texto" style="color:#713f12; font-size:14px; line-height:1.4; display:block; font-weight:600;"></span>
+          <span id="alerta-obs-visitante-texto" style="color:#713f12; font-size:14px; line-height:1.5; display:block; font-weight:600; white-space:pre-wrap;"></span>
         </div>
       </div>
 
@@ -558,8 +558,9 @@
         // Exibe observação cadastral fixa se existir
         const alertaObs = document.getElementById('alerta-obs-visitante');
         const alertaObsTexto = document.getElementById('alerta-obs-visitante-texto');
-        if (p.observacao_cadastro && p.observacao_cadastro.trim()) {
-          if (alertaObsTexto) alertaObsTexto.textContent = p.observacao_cadastro.trim();
+        const obsTexto = (p.observacao_cadastro || r.observacao_cadastro || '').trim();
+        if (obsTexto) {
+          if (alertaObsTexto) alertaObsTexto.textContent = obsTexto;
           if (alertaObs) alertaObs.classList.remove('hidden');
         } else {
           if (alertaObs) alertaObs.classList.add('hidden');
