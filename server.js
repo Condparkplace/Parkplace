@@ -873,14 +873,25 @@ app.get('/api/portaria/moradores', requireAuth, requireRole('porteiro', 'admin')
 // ADMIN - gestao de usuarios
 // ============================================================
 
-// Lista todos os perfis
+// Lista todos os perfis (com e-mail do Auth)
 app.get('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
-  const { data, error } = await supabaseAdmin
+  const { data: perfis, error } = await supabaseAdmin
     .from('perfis')
     .select('*')
     .order('criado_em', { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ usuarios: data });
+
+  try {
+    const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    const emailMap = new Map((authData?.users || []).map(u => [u.id, u.email]));
+    const usuarios = (perfis || []).map(u => ({
+      ...u,
+      email: emailMap.get(u.id) || '',
+    }));
+    res.json({ usuarios });
+  } catch {
+    res.json({ usuarios: perfis });
+  }
 });
 
 // Lista prestadores cadastrados/registrados para importacao no cadastro de porteiro
@@ -976,20 +987,110 @@ app.get('/api/admin/prestadores', requireAuth, requireRole('admin'), async (req,
   }
 });
 
+// Lista moradores cadastrados para autopreenchimento e promocao a Administrador
+app.get('/api/admin/moradores-busca', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
 
-// Cria um novo usuario (porteiro, morador ou admin)
+    const { data: perfis, error } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, tipo, bloco, telefone, aprovado, ativo')
+      .order('bloco', { ascending: true });
+
+    if (error) throw error;
+
+    // Busca e-mails no Auth
+    const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+    const emailMap = new Map((authData?.users || []).map(u => [u.id, u.email]));
+
+    let lista = (perfis || []).map(p => ({
+      ...p,
+      email: emailMap.get(p.id) || '',
+    }));
+
+    if (q) {
+      const qNorm = q.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const qNum = q.replace(/\D/g, '');
+      lista = lista.filter(item => {
+        const nomeNorm = (item.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const blocoNorm = (item.bloco || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const emailNorm = (item.email || '').toLowerCase();
+        const telNum = (item.telefone || '').replace(/\D/g, '');
+        return nomeNorm.includes(qNorm) ||
+               blocoNorm.includes(qNorm) ||
+               emailNorm.includes(qNorm) ||
+               (qNum && telNum.includes(qNum));
+      });
+    }
+
+    // Ordena: Lotes preenchidos primeiro, depois por nome alfabetico
+    lista.sort((a, b) => {
+      if (a.bloco && !b.bloco) return -1;
+      if (!a.bloco && b.bloco) return 1;
+      return a.nome.localeCompare(b.nome);
+    });
+
+    res.json({ moradores: lista.slice(0, 30) });
+  } catch (err) {
+    console.error('Erro na rota /api/admin/moradores-busca:', err);
+    res.status(500).json({ error: 'Erro ao buscar moradores cadastrados.' });
+  }
+});
+
+
+// Cria um novo usuario (porteiro, morador ou admin) ou promove morador existente a admin
 app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
-  let { email, password, nome, tipo, bloco, telefone } = req.body || {};
+  let { email, password, nome, tipo, bloco, telefone, morador_id } = req.body || {};
 
   nome = (nome || '').trim();
   tipo = (tipo || '').trim();
   email = (email || '').trim().toLowerCase();
 
-  if (!nome || !tipo || !password) {
-    return res.status(400).json({ error: 'Preencha nome, tipo e senha.' });
+  if (!nome || !tipo) {
+    return res.status(400).json({ error: 'Preencha o nome e o perfil.' });
   }
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
     return res.status(400).json({ error: 'Tipo inválido.' });
+  }
+
+  // Se morador_id foi fornecido (ou seja, selecionou morador existente para admin)
+  if (morador_id && tipo === 'admin') {
+    const { data: moradorPerfil } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, bloco, telefone')
+      .eq('id', morador_id)
+      .single();
+
+    if (moradorPerfil) {
+      await supabaseAdmin.from('perfis').update({
+        nome: nome || moradorPerfil.nome,
+        tipo: 'admin',
+        bloco: bloco || moradorPerfil.bloco,
+        telefone: telefone || moradorPerfil.telefone,
+        ativo: true,
+        aprovado: true,
+      }).eq('id', morador_id);
+
+      const authUpdates = {
+        user_metadata: {
+          nome: nome || moradorPerfil.nome,
+          tipo: 'admin',
+          bloco: bloco || moradorPerfil.bloco,
+          telefone: telefone || moradorPerfil.telefone,
+        }
+      };
+      if (password && password.trim().length >= 6) {
+        authUpdates.password = password.trim();
+      }
+      await supabaseAdmin.auth.admin.updateUserById(morador_id, authUpdates);
+
+      return res.status(200).json({ id: morador_id, promovido: true });
+    }
+  }
+
+  // Se nao e morador existente sendo promovido, a senha e obrigatoria
+  if (!password) {
+    return res.status(400).json({ error: 'Informe a senha de acesso.' });
   }
   if (password.length < 6) {
     return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
@@ -1031,6 +1132,31 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 
   if (error) {
     const jaExiste = /already|registered|exists/i.test(error.message);
+    if (jaExiste && tipo === 'admin' && email) {
+      // Se já existe e está cadastrando como Administrador, promove o perfil existente
+      const { data: authData } = await supabaseAdmin.auth.admin.listUsers({ perPage: 1000 });
+      const existenteAuth = (authData?.users || []).find(u => u.email?.toLowerCase() === email);
+      if (existenteAuth) {
+        await supabaseAdmin.from('perfis').update({
+          nome,
+          tipo: 'admin',
+          bloco: bloco || null,
+          telefone: telefone || null,
+          ativo: true,
+          aprovado: true,
+        }).eq('id', existenteAuth.id);
+
+        const authUpdates = {
+          user_metadata: { nome, tipo: 'admin', bloco, telefone }
+        };
+        if (password && password.trim().length >= 6) {
+          authUpdates.password = password.trim();
+        }
+        await supabaseAdmin.auth.admin.updateUserById(existenteAuth.id, authUpdates);
+
+        return res.status(200).json({ id: existenteAuth.id, promovido: true });
+      }
+    }
     return res.status(400).json({ error: jaExiste ? 'Este e-mail/usuário já está cadastrado.' : error.message });
   }
 

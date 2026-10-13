@@ -54,6 +54,21 @@
             </p>
           </div>
 
+          <!-- Busca de moradores cadastrados (aparece quando tipo === admin) -->
+          <div id="wrap-busca-morador" class="hidden" style="margin-top:12px; margin-bottom:14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px;">
+            <label for="busca-morador" style="margin:0 0 6px; font-weight:600; color:#1e40af; font-size:13px; display:flex; align-items:center; gap:6px;">
+              <span>🔍</span> <span>Buscar em Moradores já cadastrados (opcional):</span>
+            </label>
+            <div style="position:relative;">
+              <input type="text" id="busca-morador" placeholder="Digite nome, lote ou e-mail..." autocomplete="off" onfocus="aoFocarBuscaMorador()" oninput="aoDigitarBuscaMorador(this.value)" style="margin:0; background:#fff;" />
+              <div id="sugestoes-moradores" class="hidden" style="position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin-top:4px;"></div>
+            </div>
+            <div id="aviso-morador-selecionado" class="hidden" style="margin-top:8px; font-size:13px; color:#1e40af; font-weight:500;"></div>
+            <p class="text-muted" style="margin:6px 0 0; font-size:12px;">
+              Selecione um morador para autopreencher seus dados e torná-lo Administrador.
+            </p>
+          </div>
+
           <label for="nome" id="label-nome">Nome completo *</label>
           <input type="text" id="nome" required />
 
@@ -242,23 +257,98 @@
         const sug = document.getElementById('sugestoes-prestadores');
         if (sug) sug.classList.add('hidden');
       }
+      if (!e.target.closest('#wrap-busca-morador')) {
+        const sugM = document.getElementById('sugestoes-moradores');
+        if (sugM) sugM.classList.add('hidden');
+      }
     });
+
+    // ---------- Busca e seleção de morador para Administrador ----------
+    let moradorSelecionadoId = null;
+    let timerBuscaMorador = null;
+
+    function aoFocarBuscaMorador() {
+      const termo = document.getElementById('busca-morador').value || '';
+      buscarMoradores(termo);
+    }
+
+    function aoDigitarBuscaMorador(termo) {
+      clearTimeout(timerBuscaMorador);
+      timerBuscaMorador = setTimeout(() => buscarMoradores(termo), 250);
+    }
+
+    async function buscarMoradores(termo) {
+      const alvo = document.getElementById('sugestoes-moradores');
+      try {
+        const { moradores } = await api('/api/admin/moradores-busca?q=' + encodeURIComponent((termo || '').trim()));
+        if (!moradores || moradores.length === 0) {
+          alvo.innerHTML = '<div style="padding:10px 12px; font-size:13px; color:#64748b;">Nenhum morador encontrado.</div>';
+          alvo.classList.remove('hidden');
+          return;
+        }
+        alvo.innerHTML = moradores.map(m => `
+          <div style="padding:10px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.15s;" 
+               onmouseover="this.style.background='#eff6ff'" 
+               onmouseout="this.style.background='transparent'" 
+               onclick='selecionarMorador(${JSON.stringify(m).replace(/'/g, "&#39;")})'>
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+              <div style="font-weight:600; color:#1e293b; font-size:14px;">${escapeHtml(m.nome)}</div>
+              <span class="badge ${m.tipo === 'admin' ? 'admin' : 'morador'}">${escapeHtml(m.bloco || m.tipo || 'Morador')}</span>
+            </div>
+            <div style="font-size:12px; color:#64748b; margin-top:2px;">
+              ${m.email ? `<b>E-mail:</b> ${escapeHtml(m.email)}` : '<i>Sem e-mail</i>'}
+              ${m.telefone ? `&nbsp;|&nbsp;<b>Tel:</b> ${escapeHtml(m.telefone)}` : ''}
+            </div>
+          </div>
+        `).join('');
+        alvo.classList.remove('hidden');
+      } catch (err) {
+        alvo.innerHTML = `<div style="padding:8px 12px; font-size:12px; color:#ef4444;">Erro na busca: ${escapeHtml(err.message)}</div>`;
+        alvo.classList.remove('hidden');
+      }
+    }
+
+    function selecionarMorador(m) {
+      moradorSelecionadoId = m.id || null;
+      document.getElementById('nome').value = m.nome || '';
+      if (m.telefone) document.getElementById('telefone').value = m.telefone;
+      if (m.email) document.getElementById('email').value = m.email;
+      if (m.bloco) document.getElementById('bloco').value = m.bloco;
+      
+      document.getElementById('busca-morador').value = `${m.nome} (${m.bloco || 'Sem lote'})`;
+      document.getElementById('sugestoes-moradores').classList.add('hidden');
+
+      const aviso = document.getElementById('aviso-morador-selecionado');
+      if (aviso) {
+        aviso.innerHTML = `&#10004; Morador <strong>${escapeHtml(m.nome)}</strong> selecionado! Dados preenchidos. Ao cadastrar, ele terá perfil Administrador mantendo seu lote. A senha atual será mantida (ou informe uma nova abaixo).`;
+        aviso.classList.remove('hidden');
+      }
+
+      // Senha passa a ser opcional se o morador já possui conta
+      const inputPass = document.getElementById('password');
+      inputPass.required = false;
+      inputPass.placeholder = 'Deixe em branco para manter a senha atual do morador';
+      document.getElementById('label-password').textContent = 'Senha (deixe em branco para manter a atual)';
+    }
 
     function atualizarCamposPorTipo() {
       const tipo = document.getElementById('tipo').value;
-      // Mostra campos de lote apenas para moradores
-      document.getElementById('campos-morador').classList.toggle('hidden', tipo !== 'morador');
+      // Mostra campos de lote para morador e admin (muitos administradores são moradores)
+      document.getElementById('campos-morador').classList.toggle('hidden', tipo === 'porteiro');
 
       const wrapBuscaPrestador = document.getElementById('wrap-busca-prestador');
+      const wrapBuscaMorador = document.getElementById('wrap-busca-morador');
       const labelNome = document.getElementById('label-nome');
       const inputNome = document.getElementById('nome');
       const wrapEmail = document.getElementById('wrap-email');
       const dicaPorteiro = document.getElementById('dica-porteiro');
       const inputEmail = document.getElementById('email');
+      const inputPass = document.getElementById('password');
 
       if (editandoId) {
         // Ao editar, o e-mail nunca e alterado por este formulario
         if (wrapBuscaPrestador) wrapBuscaPrestador.classList.add('hidden');
+        if (wrapBuscaMorador) wrapBuscaMorador.classList.add('hidden');
         if (labelNome) labelNome.textContent = 'Nome completo *';
         if (inputNome) inputNome.placeholder = '';
         if (wrapEmail) wrapEmail.classList.add('hidden');
@@ -268,6 +358,7 @@
         if (tipo === 'porteiro') {
           // Para porteiro, mostra busca de prestador, altera label para Login do Porteiro e esconde o e-mail
           if (wrapBuscaPrestador) wrapBuscaPrestador.classList.remove('hidden');
+          if (wrapBuscaMorador) wrapBuscaMorador.classList.add('hidden');
           if (labelNome) labelNome.textContent = 'Nome completo (Login do Porteiro) *';
           if (inputNome) inputNome.placeholder = 'Nome que o porteiro usará para entrar';
           if (wrapEmail) wrapEmail.classList.add('hidden');
@@ -276,14 +367,36 @@
             inputEmail.required = false;
             inputEmail.value = '';
           }
-        } else {
-          // Para morador ou admin, e-mail e obrigatorio e esconde busca de prestador
+          if (inputPass) {
+            inputPass.required = true;
+            inputPass.placeholder = 'Mínimo 6 caracteres';
+          }
+        } else if (tipo === 'admin') {
+          // Para administrador, mostra busca de morador cadastrado
           if (wrapBuscaPrestador) wrapBuscaPrestador.classList.add('hidden');
+          if (wrapBuscaMorador) wrapBuscaMorador.classList.remove('hidden');
           if (labelNome) labelNome.textContent = 'Nome completo *';
           if (inputNome) inputNome.placeholder = '';
           if (wrapEmail) wrapEmail.classList.remove('hidden');
           if (dicaPorteiro) dicaPorteiro.classList.add('hidden');
           if (inputEmail) inputEmail.required = true;
+          if (inputPass && !moradorSelecionadoId) {
+            inputPass.required = true;
+            inputPass.placeholder = 'Mínimo 6 caracteres';
+          }
+        } else {
+          // Para morador, esconde buscas
+          if (wrapBuscaPrestador) wrapBuscaPrestador.classList.add('hidden');
+          if (wrapBuscaMorador) wrapBuscaMorador.classList.add('hidden');
+          if (labelNome) labelNome.textContent = 'Nome completo *';
+          if (inputNome) inputNome.placeholder = '';
+          if (wrapEmail) wrapEmail.classList.remove('hidden');
+          if (dicaPorteiro) dicaPorteiro.classList.add('hidden');
+          if (inputEmail) inputEmail.required = true;
+          if (inputPass) {
+            inputPass.required = true;
+            inputPass.placeholder = 'Mínimo 6 caracteres';
+          }
         }
       }
     }
@@ -365,6 +478,7 @@
 
     function cancelarEdicao() {
       editandoId = null;
+      moradorSelecionadoId = null;
       formUsuario.reset();
       const buscaPrestador = document.getElementById('busca-prestador');
       if (buscaPrestador) buscaPrestador.value = '';
@@ -372,6 +486,13 @@
       if (avisoPrestador) avisoPrestador.classList.add('hidden');
       const sug = document.getElementById('sugestoes-prestadores');
       if (sug) sug.classList.add('hidden');
+
+      const buscaMorador = document.getElementById('busca-morador');
+      if (buscaMorador) buscaMorador.value = '';
+      const avisoMorador = document.getElementById('aviso-morador-selecionado');
+      if (avisoMorador) avisoMorador.classList.add('hidden');
+      const sugM = document.getElementById('sugestoes-moradores');
+      if (sugM) sugM.classList.add('hidden');
 
       const inputPass = document.getElementById('password');
       inputPass.value = '';
@@ -411,19 +532,28 @@
           cancelarEdicao();
           msgUsuario.textContent = 'Usuário atualizado com sucesso.';
         } else {
+          const payload = {
+            ...dados,
+            email: document.getElementById('email').value.trim(),
+            password: document.getElementById('password').value,
+          };
+          if (moradorSelecionadoId && dados.tipo === 'admin') {
+            payload.morador_id = moradorSelecionadoId;
+          }
           await api('/api/admin/usuarios', {
             method: 'POST',
-            body: JSON.stringify({
-              ...dados,
-              email: document.getElementById('email').value.trim(),
-              password: document.getElementById('password').value,
-            }),
+            body: JSON.stringify(payload),
           });
           formUsuario.reset();
+          moradorSelecionadoId = null;
           const buscaPrestador = document.getElementById('busca-prestador');
           if (buscaPrestador) buscaPrestador.value = '';
           const avisoPrestador = document.getElementById('aviso-prestador-selecionado');
           if (avisoPrestador) avisoPrestador.classList.add('hidden');
+          const buscaMorador = document.getElementById('busca-morador');
+          if (buscaMorador) buscaMorador.value = '';
+          const avisoMorador = document.getElementById('aviso-morador-selecionado');
+          if (avisoMorador) avisoMorador.classList.add('hidden');
           atualizarCamposPorTipo();
           msgUsuario.textContent = 'Usuário cadastrado com sucesso.';
         }
@@ -463,9 +593,10 @@
             ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
             : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
           
+          const emailOuTel = u.email ? `${escapeHtml(u.email)}${u.telefone ? ' | ' + escapeHtml(u.telefone) : ''}` : (u.telefone ? escapeHtml(u.telefone) : '');
           const infoSub = u.tipo === 'porteiro'
             ? '<div class="text-muted" style="font-size:12px; color:var(--verde);">&#128273; Login: Nome e Senha</div>'
-            : (isPend && u.telefone ? `<div class="text-muted" style="font-size:12px;">${escapeHtml(u.telefone)}</div>` : '');
+            : (emailOuTel ? `<div class="text-muted" style="font-size:12px;">${emailOuTel}</div>` : '');
 
           return `
             <tr${isPend ? ' style="background:#fffbea;"' : ''}>
