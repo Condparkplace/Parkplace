@@ -189,23 +189,6 @@
           </form>
           <div id="msg-usuario" class="msg hidden"></div>
         </div>
-
-        <!-- Link de cadastro para moradores -->
-        <div class="card" style="margin-top:18px; border-left:4px solid var(--verde);">
-          <h2>&#128279; Link "Cadastrar morador"</h2>
-          <p class="text-muted" style="margin:0 0 10px; font-size:13px;">
-            Envie este link para o morador fazer o próprio cadastro.
-            O acesso só é liberado depois que você clicar em <strong>Aprovar</strong>.
-          </p>
-          <input type="text" id="link-cadastro" readonly onclick="this.select()" />
-          <div class="row-inline" style="margin-top:10px;">
-            <button type="button" class="mini" id="btn-copiar-link" onclick="copiarLink()">Copiar link</button>
-            <button type="button" class="mini" style="background:#25d366;" onclick="enviarWhatsApp()">Enviar por
-              WhatsApp</button>
-            <button type="button" class="secundario mini" onclick="window.open(linkCadastro(), '_blank')">Abrir
-              página</button>
-          </div>
-        </div>
       </div>
 
       <!-- Lista de usuarios -->
@@ -478,29 +461,6 @@
       }
     }
 
-
-    function linkCadastro() {
-      return location.origin + '/cadastro.html';
-    }
-    document.getElementById('link-cadastro').value = linkCadastro();
-
-    async function copiarLink() {
-      const btn = document.getElementById('btn-copiar-link');
-      try {
-        await navigator.clipboard.writeText(linkCadastro());
-      } catch {
-        const inp = document.getElementById('link-cadastro');
-        inp.select();
-        document.execCommand('copy');
-      }
-      btn.textContent = 'Copiado!';
-      setTimeout(() => (btn.textContent = 'Copiar link'), 2000);
-    }
-
-    function enviarWhatsApp() {
-      const texto = 'Olá! Para acessar o sistema da portaria do Park Place Residencial, faça seu cadastro neste link: ' + linkCadastro();
-      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
-    }
 
     async function aprovarUsuario(id) {
       try {
