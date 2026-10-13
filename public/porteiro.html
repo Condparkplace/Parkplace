@@ -340,6 +340,15 @@
         btn.innerHTML = '&#128259; Atualizando...';
       }
       try {
+        const inputBuscaDoc = document.getElementById('busca-doc');
+        if (inputBuscaDoc) inputBuscaDoc.value = '';
+        const msgBusca = document.getElementById('msg-busca');
+        if (msgBusca) {
+          msgBusca.textContent = '';
+          msgBusca.classList.add('hidden');
+        }
+        document.getElementById('alerta-morador-cpf')?.classList.add('hidden');
+        document.getElementById('alerta-obs-visitante')?.classList.add('hidden');
         await carregarPrevistas();
       } finally {
         if (btn) {
@@ -349,7 +358,7 @@
       }
     }
 
-    // Renderiza a lista. Se docEmDestaque for informado, destaca a linha dele.
+    // Renderiza a lista. Se docEmDestaque for informado, filtra para exibir SOMENTE o item buscado.
     async function carregarPrevistas(docEmDestaque = null, pularFetch = false) {
       const alvo = document.getElementById('lista-previstas');
       try {
@@ -370,8 +379,17 @@
           lista = lista.filter(a => (a.morador?.nome || '').toLowerCase().includes(buscaMorador));
         }
 
+        if (alvoCpf || (docEmDestaque && docEmDestaque.trim())) {
+          lista = lista.filter((a) => {
+            const docA = (a.documento_visitante || '').replace(/\D/g, '');
+            if (alvoCpf && docA && docA === alvoCpf) return true;
+            if (docEmDestaque && (a.documento_visitante || '').trim().toLowerCase() === docEmDestaque.trim().toLowerCase()) return true;
+            return false;
+          });
+        }
+
         if (!lista.length) {
-          alvo.innerHTML = '<p class="vazio">Nenhuma visita prevista para hoje.</p>';
+          alvo.innerHTML = '<p class="vazio">' + (docEmDestaque ? 'Nenhuma visita encontrada para o documento buscado.' : 'Nenhuma visita prevista para hoje.') + '</p>';
           return;
         }
         alvo.innerHTML = `
@@ -660,7 +678,21 @@
     // Mascara e validação em tempo real para campos de CPF na portaria
     const inpBuscaDoc = document.getElementById('busca-doc');
     const avisoCpfBusca = document.getElementById('aviso-cpf-busca');
-    if (inpBuscaDoc) vincularValidadorCpf(inpBuscaDoc, avisoCpfBusca);
+    if (inpBuscaDoc) {
+      vincularValidadorCpf(inpBuscaDoc, avisoCpfBusca);
+      inpBuscaDoc.addEventListener('input', () => {
+        if (!inpBuscaDoc.value.trim()) {
+          const msg = document.getElementById('msg-busca');
+          if (msg) {
+            msg.textContent = '';
+            msg.classList.add('hidden');
+          }
+          document.getElementById('alerta-morador-cpf')?.classList.add('hidden');
+          document.getElementById('alerta-obs-visitante')?.classList.add('hidden');
+          carregarPrevistas();
+        }
+      });
+    }
 
     const inpDocPortaria = document.getElementById('documento');
     const avisoCpfDoc = document.getElementById('aviso-cpf-documento');
