@@ -198,9 +198,13 @@
       <!-- Lista de visitas previstas (sempre visivel) -->
       <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
         <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
-        <div style="margin-bottom:12px;">
+        <div style="margin-bottom:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
           <input type="text" id="busca-morador-previstas" placeholder="Buscar por nome do morador..."
-            oninput="carregarPrevistas(null, true)" style="max-width:300px; width:100%;" />
+            oninput="carregarPrevistas(null, true)" style="max-width:300px; width:100%; margin:0;" />
+          <button type="button" id="btn-atualizar-previstas" onclick="atualizarGradeVisitantes()"
+            style="padding:9px 18px; font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:6px; background-color:#2b6cb0; color:white; border:none; border-radius:6px; cursor:pointer; height:38px;">
+            &#128259; ATUALIZAR
+          </button>
         </div>
         <div id="lista-previstas">
           <p class="vazio">Carregando...</p>
@@ -312,6 +316,23 @@
       return d.getFullYear() === h.getFullYear()
         && d.getMonth() === h.getMonth()
         && d.getDate() === h.getDate();
+    }
+
+    async function atualizarGradeVisitantes() {
+      const btn = document.getElementById('btn-atualizar-previstas');
+      const originalHtml = btn ? btn.innerHTML : '&#128259; ATUALIZAR';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '&#128259; Atualizando...';
+      }
+      try {
+        await carregarPrevistas();
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalHtml;
+        }
+      }
     }
 
     // Renderiza a lista. Se docEmDestaque for informado, destaca a linha dele.
@@ -437,6 +458,11 @@
           }),
         });
 
+        const alertaMorador = document.getElementById('alerta-morador-cpf');
+        if (alertaMorador) alertaMorador.classList.add('hidden');
+        const alertaObs = document.getElementById('alerta-obs-visitante');
+        if (alertaObs) alertaObs.classList.add('hidden');
+
         carregarPrevistas();
         trocarAba('presentes');
       } catch (err) {
@@ -495,6 +521,26 @@
           (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
         );
         if (avisoHoje) {
+          // Busca observação ou status de morador para exibir os alertas
+          try {
+            const r = await api('/api/portaria/buscar?documento=' + encodeURIComponent(doc));
+            if (r && r.eh_morador) {
+              const m = r.morador || {};
+              const loteTxt = m.bloco ? `do ${escapeHtml(m.bloco)}` : 'cadastrado no condomínio';
+              if (alertaMoradorTexto) alertaMoradorTexto.innerHTML = `Esta pessoa é moradora <strong>${loteTxt}</strong> (<strong>${escapeHtml(m.nome)}</strong>).`;
+              if (alertaMorador) alertaMorador.classList.remove('hidden');
+            } else {
+              if (alertaMorador) alertaMorador.classList.add('hidden');
+            }
+            const obsTexto = (r?.observacao_cadastro || '').trim();
+            if (obsTexto) {
+              if (alertaObsTexto) alertaObsTexto.textContent = obsTexto;
+              if (alertaObs) alertaObs.classList.remove('hidden');
+            } else {
+              if (alertaObs) alertaObs.classList.add('hidden');
+            }
+          } catch (_) {}
+
           // Destaca a linha deste documento e NAO abre o formulario.
           formEntrada.classList.add('hidden');
           await carregarPrevistas(doc, true);
@@ -723,6 +769,8 @@
         document.getElementById('msg-busca').classList.add('hidden');
         const alertaMorador = document.getElementById('alerta-morador-cpf');
         if (alertaMorador) alertaMorador.classList.add('hidden');
+        const alertaObs = document.getElementById('alerta-obs-visitante');
+        if (alertaObs) alertaObs.classList.add('hidden');
         formEntrada.classList.add('hidden');
         msgEntrada.textContent = 'Entrada registrada com sucesso por ' + perfil.nome + '.';
         msgEntrada.className = 'msg ok';

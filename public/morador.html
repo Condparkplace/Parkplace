@@ -478,13 +478,19 @@
         const { encomendas } = await api('/api/morador/encomendas');
         if (encomendas && encomendas.length > 0) {
           alerta.classList.remove('hidden');
-          lista.innerHTML = encomendas.map(e => `
-            <div style="background:white; padding:12px; border-radius:6px; border:1px solid #fbcfe8; display:flex; flex-direction:column; gap:4px;">
-              <strong style="color:#2d3748;">${escapeHtml(e.destino_apto || '1 pacote(s)')}</strong>
-              <span style="font-size:13px; color:#4a5568;">Recebido em: ${formatarData(e.entrada)}</span>
-              <span style="font-size:13px; color:#4a5568;">Recebido por: ${escapeHtml(e.porteiro_entrada || 'Portaria')}</span>
-            </div>
-          `).join('');
+          lista.innerHTML = encomendas.map(e => {
+            const obsLimpa = (e.observacao || '').replace(/^\[ENCOMENDA\]\s*/i, '').trim();
+            const destinatario = obsLimpa || 'Encomenda';
+            const pacotes = e.destino_apto || '1 pacote(s)';
+            return `
+              <div style="background:white; padding:12px; border-radius:6px; border:1px solid #fbcfe8; display:flex; flex-direction:column; gap:4px;">
+                <strong style="color:#2d3748; font-size:14px;">${escapeHtml(destinatario)}</strong>
+                <span style="font-size:13px; color:#4a5568;">📦 Volumes: <strong>${escapeHtml(pacotes)}</strong></span>
+                <span style="font-size:13px; color:#4a5568;">Recebido em: ${formatarData(e.entrada)}</span>
+                <span style="font-size:13px; color:#4a5568;">Recebido por: ${escapeHtml(e.porteiro_entrada || 'Portaria')}</span>
+              </div>
+            `;
+          }).join('');
         } else {
           alerta.classList.add('hidden');
           lista.innerHTML = '';

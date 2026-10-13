@@ -606,20 +606,18 @@ app.post('/api/morador/avisos/:id/cancelar', requireAuth, requireRole('morador',
 
 // Lista de encomendas pendentes para o morador logado
 app.get('/api/morador/encomendas', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
-  const { data: perfil } = await req.supabase.from('perfis').select('bloco, nome').eq('id', req.user.id).single();
+  const { data: perfil } = await supabaseAdmin.from('perfis').select('bloco, nome').eq('id', req.user.id).single();
   const bloco = perfil?.bloco;
-  const nome = perfil?.nome;
 
   if (!bloco) return res.json({ encomendas: [] });
 
   const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
 
-  const { data, error } = await req.supabase
+  const { data, error } = await supabaseAdmin
     .from('registros_portaria')
     .select('*')
     .eq('nome_pessoa', 'Encomenda')
     .ilike('destino_bloco', `%${numeroBloco}%`)
-    .ilike('observacao', `%${nome}%`)
     .is('saida', null)
     .order('entrada', { ascending: false });
 

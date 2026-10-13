@@ -53,11 +53,11 @@
           </div>
 
           <form id="form-confirmacao-rapida" onsubmit="event.preventDefault(); enviarAvisoExistente();">
-            <label for="veiculo_placa_rapido">Veículo / placa (Opcional)</label>
-            <input type="text" id="veiculo_placa_rapido" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" />
+            <label for="veiculo_placa_rapido">Veículo / placa *</label>
+            <input type="text" id="veiculo_placa_rapido" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" required />
 
-            <label for="data_prevista_rapida">Data/hora prevista (Opcional)</label>
-            <input type="datetime-local" id="data_prevista_rapida" />
+            <label for="data_prevista_rapida">Data/hora prevista *</label>
+            <input type="datetime-local" id="data_prevista_rapida" required />
 
             <button type="submit" class="block" id="btn-confirmar-rapido" style="margin-top:18px; background:var(--verde); color:#fff;">
               Confirmar solicitação de entrada
@@ -85,34 +85,34 @@
             <input type="text" id="documento_visitante" required />
             <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
-            <label for="veiculo_placa">Veículo / placa (Opcional)</label>
-            <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" />
+            <label for="veiculo_placa">Veículo / placa *</label>
+            <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" required />
 
-            <label for="data_prevista">Data/hora prevista (Opcional)</label>
-            <input type="datetime-local" id="data_prevista" />
+            <label for="data_prevista">Data/hora prevista *</label>
+            <input type="datetime-local" id="data_prevista" required />
 
             <div id="area-endereco" class="hidden">
-              <h3 style="margin:18px 0 4px; font-size:16px;">Endereço da Empresa/Prestador</h3>
+              <h3 style="margin:18px 0 4px; font-size:16px;">Endereço da Empresa/Prestador *</h3>
               <div class="grid grid-2">
                 <div>
-                  <label for="cep">CEP</label>
+                  <label for="cep">CEP *</label>
                   <input type="text" id="cep" placeholder="00000-000" maxlength="9" />
                   <span id="msg-cep" class="text-muted" style="display:block; margin-top:4px; font-size:13px;"></span>
                 </div>
                 <div>
-                  <label for="end_numero">Número</label>
+                  <label for="end_numero">Número *</label>
                   <input type="text" id="end_numero" placeholder="Ex: 123" />
                 </div>
                 <div>
-                  <label for="end_logradouro">Logradouro</label>
+                  <label for="end_logradouro">Logradouro *</label>
                   <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
                 </div>
                 <div>
-                  <label for="end_bairro">Bairro</label>
+                  <label for="end_bairro">Bairro *</label>
                   <input type="text" id="end_bairro" />
                 </div>
                 <div>
-                  <label for="end_cidade">Cidade / UF</label>
+                  <label for="end_cidade">Cidade / UF *</label>
                   <div class="row-inline">
                     <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
                     <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
@@ -179,6 +179,10 @@
 
       if (tipo === 'Prestador') {
         document.getElementById('area-endereco').classList.remove('hidden');
+        ['cep', 'end_numero', 'end_logradouro', 'end_bairro', 'end_cidade', 'end_uf'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.required = true;
+        });
       }
     }
 
@@ -265,13 +269,29 @@
       const msgRapido = document.getElementById('msg-rapido');
       msgRapido.classList.add('hidden');
 
+      const dt = document.getElementById('data_prevista_rapida').value;
+      const placa = document.getElementById('veiculo_placa_rapido').value.trim();
+
+      if (!placa) {
+        msgRapido.textContent = 'Por favor, informe a placa do veículo.';
+        msgRapido.className = 'msg erro';
+        msgRapido.classList.remove('hidden');
+        document.getElementById('veiculo_placa_rapido').focus();
+        return;
+      }
+
+      if (!dt) {
+        msgRapido.textContent = 'Por favor, informe a data/hora prevista.';
+        msgRapido.className = 'msg erro';
+        msgRapido.classList.remove('hidden');
+        document.getElementById('data_prevista_rapida').focus();
+        return;
+      }
+
       btnRapido.disabled = true;
       btnRapido.textContent = 'Enviando...';
 
       try {
-        const dt = document.getElementById('data_prevista_rapida').value;
-        const placa = document.getElementById('veiculo_placa_rapido').value.trim();
-
         await api('/api/public/avisos', {
           method: 'POST',
           body: JSON.stringify({
@@ -365,8 +385,28 @@
       e.preventDefault();
       msg.classList.add('hidden');
 
+      const nomeVal = document.getElementById('nome_visitante').value.trim();
       const docExt = document.getElementById('documento_visitante').value.trim();
       const docExtLimpo = docExt.replace(/\D/g, '');
+      const placaVal = document.getElementById('veiculo_placa').value.trim();
+      const dtVal = document.getElementById('data_prevista').value;
+
+      if (!nomeVal) {
+        msg.textContent = 'Por favor, informe seu nome completo.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('nome_visitante').focus();
+        return;
+      }
+
+      if (!docExtLimpo) {
+        msg.textContent = 'Por favor, informe o documento.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('documento_visitante').focus();
+        return;
+      }
+
       if (docExtLimpo.length === 11 && !validarCpf(docExtLimpo)) {
         msg.textContent = 'O CPF informado é inválido! Confira os 11 dígitos.';
         msg.className = 'msg erro';
@@ -376,20 +416,51 @@
         return;
       }
 
+      if (!placaVal) {
+        msg.textContent = 'Por favor, informe o veículo / placa.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('veiculo_placa').focus();
+        return;
+      }
+
+      if (!dtVal) {
+        msg.textContent = 'Por favor, informe a data/hora prevista.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('data_prevista').focus();
+        return;
+      }
+
+      if (tipo === 'Prestador') {
+        const cepVal = document.getElementById('cep').value.trim();
+        const numVal = document.getElementById('end_numero').value.trim();
+        const logVal = document.getElementById('end_logradouro').value.trim();
+        const bairroVal = document.getElementById('end_bairro').value.trim();
+        const cidadeVal = document.getElementById('end_cidade').value.trim();
+        const ufVal = document.getElementById('end_uf').value.trim();
+
+        if (!cepVal || !numVal || !logVal || !bairroVal || !cidadeVal || !ufVal) {
+          msg.textContent = 'Todos os dados de endereço do prestador são obrigatórios.';
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+          return;
+        }
+      }
+
       btn.disabled = true;
       btn.textContent = 'Enviando...';
 
       try {
-        const dt = document.getElementById('data_prevista').value;
         await api('/api/public/avisos', {
           method: 'POST',
           body: JSON.stringify({
             morador_id: morador_id,
-            nome_visitante: document.getElementById('nome_visitante').value.trim(),
+            nome_visitante: nomeVal,
             tipo: tipo,
-            documento_visitante: document.getElementById('documento_visitante').value.trim(),
-            veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
-            data_prevista: dt ? new Date(dt).toISOString() : null,
+            documento_visitante: docExt,
+            veiculo_placa: placaVal,
+            data_prevista: new Date(dtVal).toISOString(),
             endereco_visitante: montarEnderecoVisitante(),
             cep_visitante: tipo === 'Prestador' ? document.getElementById('cep').value.trim() || null : null
           }),
