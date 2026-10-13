@@ -41,7 +41,14 @@ SUPABASE_ANON_KEY=sua-anon-key
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 PORT=3000
 SESSION_SECRET=um-texto-aleatorio-bem-longo
+
+# Push Notifications (gere com: npx web-push generate-vapid-keys)
+VAPID_PUBLIC_KEY=sua-chave-publica-vapid
+VAPID_PRIVATE_KEY=sua-chave-privada-vapid
+VAPID_SUBJECT=mailto:contato@parkplace.com
 ```
+
+> As chaves VAPID são opcionais no desenvolvimento local (há um fallback embutido só para testes). Em produção, **gere e configure as suas** com `npx web-push generate-vapid-keys`.
 
 ## 4. Criar o primeiro administrador
 
@@ -70,11 +77,10 @@ npm start
 
 Acesse **http://localhost:3000** e faça login com o administrador. A partir daí, cadastre porteiros e moradores pela própria tela de administração.
 
-## 6. Deploy no Cloudflare
+## 6. Deploy no Cloudflare Workers
 
-O projeto está totalmente configurado para rodar no **Cloudflare** (Workers com Assets estáticos ou Cloudflare Pages Functions).
+O projeto roda como um **Cloudflare Worker** (Express via `cloudflare:node`) servindo os arquivos estáticos de `public/` pelo binding de Assets. A configuração está em [`wrangler.jsonc`](./wrangler.jsonc) (`main: worker.js`).
 
-### Opção A: Deploy direto via terminal (Wrangler)
 1. Faça login na sua conta do Cloudflare:
 ```bash
 npx wrangler login
@@ -83,20 +89,19 @@ npx wrangler login
 ```bash
 npm run deploy
 ```
-3. No painel da Cloudflare (Workers & Pages > seu projeto > **Settings > Variables and Secrets**), adicione as seguintes variáveis de ambiente:
-   - `SUPABASE_URL`
-   - `SUPABASE_ANON_KEY`
-   - `SUPABASE_SERVICE_ROLE_KEY`
-   - `SESSION_SECRET`
+3. Configure as variáveis/segredos. Como são valores sensíveis, use **secrets** (não ficam no código):
+```bash
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_ANON_KEY
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler secret put SESSION_SECRET
+npx wrangler secret put VAPID_PUBLIC_KEY
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler secret put VAPID_SUBJECT
+```
+   Alternativamente, defina-os pelo painel: **Workers & Pages > seu Worker > Settings > Variables and Secrets**.
 
-### Opção B: Deploy contínuo via GitHub (Cloudflare Pages)
-1. No painel Cloudflare, vá em **Workers & Pages > Create > Pages > Connect to Git**.
-2. Selecione o repositório do projeto.
-3. Nas configurações de build:
-   - **Framework preset**: `None`
-   - **Build output directory**: `public`
-4. Em **Environment variables**, adicione `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` e `SESSION_SECRET`.
-5. Clique em **Save and Deploy**.
+> **Persistência (importante):** o Worker tem filesystem efêmero/somente leitura. Toda a persistência de dados — inclusive observações e **bloqueios de visitantes** — é feita no **Supabase**. Por isso é obrigatório ter rodado o `supabase_schema.sql` atualizado (que inclui a tabela `observacoes_visitantes` com a coluna `historico`). Sem essa coluna, os bloqueios não persistem em produção.
 
 ---
 
@@ -114,18 +119,23 @@ npm run deploy
 ```
 Parkplace/
 ├── server.js              # Servidor Express + rotas da API
+├── worker.js              # Entrada do Cloudflare Worker (roda o Express)
+├── wrangler.jsonc         # Configuração de deploy (Workers + Assets)
 ├── supabase_schema.sql    # Script do banco (rodar no Supabase)
 ├── .env.example           # Modelo de variáveis de ambiente
 ├── src/
 │   ├── supabase.js        # Clientes Supabase (admin, anon, por-token)
 │   └── auth.js            # Sessão por cookie e middlewares de acesso
 └── public/
-    ├── index.html         # Login único
+    ├── index.html         # Login único / landing
+    ├── cadastro.html      # Cadastro público de morador
+    ├── cadastro-visita.html # Cadastro de visita/prestador (link com validade de 2h)
     ├── morador.html       # Painel do morador
     ├── porteiro.html      # Painel da portaria
     ├── admin.html         # Painel administrativo
-    ├── css/style.css      # Estilos
-    └── js/api.js          # Helpers de API/sessão do frontend
+    ├── css/style.css      # Estilos (desktop + mobile)
+    ├── js/api.js          # Helpers de API/sessão do frontend
+    └── sw.js              # Service worker (push notifications)
 ```
 
 ## Segurança

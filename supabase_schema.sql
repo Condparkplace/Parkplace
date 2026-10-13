@@ -219,9 +219,15 @@ create table if not exists public.observacoes_visitantes (
   nome           text not null,
   documento      text,
   observacao     text,
+  historico      jsonb not null default '[]'::jsonb, -- histórico de observações/bloqueios
   atualizado_em  timestamptz not null default now(),
   atualizado_por uuid references public.perfis(id) on delete set null
 );
+
+-- Migracao: garante a coluna historico (JSON) caso a tabela ja exista sem ela.
+-- Essencial para persistir bloqueios e observações em produção (Cloudflare
+-- Workers tem filesystem efêmero/somente leitura; o Supabase é a fonte real).
+alter table public.observacoes_visitantes add column if not exists historico jsonb not null default '[]'::jsonb;
 
 alter table public.observacoes_visitantes enable row level security;
 

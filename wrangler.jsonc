@@ -10,5 +10,11 @@
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"
-  }
+  },
+  // Domínios customizados do Worker. Mantê-los aqui evita que um deploy
+  // remova os domínios configurados no dashboard da Cloudflare.
+  "routes": [
+    { "pattern": "associacaoparkplace.com.br", "custom_domain": true },
+    { "pattern": "www.associacaoparkplace.com.br", "custom_domain": true }
+  ]
 }

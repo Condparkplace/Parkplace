@@ -782,8 +782,7 @@
     });
 
     // PUSH NOTIFICATIONS
-    const publicVapidKey = 'BIOSYWts_mjXNf9VlPkqU_jnGCsXVaf64QLsyw-hI7AbyCbh0D0XufMoWEXWO0RJmJd3RPsQVRp9wgOLEIhe-O0';
-
+    // A chave pública VAPID é obtida do backend (não fica hardcoded no HTML).
     function urlBase64ToUint8Array(base64String) {
       const padding = '='.repeat((4 - base64String.length % 4) % 4);
       const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
@@ -801,11 +800,18 @@
           const register = await navigator.serviceWorker.register('/sw.js');
           console.log('Service Worker registrado com sucesso');
 
+          // Busca a chave pública VAPID do backend.
+          const { publicKey } = await api('/api/push/public-key');
+          if (!publicKey) {
+            console.warn('Chave VAPID indisponível; push não será ativado.');
+            return;
+          }
+
           const permission = await Notification.requestPermission();
           if (permission === 'granted') {
             const subscription = await register.pushManager.subscribe({
               userVisibleOnly: true,
-              applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+              applicationServerKey: urlBase64ToUint8Array(publicKey)
             });
 
             await api('/api/push/subscribe', {

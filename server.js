@@ -7,15 +7,19 @@ const fs = require('fs');
 const crypto = require('crypto');
 const webpush = require('web-push');
 
-// Inicializa VAPID Keys para Push Notifications
-// Substitua as chaves públicas e privadas abaixo se precisar (foram geradas no backend)
-const vapidPublicKey = 'BIOSYWts_mjXNf9VlPkqU_jnGCsXVaf64QLsyw-hI7AbyCbh0D0XufMoWEXWO0RJmJd3RPsQVRp9wgOLEIhe-O0';
-const vapidPrivateKey = 'a12m4cF5E3njmkKf8P2SKRcid34mRAualhbIm05NLsI';
-webpush.setVapidDetails(
-  'mailto:contato@parkplace.com',
-  vapidPublicKey,
-  vapidPrivateKey
-);
+// Inicializa VAPID Keys para Push Notifications.
+// As chaves vêm das variáveis de ambiente (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).
+// Os valores abaixo são apenas fallback para desenvolvimento local.
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY
+  || 'BIOSYWts_mjXNf9VlPkqU_jnGCsXVaf64QLsyw-hI7AbyCbh0D0XufMoWEXWO0RJmJd3RPsQVRp9wgOLEIhe-O0';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY
+  || 'a12m4cF5E3njmkKf8P2SKRcid34mRAualhbIm05NLsI';
+const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:contato@parkplace.com';
+try {
+  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+} catch (err) {
+  console.warn('[AVISO] Falha ao configurar VAPID (push desativado):', err.message);
+}
 
 const { supabaseAnon, supabaseAdmin } = require('./src/supabase');
 const {
@@ -288,6 +292,12 @@ app.put('/api/me', requireAuth, async (req, res) => {
 // ============================================================
 // PUSH NOTIFICATIONS
 // ============================================================
+
+// Expõe a chave pública VAPID para o frontend (evita hardcode no HTML).
+app.get('/api/push/public-key', (req, res) => {
+  res.json({ publicKey: vapidPublicKey });
+});
+
 app.post('/api/push/subscribe', requireAuth, async (req, res) => {
   const subscription = req.body;
   if (!subscription) return res.status(400).json({ error: 'Subscription missing' });
@@ -900,10 +910,15 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
 // ------------------------------------------------------------
 // Observações cadastrais fixas de visitantes e prestadores
 // ------------------------------------------------------------
-const OBS_VISITANTES_FILE = path.join(__dirname, 'scratch', 'observacoes_visitantes.json');
+// Caminho do cache local de observações. Em ambientes sem filesystem gravável
+// (ex.: Cloudflare Workers) fica nulo e o cache opera só em memória + Supabase.
+const OBS_VISITANTES_FILE = (typeof __dirname !== 'undefined')
+  ? path.join(__dirname, 'scratch', 'observacoes_visitantes.json')
+  : null;
 let cacheObsVisitantes = new Map();
 
 function carregarCacheObsVisitantes() {
+  if (!OBS_VISITANTES_FILE) return; // sem filesystem: só memória + Supabase
   try {
     if (fs.existsSync(OBS_VISITANTES_FILE)) {
       const raw = fs.readFileSync(OBS_VISITANTES_FILE, 'utf8');
@@ -916,6 +931,7 @@ function carregarCacheObsVisitantes() {
 }
 
 function salvarCacheObsVisitantes() {
+  if (!OBS_VISITANTES_FILE) return; // sem filesystem: a persistência real é o Supabase
   try {
     const dir = path.dirname(OBS_VISITANTES_FILE);
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
@@ -1112,6 +1128,10 @@ async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, e
       .from('observacoes_visitantes')
       .upsert(payload, { onConflict: 'chave' });
     if (errUp) {
+      console.warn(
+        '[Obs Visitantes] Upsert com histórico falhou (a coluna "historico" jsonb existe no Supabase? rode supabase_schema.sql). ' +
+        'Salvando sem histórico como fallback. Detalhe:', errUp.message
+      );
       const { historico: _, ...basePayload } = payload;
       await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
     }
