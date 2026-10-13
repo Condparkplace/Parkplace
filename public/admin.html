@@ -956,12 +956,12 @@
               <tbody>
                 ${registros.map(r => `
                   <tr>
-                    <td><strong>${formatarData(r.entrada)}</strong></td>
-                    <td>${r.saida ? formatarData(r.saida) : '<span style="color:#16a34a; font-weight:600;">Presente</span>'}</td>
-                    <td>${escapeHtml(r.destino_bloco || '-')}</td>
-                    <td>${escapeHtml(r.veiculo_placa || '-')}</td>
-                    <td>${escapeHtml(r.porteiro_entrada || '-')}</td>
-                    <td>
+                    <td data-label="Entrada"><strong>${formatarData(r.entrada)}</strong></td>
+                    <td data-label="Saída">${r.saida ? formatarData(r.saida) : '<span style="color:#16a34a; font-weight:600;">Presente</span>'}</td>
+                    <td data-label="Destino">${escapeHtml(r.destino_bloco || '-')}</td>
+                    <td data-label="Veículo">${escapeHtml(r.veiculo_placa || '-')}</td>
+                    <td data-label="Porteiro">${escapeHtml(r.porteiro_entrada || '-')}</td>
+                    <td data-label="Observação do Acesso">
                       ${r.observacao ? `<span style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-weight:500;">${escapeHtml(r.observacao)}</span>` : '<span class="text-muted">-</span>'}
                     </td>
                   </tr>

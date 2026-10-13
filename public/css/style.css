@@ -799,6 +799,7 @@ tr:last-child td { border-bottom: none; }
   }
 
   .card table,
+  #modal-tabela-historico table,
   #lista-usuarios table,
   #lista-visitantes table,
   #lista-avisos table,
@@ -814,7 +815,8 @@ tr:last-child td { border-bottom: none; }
   }
 
   /* Esconde o cabeçalho real (os rótulos vêm do data-label) */
-  .card table thead {
+  .card table thead,
+  #modal-tabela-historico table thead {
     position: absolute;
     width: 1px; height: 1px;
     padding: 0; margin: -1px;
@@ -824,10 +826,12 @@ tr:last-child td { border-bottom: none; }
     border: 0;
   }
 
-  .card table tbody { display: block; width: 100%; }
+  .card table tbody,
+  #modal-tabela-historico table tbody { display: block; width: 100%; }
 
   /* Cada linha = um cartão */
-  .card table tr {
+  .card table tr,
+  #modal-tabela-historico table tr {
     display: block;
     background: #fff;
     border: 1px solid var(--cinza-borda);
@@ -836,10 +840,12 @@ tr:last-child td { border-bottom: none; }
     margin-bottom: 12px;
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
   }
-  .card table tr:last-child { margin-bottom: 0; }
+  .card table tr:last-child,
+  #modal-tabela-historico table tr:last-child { margin-bottom: 0; }
 
   /* Cada célula = uma linha "rótulo : valor" */
-  .card table td {
+  .card table td,
+  #modal-tabela-historico table td {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -852,10 +858,12 @@ tr:last-child td { border-bottom: none; }
     text-align: right;
     font-size: 14px;
   }
-  .card table tr td:last-child { border-bottom: none; }
+  .card table tr td:last-child,
+  #modal-tabela-historico table tr td:last-child { border-bottom: none; }
 
   /* Rótulo da coluna (vem do data-label), à esquerda */
-  .card table td::before {
+  .card table td::before,
+  #modal-tabela-historico table td::before {
     content: attr(data-label);
     font-weight: 600;
     color: var(--texto-suave);
