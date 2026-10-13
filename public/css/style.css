@@ -734,3 +734,48 @@ tr:last-child td { border-bottom: none; }
     max-width: 100%;
   }
 }
+
+/* ============================================================
+   CAMPO DE SENHA COM OLHO (MOSTRAR / OCULTAR SENHA)
+   ============================================================ */
+.password-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+.password-wrap input {
+  padding-right: 44px !important;
+}
+.btn-toggle-senha {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent !important;
+  border: none !important;
+  padding: 6px 8px !important;
+  color: #64748b !important;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  margin: 0 !important;
+  width: auto !important;
+  height: auto !important;
+  box-shadow: none !important;
+  transition: color .15s, background .15s;
+}
+.btn-toggle-senha:hover {
+  background: rgba(0, 0, 0, 0.06) !important;
+  color: #1e293b !important;
+}
+.btn-toggle-senha:focus {
+  outline: none;
+}
+.btn-toggle-senha svg {
+  display: block;
+  pointer-events: none;
+}
+

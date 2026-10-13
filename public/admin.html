@@ -131,7 +131,13 @@
 
             <div id="wrap-password">
               <label for="password" id="label-password">Senha inicial *</label>
-              <input type="text" id="password" placeholder="Mínimo 6 caracteres" required />
+              <div class="password-wrap">
+                <input type="password" id="password" placeholder="Mínimo 6 caracteres" required />
+                <button type="button" class="btn-toggle-senha" onclick="toggleSenha('password', this)" title="Ver senha" aria-label="Mostrar ou ocultar senha">
+                  <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                  <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -487,8 +493,14 @@
       document.getElementById('label-password').textContent = 'Nova senha (deixe em branco para manter a atual)';
       const inputPass = document.getElementById('password');
       inputPass.value = '';
+      inputPass.type = 'password';
       inputPass.required = false;
       inputPass.placeholder = 'Deixe em branco para manter a senha atual';
+      const toggleBtn = inputPass.parentElement?.querySelector('.btn-toggle-senha');
+      if (toggleBtn) {
+        toggleBtn.querySelector('.eye-open')?.classList.remove('hidden');
+        toggleBtn.querySelector('.eye-closed')?.classList.add('hidden');
+      }
 
       document.querySelector('#form-usuario').previousElementSibling.textContent = 'Editar usuário';
       btnUsuario.textContent = 'Salvar alterações';
@@ -520,8 +532,14 @@
 
       const inputPass = document.getElementById('password');
       inputPass.value = '';
+      inputPass.type = 'password';
       inputPass.required = true;
       inputPass.placeholder = 'Mínimo 6 caracteres';
+      const toggleBtn = inputPass.parentElement?.querySelector('.btn-toggle-senha');
+      if (toggleBtn) {
+        toggleBtn.querySelector('.eye-open')?.classList.remove('hidden');
+        toggleBtn.querySelector('.eye-closed')?.classList.add('hidden');
+      }
       document.getElementById('label-password').textContent = 'Senha inicial *';
       document.querySelector('#form-usuario').previousElementSibling.textContent = 'Cadastrar usuário';
       btnUsuario.textContent = 'Cadastrar';

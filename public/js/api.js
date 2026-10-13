@@ -125,3 +125,22 @@ function badgeStatus(status) {
   const cls = mapa[status] || 'finalizada';
   return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;
 }
+
+// Alterna a visibilidade da senha (olho aberto / fechado)
+function toggleSenha(inputId, btn) {
+  const inp = document.getElementById(inputId);
+  if (!inp) return;
+  const isPass = inp.type === 'password';
+  inp.type = isPass ? 'text' : 'password';
+  if (btn) {
+    const eyeOpen = btn.querySelector('.eye-open');
+    const eyeClosed = btn.querySelector('.eye-closed');
+    if (eyeOpen && eyeClosed) {
+      eyeOpen.classList.toggle('hidden', isPass);
+      eyeClosed.classList.toggle('hidden', !isPass);
+    }
+    btn.setAttribute('aria-label', isPass ? 'Ocultar senha' : 'Ver senha');
+    btn.title = isPass ? 'Ocultar senha' : 'Ver senha';
+  }
+}
+
