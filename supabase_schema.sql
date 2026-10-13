@@ -210,3 +210,23 @@ create trigger on_auth_user_created
 --    update public.perfis set tipo = 'admin'
 --    where id = (select id from auth.users where email = 'admin@parkplace.com');
 -- ============================================================
+
+-- ------------------------------------------------------------
+-- 7) Observações cadastrais de visitantes e prestadores
+-- ------------------------------------------------------------
+create table if not exists public.observacoes_visitantes (
+  chave          text primary key, -- CPF limpo ou 'nome:...'
+  nome           text not null,
+  documento      text,
+  observacao     text,
+  atualizado_em  timestamptz not null default now(),
+  atualizado_por uuid references public.perfis(id) on delete set null
+);
+
+alter table public.observacoes_visitantes enable row level security;
+
+drop policy if exists observacoes_visitantes_all on public.observacoes_visitantes;
+create policy observacoes_visitantes_all on public.observacoes_visitantes
+  for all using (public.meu_tipo() in ('admin', 'porteiro'))
+  with check (public.meu_tipo() in ('admin', 'porteiro'));
+

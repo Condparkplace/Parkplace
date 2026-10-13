@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const fs = require('fs');
 const webpush = require('web-push');
 
 // Inicializa VAPID Keys para Push Notifications
@@ -649,6 +650,91 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
   res.json({ registros });
 });
 
+// ------------------------------------------------------------
+// Observações cadastrais fixas de visitantes e prestadores
+// ------------------------------------------------------------
+const OBS_VISITANTES_FILE = path.join(__dirname, 'scratch', 'observacoes_visitantes.json');
+let cacheObsVisitantes = new Map();
+
+function carregarCacheObsVisitantes() {
+  try {
+    if (fs.existsSync(OBS_VISITANTES_FILE)) {
+      const raw = fs.readFileSync(OBS_VISITANTES_FILE, 'utf8');
+      const data = JSON.parse(raw);
+      cacheObsVisitantes = new Map(Object.entries(data));
+    }
+  } catch (e) {
+    // Silencioso se o ambiente restringir leitura local
+  }
+}
+
+function salvarCacheObsVisitantes() {
+  try {
+    const dir = path.dirname(OBS_VISITANTES_FILE);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const obj = Object.fromEntries(cacheObsVisitantes);
+    fs.writeFileSync(OBS_VISITANTES_FILE, JSON.stringify(obj, null, 2), 'utf8');
+  } catch (e) {
+    // Silencioso se fs for somente leitura
+  }
+}
+
+carregarCacheObsVisitantes();
+
+async function obterTodasObservacoesVisitantes() {
+  const mapa = new Map(cacheObsVisitantes);
+  try {
+    const { data, error } = await supabaseAdmin
+      .from('observacoes_visitantes')
+      .select('chave, nome, documento, observacao, atualizado_em, atualizado_por');
+    if (!error && Array.isArray(data)) {
+      data.forEach((item) => {
+        if (item.chave) {
+          mapa.set(item.chave, item);
+          cacheObsVisitantes.set(item.chave, item);
+        }
+      });
+      salvarCacheObsVisitantes();
+    }
+  } catch (err) {
+    // Supabase pode ainda não ter a tabela migrada; segue com cache local
+  }
+  return mapa;
+}
+
+async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
+  const todas = await obterTodasObservacoesVisitantes();
+  if (chave && todas.has(chave)) return todas.get(chave);
+  if (docLimpo && todas.has(docLimpo)) return todas.get(docLimpo);
+  if (nomeNorm && todas.has('nome:' + nomeNorm)) return todas.get('nome:' + nomeNorm);
+  return null;
+}
+
+async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
+  const agora = new Date().toISOString();
+  const registro = {
+    chave: (chave || '').trim() || ((documento || '').replace(/\D/g, '') || ('nome:' + (nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''))),
+    nome: (nome || '').trim(),
+    documento: documento ? (documento || '').trim() : null,
+    observacao: (observacao || '').trim(),
+    atualizado_em: agora,
+    atualizado_por: userId || null,
+  };
+
+  cacheObsVisitantes.set(registro.chave, registro);
+  salvarCacheObsVisitantes();
+
+  try {
+    await supabaseAdmin
+      .from('observacoes_visitantes')
+      .upsert(registro, { onConflict: 'chave' });
+  } catch (err) {
+    console.warn('[Obs Visitantes] Erro ao sincronizar com Supabase:', err.message);
+  }
+
+  return registro;
+}
+
 // Busca o cadastro de uma pessoa pelo documento (CPF).
 // Verifica:
 // 1. Base oficial de MORADORES (perfis) -> Prioridade máxima para unificação de cadastro!
@@ -698,6 +784,10 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
     (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
   );
 
+  // Busca observação fixa no cadastro do visitante (se existir)
+  const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, null);
+  const obsCad = obsVisitante ? (obsVisitante.observacao || '').trim() : '';
+
   // SE FOR MORADOR: Unifica o cadastro pelo perfil oficial do morador
   if (moradorEncontrado) {
     return res.json({
@@ -721,6 +811,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
         destino_apto: moradorEncontrado.apartamento || null,
         endereco_visitante: null,
         cep_visitante: null,
+        observacao_cadastro: obsCad,
       },
     });
   }
@@ -740,6 +831,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
         destino_apto: achoReg.destino_apto,
         endereco_visitante: achoReg.endereco_visitante,
         cep_visitante: achoReg.cep_visitante,
+        observacao_cadastro: obsCad,
       },
     });
   }
@@ -759,6 +851,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
         destino_apto: m.apartamento || null,
         endereco_visitante: achoAviso.endereco_visitante || null,
         cep_visitante: achoAviso.cep_visitante || null,
+        observacao_cadastro: obsCad,
       },
     });
   }
@@ -1440,6 +1533,7 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
       const existente = mapa.get(chave);
       if (!existente) {
         mapa.set(chave, {
+          chave,
           nome: nomeLimpo,
           documento: documento || null,
           veiculo_placa: placa || null,
@@ -1464,7 +1558,17 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
       adicionar(r.nome_pessoa, r.documento, r.veiculo_placa, r.tipo, r.entrada)
     );
 
-    let visitantes = Array.from(mapa.values());
+    const mapaObs = await obterTodasObservacoesVisitantes();
+    let visitantes = Array.from(mapa.values()).map((v) => {
+      const docLimpo = (v.documento || '').replace(/\D/g, '');
+      const nomeNorm = v.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const obsObj = (v.chave && mapaObs.get(v.chave)) || (docLimpo && mapaObs.get(docLimpo)) || mapaObs.get('nome:' + nomeNorm);
+      return {
+        ...v,
+        observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
+        observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
+      };
+    });
 
     // Filtro por nome ou documento
     if (busca) {
@@ -1480,6 +1584,147 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
     visitantes.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
 
     res.json({ visitantes });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Detalhes completos e dashboard do visitante para o pop-up
+app.get('/api/admin/visitantes/detalhes', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const chave = (req.query.chave || '').trim();
+    const nome = (req.query.nome || '').trim();
+    const doc = (req.query.documento || '').trim();
+    const docLimpo = doc.replace(/\D/g, '');
+    const nomeNorm = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    if (!chave && !nome && !docLimpo) {
+      return res.status(400).json({ error: 'Informe a chave, nome ou documento do visitante.' });
+    }
+
+    // 1. Observação fixa de cadastro
+    const obsObj = await obterObservacaoVisitante(chave, docLimpo, nomeNorm);
+
+    // 2. Registros reais de portaria
+    const { data: todosReg, error: errReg } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('*')
+      .neq('nome_pessoa', 'Encomenda')
+      .order('entrada', { ascending: false })
+      .limit(1000);
+    if (errReg) throw errReg;
+
+    // Filtra registros desse visitante
+    const registrosPessoa = (todosReg || []).filter((r) => {
+      const rDoc = (r.documento || '').replace(/\D/g, '');
+      if (docLimpo && rDoc && rDoc === docLimpo) return true;
+      const rNome = (r.nome_pessoa || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (nomeNorm && rNome === nomeNorm) return true;
+      return false;
+    });
+
+    const registrosComPorteiros = await comPorteiros(registrosPessoa);
+
+    // 3. Avisos de moradores para esse visitante
+    const { data: todosAv, error: errAv } = await supabaseAdmin
+      .from('avisos_visitas')
+      .select('*, morador:perfis!avisos_visitas_morador_id_fkey(nome, bloco, apartamento)')
+      .order('criado_em', { ascending: false })
+      .limit(1000);
+    if (errAv) throw errAv;
+
+    const avisosPessoa = (todosAv || []).filter((a) => {
+      const aDoc = (a.documento_visitante || '').replace(/\D/g, '');
+      if (docLimpo && aDoc && aDoc === docLimpo) return true;
+      const aNome = (a.nome_visitante || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (nomeNorm && aNome === nomeNorm) return true;
+      return false;
+    });
+
+    // 4. Métricas e Dashboard
+    const veiculosSet = new Set();
+    const destinosMap = new Map();
+    let primeiraData = null;
+    let ultimaData = null;
+    let presenteAgora = false;
+
+    registrosComPorteiros.forEach((r) => {
+      if (r.veiculo_placa && r.veiculo_placa.trim()) {
+        veiculosSet.add(r.veiculo_placa.trim().toUpperCase());
+      }
+      const destino = (r.destino_bloco || '').trim();
+      if (destino) {
+        destinosMap.set(destino, (destinosMap.get(destino) || 0) + 1);
+      }
+      if (r.entrada) {
+        if (!primeiraData || new Date(r.entrada) < new Date(primeiraData)) primeiraData = r.entrada;
+        if (!ultimaData || new Date(r.entrada) > new Date(ultimaData)) ultimaData = r.entrada;
+      }
+      if (!r.saida && r.tipo !== 'Morador') {
+        presenteAgora = true;
+      }
+    });
+
+    avisosPessoa.forEach((a) => {
+      if (a.veiculo_placa && a.veiculo_placa.trim()) {
+        veiculosSet.add(a.veiculo_placa.trim().toUpperCase());
+      }
+      const destinoAviso = (a.morador?.bloco || '').trim();
+      if (destinoAviso && !destinosMap.has(destinoAviso)) {
+        destinosMap.set(destinoAviso, (destinosMap.get(destinoAviso) || 0) + 1);
+      }
+    });
+
+    const destinos = Array.from(destinosMap.entries())
+      .map(([destino, total]) => ({ destino, total }))
+      .sort((a, b) => b.total - a.total);
+
+    const destinoHabitual = destinos.length ? destinos[0].destino : '-';
+    const listaVeiculos = Array.from(veiculosSet);
+    const veiculoHabitual = listaVeiculos.length ? listaVeiculos[0] : '-';
+
+    const nomeFinal = nome || registrosPessoa[0]?.nome_pessoa || avisosPessoa[0]?.nome_visitante || 'Visitante';
+    const docFinal = doc || registrosPessoa[0]?.documento || avisosPessoa[0]?.documento_visitante || null;
+    const tipoFinal = registrosPessoa[0]?.tipo || avisosPessoa[0]?.tipo || 'Visitante';
+
+    res.json({
+      visitante: {
+        chave: chave || docLimpo || ('nome:' + nomeNorm),
+        nome: nomeFinal,
+        documento: docFinal,
+        tipo: tipoFinal,
+        observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
+        observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
+      },
+      kpis: {
+        total_visitas: registrosPessoa.length,
+        total_avisos: avisosPessoa.length,
+        primeira_visita: primeiraData,
+        ultima_visita: ultimaData,
+        presente_agora: presenteAgora,
+        veiculos: listaVeiculos,
+        veiculo_habitual: veiculoHabitual,
+        destinos,
+        destino_habitual: destinoHabitual,
+      },
+      registros: registrosComPorteiros,
+      avisos: avisosPessoa,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Salva observação cadastral fixa de um visitante
+app.post('/api/admin/visitantes/observacao', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { chave, nome, documento, observacao } = req.body || {};
+    if (!chave && !nome && !documento) {
+      return res.status(400).json({ error: 'Informe a identificação do visitante.' });
+    }
+
+    const salvo = await salvarObservacaoVisitante(chave, nome, documento, observacao, req.user.id);
+    res.json({ ok: true, observacao: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

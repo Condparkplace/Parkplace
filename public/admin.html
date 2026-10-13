@@ -840,23 +840,292 @@
       alvo.innerHTML = `
         <table>
           <thead>
-            <tr><th>Nome</th><th>Documento</th><th>Tipo</th><th>Veículo</th><th>Visitas</th><th>Última vez</th></tr>
+            <tr><th>Nome</th><th>Documento</th><th>Tipo</th><th>Veículo</th><th>Visitas</th><th>Última vez</th><th>Observação</th></tr>
           </thead>
           <tbody>
             ${lista.map((v) => `
               <tr>
-                <td>${escapeHtml(v.nome)}</td>
+                <td>
+                  <a href="javascript:void(0)" onclick="abrirDashboardVisitante('${escapeAttr(v.chave || '')}', '${escapeAttr(v.nome)}', '${escapeAttr(v.documento || '')}')" style="font-weight:600; color:var(--azul, #2563eb); text-decoration:none; cursor:pointer;" title="Clique para abrir dashboard e observação do visitante">
+                    ${escapeHtml(v.nome)} <span style="font-size:12px; opacity:0.8;">🔎</span>
+                  </a>
+                </td>
                 <td>${escapeHtml(v.documento || '-')}</td>
                 <td><span class="badge ${escapeHtml((v.tipo || '').toLowerCase())}">${escapeHtml(v.tipo || '-')}</span></td>
                 <td>${escapeHtml(v.veiculo_placa || '-')}</td>
-                <td>${v.vezes || 1}</td>
+                <td><strong>${v.vezes || 1}</strong></td>
                 <td>${formatarData(v.ultima_vez)}</td>
+                <td style="max-width:220px;">
+                  ${v.observacao_cadastro ? `<span style="display:inline-block; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:500;" title="${escapeAttr(v.observacao_cadastro)}">📝 ${escapeHtml(v.observacao_cadastro)}</span>` : '<span class="text-muted" style="font-size:12px;">-</span>'}
+                </td>
               </tr>
             `).join('')}
           </tbody>
         </table>`;
     }
+
+    let visitanteModalAtual = null;
+
+    function escapeAttr(str) {
+      if (str === null || str === undefined) return '';
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/'/g, '&#39;')
+        .replace(/"/g, '&quot;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    async function abrirDashboardVisitante(chave, nome, documento) {
+      visitanteModalAtual = { chave, nome, documento };
+      const modal = document.getElementById('modal-visitante');
+      const loading = document.getElementById('modal-vis-loading');
+      const conteudo = document.getElementById('modal-vis-conteudo');
+      const msgObs = document.getElementById('modal-vis-obs-msg');
+
+      msgObs.style.display = 'none';
+      msgObs.textContent = '';
+      document.getElementById('modal-vis-nome').textContent = nome || 'Visitante';
+      document.getElementById('modal-vis-doc').textContent = documento ? ('Documento: ' + documento) : 'Documento: Não informado';
+
+      modal.classList.remove('hidden');
+      loading.style.display = 'block';
+      conteudo.style.display = 'none';
+
+      try {
+        const query = '?chave=' + encodeURIComponent(chave || '') +
+                      '&nome=' + encodeURIComponent(nome || '') +
+                      '&documento=' + encodeURIComponent(documento || '');
+        const data = await api('/api/admin/visitantes/detalhes' + query);
+
+        const vis = data.visitante || {};
+        const kpis = data.kpis || {};
+        const registros = data.registros || [];
+
+        // Atualiza cabeçalho
+        document.getElementById('modal-vis-nome').textContent = vis.nome || nome;
+        document.getElementById('modal-vis-doc').textContent = vis.documento ? ('CPF / Documento: ' + vis.documento) : 'Documento não informado';
+
+        const badgeTipo = document.getElementById('modal-vis-tipo-badge');
+        badgeTipo.textContent = vis.tipo || 'Visitante';
+        badgeTipo.className = 'badge ' + (vis.tipo || '').toLowerCase();
+
+        const badgeStatus = document.getElementById('modal-vis-status-badge');
+        if (kpis.presente_agora) {
+          badgeStatus.textContent = '🟢 No condomínio agora';
+          badgeStatus.style.display = 'inline-block';
+          badgeStatus.style.background = '#dcfce7';
+          badgeStatus.style.color = '#15803d';
+        } else {
+          badgeStatus.style.display = 'none';
+        }
+
+        // KPIs / Dashboard
+        document.getElementById('modal-kpi-total').textContent = kpis.total_visitas || 0;
+        document.getElementById('modal-kpi-ultima').textContent = kpis.ultima_visita ? formatarData(kpis.ultima_visita) : 'Nunca';
+        document.getElementById('modal-kpi-destino').textContent = kpis.destino_habitual || '-';
+        document.getElementById('modal-kpi-veiculos').textContent = (kpis.veiculos && kpis.veiculos.length) ? kpis.veiculos.join(', ') : 'Nenhum';
+
+        // Campo de observação cadastral fixa
+        const textareaObs = document.getElementById('modal-vis-obs');
+        textareaObs.value = vis.observacao_cadastro || '';
+        const obsData = document.getElementById('modal-vis-obs-data');
+        if (vis.observacao_atualizada_em) {
+          obsData.textContent = 'Atualizado em: ' + formatarData(vis.observacao_atualizada_em);
+        } else {
+          obsData.textContent = '';
+        }
+
+        // Tabela do histórico de acessos na portaria
+        const containerHist = document.getElementById('modal-tabela-historico');
+        if (!registros.length) {
+          containerHist.innerHTML = '<p class="vazio" style="margin:16px 0;">Nenhuma entrada registrada na portaria para este visitante.</p>';
+        } else {
+          containerHist.innerHTML = `
+            <table style="width:100%; font-size:13px; margin:0;">
+              <thead>
+                <tr>
+                  <th>Entrada</th>
+                  <th>Saída</th>
+                  <th>Destino</th>
+                  <th>Veículo</th>
+                  <th>Porteiro</th>
+                  <th>Observação do Acesso</th>
+                </tr>
+              </thead>
+              <tbody>
+                ${registros.map(r => `
+                  <tr>
+                    <td><strong>${formatarData(r.entrada)}</strong></td>
+                    <td>${r.saida ? formatarData(r.saida) : '<span style="color:#16a34a; font-weight:600;">Presente</span>'}</td>
+                    <td>${escapeHtml(r.destino_bloco || '-')}</td>
+                    <td>${escapeHtml(r.veiculo_placa || '-')}</td>
+                    <td>${escapeHtml(r.porteiro_entrada || '-')}</td>
+                    <td>
+                      ${r.observacao ? `<span style="background:#f1f5f9; padding:2px 6px; border-radius:4px; font-weight:500;">${escapeHtml(r.observacao)}</span>` : '<span class="text-muted">-</span>'}
+                    </td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          `;
+        }
+
+        loading.style.display = 'none';
+        conteudo.style.display = 'flex';
+      } catch (err) {
+        loading.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function fecharModalVisitante() {
+      document.getElementById('modal-visitante').classList.add('hidden');
+    }
+
+    async function salvarObservacaoVisitanteModal() {
+      if (!visitanteModalAtual) return;
+      const btn = document.getElementById('btn-salvar-obs-visitante');
+      const msg = document.getElementById('modal-vis-obs-msg');
+      const obsValor = document.getElementById('modal-vis-obs').value.trim();
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      msg.style.display = 'none';
+
+      try {
+        const res = await api('/api/admin/visitantes/observacao', {
+          method: 'POST',
+          body: {
+            chave: visitanteModalAtual.chave,
+            nome: visitanteModalAtual.nome,
+            documento: visitanteModalAtual.documento,
+            observacao: obsValor,
+          },
+        });
+
+        msg.textContent = 'Observação salva com sucesso no cadastro!';
+        msg.className = 'msg ok';
+        msg.style.display = 'inline-block';
+        document.getElementById('modal-vis-obs-data').textContent = 'Atualizado em: ' + formatarData(res.observacao?.atualizado_em || new Date().toISOString());
+
+        // Atualiza na lista local e re-renderiza para refletir na tabela
+        const item = todosVisitantes.find(v =>
+          (v.chave && v.chave === visitanteModalAtual.chave) ||
+          (v.documento && v.documento === visitanteModalAtual.documento) ||
+          (v.nome === visitanteModalAtual.nome)
+        );
+        if (item) {
+          item.observacao_cadastro = obsValor;
+          item.observacao_atualizada_em = res.observacao?.atualizado_em;
+          filtrarVisitantes();
+        }
+      } catch (err) {
+        msg.textContent = 'Erro ao salvar: ' + err.message;
+        msg.className = 'msg erro';
+        msg.style.display = 'inline-block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salvar Observação';
+      }
+    }
   </script>
+
+  <!-- Modal Dashboard e Observação do Visitante -->
+  <div id="modal-visitante" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px;">
+    <div
+      style="background:#fff; border-radius:12px; width:100%; max-width:820px; max-height:90vh; display:flex; flex-direction:column; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden;">
+
+      <!-- Cabeçalho -->
+      <div
+        style="padding:16px 20px; border-bottom:1px solid #e5e7eb; display:flex; justify-content:space-between; align-items:center; background:#f9fafb;">
+        <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+          <div
+            style="width:40px; height:40px; border-radius:50%; background:#e0e7ff; color:#3730a3; display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:bold;">
+            👤
+          </div>
+          <div>
+            <h3 id="modal-vis-nome" style="margin:0; font-size:18px; color:#111827; font-weight:700;">Nome do Visitante</h3>
+            <span id="modal-vis-doc" class="text-muted" style="font-size:13px;">CPF / Documento</span>
+          </div>
+          <span id="modal-vis-tipo-badge" class="badge" style="margin-left:4px;">Visitante</span>
+          <span id="modal-vis-status-badge" class="badge" style="display:none; font-weight:600;"></span>
+        </div>
+        <button type="button" class="secundario mini" onclick="fecharModalVisitante()"
+          style="border:none; font-size:20px; line-height:1; padding:6px 10px; cursor:pointer;" title="Fechar">&times;</button>
+      </div>
+
+      <!-- Loading State -->
+      <div id="modal-vis-loading" style="padding:40px; text-align:center;">
+        <p class="vazio" style="margin:0;">Carregando dados e histórico do visitante...</p>
+      </div>
+
+      <!-- Corpo do Modal -->
+      <div id="modal-vis-conteudo"
+        style="padding:20px; overflow-y:auto; flex:1; display:none; flex-direction:column; gap:20px;">
+
+        <!-- DASHBOARD / KPIS -->
+        <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px, 1fr)); gap:12px;">
+          <div style="background:#f8fafc; border-radius:8px; padding:12px 14px; border-left:4px solid var(--verde, #10b981);">
+            <div style="font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Total de Visitas</div>
+            <div id="modal-kpi-total" style="font-size:24px; font-weight:700; color:#0f172a; margin-top:4px;">0</div>
+          </div>
+          <div style="background:#f8fafc; border-radius:8px; padding:12px 14px; border-left:4px solid #3b82f6;">
+            <div style="font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Último Acesso</div>
+            <div id="modal-kpi-ultima" style="font-size:13px; font-weight:600; color:#0f172a; margin-top:8px;">-</div>
+          </div>
+          <div style="background:#f8fafc; border-radius:8px; padding:12px 14px; border-left:4px solid #f59e0b;">
+            <div style="font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Destino Habitual</div>
+            <div id="modal-kpi-destino" style="font-size:14px; font-weight:600; color:#0f172a; margin-top:8px;">-</div>
+          </div>
+          <div style="background:#f8fafc; border-radius:8px; padding:12px 14px; border-left:4px solid #8b5cf6;">
+            <div style="font-size:11px; color:#64748b; font-weight:700; text-transform:uppercase; letter-spacing:0.5px;">Veículo(s)</div>
+            <div id="modal-kpi-veiculos" style="font-size:13px; font-weight:600; color:#0f172a; margin-top:8px; word-break:break-all;">-</div>
+          </div>
+        </div>
+
+        <!-- CAMPO DE OBSERVAÇÃO DO VISITANTE (CADASTRO FIXO) -->
+        <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:10px; padding:16px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
+            <label for="modal-vis-obs" style="font-weight:700; color:#92400e; margin:0; display:flex; align-items:center; gap:6px; font-size:14px;">
+              📝 Observação do Visitante (Fixa no Cadastro)
+            </label>
+            <span id="modal-vis-obs-data" style="font-size:11px; color:#b45309;"></span>
+          </div>
+          <p style="font-size:12px; color:#78350f; margin:0 0 10px;">
+            Esta observação fica gravada no perfil desta pessoa. Ela será exibida ao porteiro na busca da portaria e nos registros de entrada.
+          </p>
+          <textarea id="modal-vis-obs" rows="3"
+            placeholder="Ex: Mãe da moradora do Lote 12; Prestador oficial de jardinagem; Autorizado sem necessidade de confirmação prévia..."
+            style="width:100%; box-sizing:border-box; border:1px solid #fcd34d; border-radius:6px; padding:10px; font-size:14px; background:#fff;"></textarea>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:8px;">
+            <span id="modal-vis-obs-msg" class="msg" style="margin:0; padding:6px 12px; font-size:12px; display:none;"></span>
+            <button type="button" class="primario mini" id="btn-salvar-obs-visitante" onclick="salvarObservacaoVisitanteModal()"
+              style="margin-left:auto; background:var(--verde); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
+              Salvar Observação
+            </button>
+          </div>
+        </div>
+
+        <!-- HISTÓRICO DE ACESSOS (PORTARIA) -->
+        <div>
+          <h4 style="margin:0 0 10px; font-size:15px; color:#111827; display:flex; align-items:center; gap:6px;">
+            🚪 Histórico de Acessos Registrados na Portaria
+          </h4>
+          <div id="modal-tabela-historico"
+            style="max-height:240px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:8px;">
+          </div>
+        </div>
+
+      </div>
+
+      <!-- Rodapé -->
+      <div style="padding:12px 20px; border-top:1px solid #e5e7eb; background:#f9fafb; display:flex; justify-content:flex-end;">
+        <button type="button" class="secundario" onclick="fecharModalVisitante()">Fechar</button>
+      </div>
+
+    </div>
+  </div>
 </body>
 
 </html>
