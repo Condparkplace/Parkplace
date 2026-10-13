@@ -711,11 +711,11 @@
 
           return `
             <tr${isPend ? ' style="background:#fffbea;"' : ''}>
-              <td>${escapeHtml(u.nome)}${infoSub}</td>
-              <td><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
-              <td>${escapeHtml(local)}</td>
-              <td>${status}</td>
-              <td class="row-inline">
+              <td data-label="Nome">${escapeHtml(u.nome)}${infoSub}</td>
+              <td data-label="Perfil"><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
+              <td data-label="Local">${escapeHtml(local)}</td>
+              <td data-label="Status">${status}</td>
+              <td class="row-inline" data-label="">
                 <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>
                 ${btnStatus}
                 <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
@@ -845,17 +845,17 @@
           <tbody>
             ${lista.map((v) => `
               <tr>
-                <td>
+                <td data-label="Nome">
                   <a href="javascript:void(0)" onclick="abrirDashboardVisitante('${escapeAttr(v.chave || '')}', '${escapeAttr(v.nome)}', '${escapeAttr(v.documento || '')}')" style="font-weight:600; color:var(--azul, #2563eb); text-decoration:none; cursor:pointer;" title="Clique para abrir dashboard e observação do visitante">
                     ${escapeHtml(v.nome)} <span style="font-size:12px; opacity:0.8;">🔎</span>
                   </a>
                 </td>
-                <td>${escapeHtml(v.documento || '-')}</td>
-                <td><span class="badge ${escapeHtml((v.tipo || '').toLowerCase())}">${escapeHtml(v.tipo || '-')}</span></td>
-                <td>${escapeHtml(v.veiculo_placa || '-')}</td>
-                <td><strong>${v.vezes || 1}</strong></td>
-                <td>${formatarData(v.ultima_vez)}</td>
-                <td style="max-width:220px;">
+                <td data-label="Documento">${escapeHtml(v.documento || '-')}</td>
+                <td data-label="Tipo"><span class="badge ${escapeHtml((v.tipo || '').toLowerCase())}">${escapeHtml(v.tipo || '-')}</span></td>
+                <td data-label="Veículo">${escapeHtml(v.veiculo_placa || '-')}</td>
+                <td data-label="Visitas"><strong>${v.vezes || 1}</strong></td>
+                <td data-label="Última vez">${formatarData(v.ultima_vez)}</td>
+                <td data-label="Observação" style="max-width:220px;">
                   ${v.observacao_cadastro ? `<span style="display:inline-block; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:500;" title="${escapeAttr(v.observacao_cadastro)}">📝 ${escapeHtml(v.observacao_cadastro)}</span>` : '<span class="text-muted" style="font-size:12px;">-</span>'}
                 </td>
               </tr>

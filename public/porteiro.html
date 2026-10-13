@@ -363,12 +363,12 @@
 
           return `
                   <tr style="${trStyle}">
-                    <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
-                    <td>${escapeHtml(a.tipo)}</td>
-                    <td>${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + escapeHtml(m.telefone) : ''}</span></td>
-                    <td>${formatarData(a.data_prevista)}</td>
-                    <td>${badgeStatus(a.status)}</td>
-                    <td>
+                    <td data-label="Visitante">${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
+                    <td data-label="Tipo">${escapeHtml(a.tipo)}</td>
+                    <td data-label="Morador / destino">${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + escapeHtml(m.telefone) : ''}</span></td>
+                    <td data-label="Previsto">${formatarData(a.data_prevista)}</td>
+                    <td data-label="Status">${badgeStatus(a.status)}</td>
+                    <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="mini" style="${btnStyle}" onclick='registrarDeAviso(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Registrar entrada</button>
                         <button class="secundario mini" onclick="marcarNaoVeio(${a.id})">Não veio</button>
@@ -753,12 +753,12 @@
           const destino = r.destino_bloco || '-';
           return `
                   <tr>
-                    <td>${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
-                    <td>${escapeHtml(r.tipo)}</td>
-                    <td>${escapeHtml(destino || '-')}</td>
-                    <td>${formatarData(r.entrada)}</td>
-                    <td>${escapeHtml(r.porteiro_entrada || '-')}</td>
-                    <td>
+                    <td data-label="Nome">${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
+                    <td data-label="Tipo">${escapeHtml(r.tipo)}</td>
+                    <td data-label="Destino">${escapeHtml(destino || '-')}</td>
+                    <td data-label="Entrada">${formatarData(r.entrada)}</td>
+                    <td data-label="Porteiro">${escapeHtml(r.porteiro_entrada || '-')}</td>
+                    <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
                         <button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saída</button>
@@ -861,13 +861,13 @@
           }
           return `
                   <tr>
-                    <td>${escapeHtml(r.nome_pessoa)}</td>
-                    <td>${escapeHtml(r.tipo)}</td>
-                    <td>${escapeHtml(destino || '-')}</td>
-                    <td>${naoVeio ? '<span class="text-muted">previsto ' + formatarData(r.entrada) + '</span>' : formatarData(r.entrada)}</td>
-                    <td>${saidaCol}</td>
-                    <td style="font-size:13px;">${porteiroCol}</td>
-                    <td style="font-size:13px; color:var(--vermelho);">${escapeHtml(observacaoText)}</td>
+                    <td data-label="Nome">${escapeHtml(r.nome_pessoa)}</td>
+                    <td data-label="Tipo">${escapeHtml(r.tipo)}</td>
+                    <td data-label="Destino">${escapeHtml(destino || '-')}</td>
+                    <td data-label="Entrada">${naoVeio ? '<span class="text-muted">previsto ' + formatarData(r.entrada) + '</span>' : formatarData(r.entrada)}</td>
+                    <td data-label="Saída">${saidaCol}</td>
+                    <td data-label="Porteiro" style="font-size:13px;">${porteiroCol}</td>
+                    <td data-label="Observação" style="font-size:13px; color:var(--vermelho);">${escapeHtml(observacaoText)}</td>
                   </tr>`;
         }).join('')}
             </tbody>
@@ -1141,11 +1141,11 @@
           const morador = (r.observacao || '').replace('[ENCOMENDA] Para: ', '');
           return `
                   <tr>
-                    <td><strong>${escapeHtml(r.destino_bloco || '')}</strong><br><span class="text-muted">${escapeHtml(morador)}</span></td>
-                    <td>${escapeHtml(r.destino_apto || '1 pacote(s)')}</td>
-                    <td>${formatarData(r.entrada)}</td>
-                    <td>${escapeHtml(r.porteiro_entrada || '')}</td>
-                    <td>
+                    <td data-label="Lote / Morador"><strong>${escapeHtml(r.destino_bloco || '')}</strong><br><span class="text-muted">${escapeHtml(morador)}</span></td>
+                    <td data-label="Qtd Pacotes">${escapeHtml(r.destino_apto || '1 pacote(s)')}</td>
+                    <td data-label="Recebido Em">${formatarData(r.entrada)}</td>
+                    <td data-label="Recebido Por">${escapeHtml(r.porteiro_entrada || '')}</td>
+                    <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="mini" style="background-color:#d53f8c; color:white;" onclick="abrirModalRetiradaEncomenda(${r.id}, '${escapeHtml(r.destino_bloco || '').replace(/'/g, "\\'")}', '${escapeHtml(r.observacao || '').replace(/'/g, "\\'")}')">Registrar Retirada</button>
                       </div>

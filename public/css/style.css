@@ -605,10 +605,9 @@ tr:last-child td { border-bottom: none; }
   .admin-nav::-webkit-scrollbar { display: none; }
   .admin-nav a { flex: 0 0 auto; }
 
-  /* ---------- Tabelas: scroll horizontal confiável ---------- */
-  /* As tabelas são geradas via JS (sem wrapper). Para rolar no toque sem
-     desalinhar colunas, o container que envolve cada tabela recebe o overflow
-     e a própria tabela mantém a estrutura nativa (thead/tbody alinhados). */
+  /* ---------- Tabelas: fallback de scroll horizontal (601px–760px) ---------- */
+  /* Entre tablet pequeno e 760px mantemos a rolagem lateral; abaixo de 600px
+     as tabelas viram cartões (ver bloco mais adiante). */
   #lista-usuarios,
   #lista-visitantes,
   #lista-avisos,
@@ -779,3 +778,125 @@ tr:last-child td { border-bottom: none; }
   pointer-events: none;
 }
 
+
+/* ============================================================
+   TABELAS COMO CARTÕES (card view) — celular (<=600px)
+   Cada linha vira um cartão; o cabeçalho de cada coluna aparece
+   à esquerda do valor via atributo data-label nas células (td).
+   As tabelas são geradas por JS; os td recebem data-label="...".
+   ============================================================ */
+@media (max-width: 600px) {
+  /* Desliga a rolagem lateral: no celular pequeno usamos cartões */
+  #lista-usuarios,
+  #lista-visitantes,
+  #lista-avisos,
+  #lista-previstas,
+  #lista-presentes,
+  #lista-historico,
+  #lista-encomendas,
+  #lista-frequentes {
+    overflow-x: visible;
+  }
+
+  .card table,
+  #lista-usuarios table,
+  #lista-visitantes table,
+  #lista-avisos table,
+  #lista-previstas table,
+  #lista-presentes table,
+  #lista-historico table,
+  #lista-encomendas table,
+  #lista-frequentes table {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    border-collapse: separate;
+  }
+
+  /* Esconde o cabeçalho real (os rótulos vêm do data-label) */
+  .card table thead {
+    position: absolute;
+    width: 1px; height: 1px;
+    padding: 0; margin: -1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .card table tbody { display: block; width: 100%; }
+
+  /* Cada linha = um cartão */
+  .card table tr {
+    display: block;
+    background: #fff;
+    border: 1px solid var(--cinza-borda);
+    border-radius: 10px;
+    padding: 6px 12px;
+    margin-bottom: 12px;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.05);
+  }
+  .card table tr:last-child { margin-bottom: 0; }
+
+  /* Cada célula = uma linha "rótulo : valor" */
+  .card table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 14px;
+    width: 100%;
+    padding: 8px 0;
+    border: none;
+    border-bottom: 1px solid #eef1f4;
+    white-space: normal;
+    text-align: right;
+    font-size: 14px;
+  }
+  .card table tr td:last-child { border-bottom: none; }
+
+  /* Rótulo da coluna (vem do data-label), à esquerda */
+  .card table td::before {
+    content: attr(data-label);
+    font-weight: 600;
+    color: var(--texto-suave);
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: .02em;
+    text-align: left;
+    flex: 0 0 42%;
+    white-space: normal;
+  }
+  /* Células sem rótulo (ex.: coluna de ações) ocupam a largura toda */
+  .card table td[data-label=""]::before,
+  .card table td:not([data-label])::before {
+    content: "";
+    flex: 0;
+  }
+
+  /* Coluna de ações: ocupa a linha inteira e os botões distribuem o espaço.
+     Cobre dois casos: botões direto no td (admin) e dentro de div.row-inline (porteiro). */
+  .card table td[data-label=""] { padding: 10px 0 4px; }
+  .card table td[data-label=""] > .row-inline { width: 100%; }
+
+  .card table td.row-inline,
+  .card table td .row-inline {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: stretch;
+    gap: 8px;
+  }
+  .card table td.row-inline > .mini,
+  .card table td.row-inline > button,
+  .card table td .row-inline > .mini,
+  .card table td .row-inline > button,
+  .card table td[data-label=""] > button {
+    flex: 1 1 auto;
+    text-align: center;
+    padding: 10px 12px;
+    font-size: 13px;
+    margin: 0;
+  }
+
+  /* Dentro do cartão, blocos auxiliares (placa, telefone) alinham à direita */
+  .card table td .text-muted { display: block; }
+}
