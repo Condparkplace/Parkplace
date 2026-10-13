@@ -883,6 +883,100 @@ app.get('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, re
   res.json({ usuarios: data });
 });
 
+// Lista prestadores cadastrados/registrados para importacao no cadastro de porteiro
+app.get('/api/admin/prestadores', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const q = (req.query.q || '').trim();
+
+    // 1. Busca nos registros de portaria
+    let qReg = supabaseAdmin
+      .from('registros_portaria')
+      .select('nome_pessoa, documento, tipo, veiculo_placa, endereco_visitante, observacao')
+      .not('nome_pessoa', 'is', null)
+      .neq('nome_pessoa', 'Encomenda')
+      .neq('nome_pessoa', 'Entregador iFood')
+      .order('entrada', { ascending: false })
+      .limit(300);
+
+    // 2. Busca nos avisos de visitas
+    let qAv = supabaseAdmin
+      .from('avisos_visitas')
+      .select('nome_visitante, documento_visitante, tipo, veiculo_placa, endereco_visitante, observacao')
+      .not('nome_visitante', 'is', null)
+      .neq('nome_visitante', 'Entregador iFood')
+      .order('criado_em', { ascending: false })
+      .limit(300);
+
+    const [{ data: regData, error: errReg }, { data: avData, error: errAv }] = await Promise.all([qReg, qAv]);
+
+    if (errReg) console.error('Erro ao buscar registros_portaria:', errReg);
+    if (errAv) console.error('Erro ao buscar avisos_visitas:', errAv);
+
+    const mapa = new Map();
+    const normalizar = s => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    (regData || []).forEach(r => {
+      const nome = (r.nome_pessoa || '').trim();
+      const doc = (r.documento || '').trim();
+      if (!nome) return;
+      const chave = doc ? doc.replace(/\D/g, '') : normalizar(nome);
+      if (!mapa.has(chave)) {
+        mapa.set(chave, {
+          nome,
+          documento: doc,
+          tipo: r.tipo || 'Prestador',
+          veiculo_placa: r.veiculo_placa || '',
+          endereco: r.endereco_visitante || '',
+          observacao: r.observacao || ''
+        });
+      }
+    });
+
+    (avData || []).forEach(a => {
+      const nome = (a.nome_visitante || '').trim();
+      const doc = (a.documento_visitante || '').trim();
+      if (!nome) return;
+      const chave = doc ? doc.replace(/\D/g, '') : normalizar(nome);
+      if (!mapa.has(chave)) {
+        mapa.set(chave, {
+          nome,
+          documento: doc,
+          tipo: a.tipo || 'Prestador',
+          veiculo_placa: a.veiculo_placa || '',
+          endereco: a.endereco_visitante || '',
+          observacao: a.observacao || ''
+        });
+      }
+    });
+
+    let lista = Array.from(mapa.values());
+
+    // Se houve busca por termo, filtra pelo nome ou documento
+    if (q) {
+      const qNorm = normalizar(q);
+      const qDoc = q.replace(/\D/g, '');
+      lista = lista.filter(item => {
+        const nNorm = normalizar(item.nome);
+        const dLimpo = (item.documento || '').replace(/\D/g, '');
+        return nNorm.includes(qNorm) || (qDoc && dLimpo.includes(qDoc));
+      });
+    }
+
+    // Ordena: Prestador primeiro, depois por ordem alfabetica
+    lista.sort((a, b) => {
+      if (a.tipo === 'Prestador' && b.tipo !== 'Prestador') return -1;
+      if (b.tipo === 'Prestador' && a.tipo !== 'Prestador') return 1;
+      return a.nome.localeCompare(b.nome);
+    });
+
+    res.json({ prestadores: lista.slice(0, 30) });
+  } catch (err) {
+    console.error('Erro na rota /api/admin/prestadores:', err);
+    res.status(500).json({ error: 'Erro ao buscar prestadores cadastrados.' });
+  }
+});
+
+
 // Cria um novo usuario (porteiro, morador ou admin)
 app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
   let { email, password, nome, tipo, bloco, telefone } = req.body || {};

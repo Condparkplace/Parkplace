@@ -32,15 +32,31 @@
       <div class="card">
         <h2>Cadastrar usuário</h2>
         <form id="form-usuario">
-          <label for="nome">Nome completo *</label>
-          <input type="text" id="nome" required />
-
           <label for="tipo">Perfil *</label>
           <select id="tipo" onchange="atualizarCamposPorTipo()">
             <option value="morador">Morador</option>
             <option value="porteiro">Porteiro</option>
             <option value="admin">Administrador</option>
           </select>
+
+          <!-- Busca de prestadores cadastrados (aparece quando tipo === porteiro) -->
+          <div id="wrap-busca-prestador" class="hidden" style="margin-top:12px; margin-bottom:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px;">
+            <label for="busca-prestador" style="margin:0 0 6px; font-weight:600; color:#166534; font-size:13px; display:flex; align-items:center; gap:6px;">
+              <span>🔍</span> <span>Buscar em Prestadores já cadastrados (opcional):</span>
+            </label>
+            <div style="position:relative;">
+              <input type="text" id="busca-prestador" placeholder="Digite nome ou CPF para buscar..." autocomplete="off" oninput="aoDigitarBuscaPrestador(this.value)" style="margin:0; background:#fff;" />
+              <div id="sugestoes-prestadores" class="hidden" style="position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin-top:4px;"></div>
+            </div>
+            <div id="aviso-prestador-selecionado" class="hidden" style="margin-top:8px; font-size:13px; color:#15803d; font-weight:500;"></div>
+            <p class="text-muted" style="margin:6px 0 0; font-size:12px;">
+              Selecione um prestador para autopreencher ou digite o Login manualmente abaixo.
+            </p>
+          </div>
+
+          <label for="nome" id="label-nome">Nome completo *</label>
+          <input type="text" id="nome" required />
+
 
           <div id="campos-morador">
             <div class="grid grid-2">
@@ -161,23 +177,99 @@
       atualizarCamposPorTipo();
     })();
 
+    let timerBuscaPrestador = null;
+
+    function aoDigitarBuscaPrestador(termo) {
+      clearTimeout(timerBuscaPrestador);
+      timerBuscaPrestador = setTimeout(() => buscarPrestadores(termo), 250);
+    }
+
+    async function buscarPrestadores(termo) {
+      const alvo = document.getElementById('sugestoes-prestadores');
+      if (!termo || termo.trim().length < 1) {
+        alvo.classList.add('hidden');
+        alvo.innerHTML = '';
+        return;
+      }
+      try {
+        const { prestadores } = await api('/api/admin/prestadores?q=' + encodeURIComponent(termo.trim()));
+        if (!prestadores || prestadores.length === 0) {
+          alvo.innerHTML = '<div style="padding:10px 12px; font-size:13px; color:#64748b;">Nenhum prestador encontrado com esse termo.</div>';
+          alvo.classList.remove('hidden');
+          return;
+        }
+        alvo.innerHTML = prestadores.map(p => `
+          <div style="padding:10px 12px; border-bottom:1px solid #f1f5f9; cursor:pointer; transition:background 0.15s;" 
+               onmouseover="this.style.background='#f8fafc'" 
+               onmouseout="this.style.background='transparent'" 
+               onclick='selecionarPrestador(${JSON.stringify(p).replace(/'/g, "&#39;")})'>
+            <div style="font-weight:600; color:#1e293b; font-size:14px;">${escapeHtml(p.nome)}</div>
+            <div style="font-size:12px; color:#64748b; margin-top:2px;">
+              <span class="badge ${escapeHtml((p.tipo || '').toLowerCase())}">${escapeHtml(p.tipo || 'Prestador')}</span>
+              ${p.documento ? `&nbsp;<b>Doc:</b> ${escapeHtml(p.documento)}` : ''}
+              ${p.veiculo_placa ? `&nbsp;|&nbsp;<b>Placa:</b> ${escapeHtml(p.veiculo_placa)}` : ''}
+            </div>
+          </div>
+        `).join('');
+        alvo.classList.remove('hidden');
+      } catch (err) {
+        alvo.innerHTML = `<div style="padding:8px 12px; font-size:12px; color:#ef4444;">Erro na busca: ${escapeHtml(err.message)}</div>`;
+        alvo.classList.remove('hidden');
+      }
+    }
+
+    function selecionarPrestador(p) {
+      document.getElementById('nome').value = p.nome || '';
+      if (p.telefone) {
+        document.getElementById('telefone').value = p.telefone;
+      }
+      document.getElementById('busca-prestador').value = p.nome || '';
+      document.getElementById('sugestoes-prestadores').classList.add('hidden');
+
+      const aviso = document.getElementById('aviso-prestador-selecionado');
+      if (aviso) {
+        aviso.innerHTML = `&#10004; Prestador <strong>${escapeHtml(p.nome)}</strong> selecionado! Confirme o Login e digite a Senha abaixo.`;
+        aviso.classList.remove('hidden');
+      }
+
+      // Foca no campo de senha para o admin definir
+      document.getElementById('password').focus();
+    }
+
+    // Fecha sugestoes ao clicar fora da caixa de busca
+    document.addEventListener('click', (e) => {
+      if (!e.target.closest('#wrap-busca-prestador')) {
+        const sug = document.getElementById('sugestoes-prestadores');
+        if (sug) sug.classList.add('hidden');
+      }
+    });
+
     function atualizarCamposPorTipo() {
       const tipo = document.getElementById('tipo').value;
       // Mostra campos de lote apenas para moradores
       document.getElementById('campos-morador').classList.toggle('hidden', tipo !== 'morador');
 
+      const wrapBuscaPrestador = document.getElementById('wrap-busca-prestador');
+      const labelNome = document.getElementById('label-nome');
+      const inputNome = document.getElementById('nome');
       const wrapEmail = document.getElementById('wrap-email');
       const dicaPorteiro = document.getElementById('dica-porteiro');
       const inputEmail = document.getElementById('email');
 
       if (editandoId) {
         // Ao editar, o e-mail nunca e alterado por este formulario
+        if (wrapBuscaPrestador) wrapBuscaPrestador.classList.add('hidden');
+        if (labelNome) labelNome.textContent = 'Nome completo *';
+        if (inputNome) inputNome.placeholder = '';
         if (wrapEmail) wrapEmail.classList.add('hidden');
         if (dicaPorteiro) dicaPorteiro.classList.add('hidden');
         if (inputEmail) inputEmail.required = false;
       } else {
         if (tipo === 'porteiro') {
-          // Para porteiro, esconde o e-mail e exibe a orientacao clara
+          // Para porteiro, mostra busca de prestador, altera label para Login do Porteiro e esconde o e-mail
+          if (wrapBuscaPrestador) wrapBuscaPrestador.classList.remove('hidden');
+          if (labelNome) labelNome.textContent = 'Nome completo (Login do Porteiro) *';
+          if (inputNome) inputNome.placeholder = 'Nome que o porteiro usará para entrar';
           if (wrapEmail) wrapEmail.classList.add('hidden');
           if (dicaPorteiro) dicaPorteiro.classList.remove('hidden');
           if (inputEmail) {
@@ -185,13 +277,17 @@
             inputEmail.value = '';
           }
         } else {
-          // Para morador ou admin, e-mail e obrigatorio
+          // Para morador ou admin, e-mail e obrigatorio e esconde busca de prestador
+          if (wrapBuscaPrestador) wrapBuscaPrestador.classList.add('hidden');
+          if (labelNome) labelNome.textContent = 'Nome completo *';
+          if (inputNome) inputNome.placeholder = '';
           if (wrapEmail) wrapEmail.classList.remove('hidden');
           if (dicaPorteiro) dicaPorteiro.classList.add('hidden');
           if (inputEmail) inputEmail.required = true;
         }
       }
     }
+
 
     function linkCadastro() {
       return location.origin + '/cadastro.html';
@@ -270,6 +366,13 @@
     function cancelarEdicao() {
       editandoId = null;
       formUsuario.reset();
+      const buscaPrestador = document.getElementById('busca-prestador');
+      if (buscaPrestador) buscaPrestador.value = '';
+      const avisoPrestador = document.getElementById('aviso-prestador-selecionado');
+      if (avisoPrestador) avisoPrestador.classList.add('hidden');
+      const sug = document.getElementById('sugestoes-prestadores');
+      if (sug) sug.classList.add('hidden');
+
       const inputPass = document.getElementById('password');
       inputPass.value = '';
       inputPass.required = true;
@@ -317,6 +420,10 @@
             }),
           });
           formUsuario.reset();
+          const buscaPrestador = document.getElementById('busca-prestador');
+          if (buscaPrestador) buscaPrestador.value = '';
+          const avisoPrestador = document.getElementById('aviso-prestador-selecionado');
+          if (avisoPrestador) avisoPrestador.classList.add('hidden');
           atualizarCamposPorTipo();
           msgUsuario.textContent = 'Usuário cadastrado com sucesso.';
         }
@@ -331,6 +438,7 @@
         btnUsuario.textContent = editandoId ? 'Salvar alterações' : 'Cadastrar';
       }
     });
+
 
     async function carregarUsuarios() {
       const alvo = document.getElementById('lista-usuarios');

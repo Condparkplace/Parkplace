@@ -558,3 +558,179 @@ tr:last-child td { border-bottom: none; }
   .lp-footer-inner { flex-direction: column; }
   .lp-footer-contato { text-align: left; }
 }
+
+/* ============================================================
+   MOBILE / RESPONSIVO (não altera o desktop)
+   Camadas progressivas: <=760px (tablet/celular) e <=480px (celular pequeno)
+   ============================================================ */
+
+/* Evita estouro horizontal da página inteira em qualquer tela estreita */
+@media (max-width: 760px) {
+  html, body { overflow-x: hidden; }
+
+  /* ---------- Container e cards ---------- */
+  .container { margin: 16px auto; padding: 0 12px; }
+  .card { padding: 16px; }
+  .card h2 { font-size: 16px; }
+
+  /* ---------- Topbar ---------- */
+  .topbar {
+    padding: 10px 14px;
+    gap: 8px;
+  }
+  .topbar .brand { font-size: 15px; gap: 8px; }
+  .topbar .brand span.sub { display: none; } /* o "· Administração" ocupa espaço demais no mobile */
+  .topbar .user-area {
+    gap: 8px;
+    font-size: 13px;
+    margin-left: auto;
+  }
+  .topbar .user-area #nome-usuario {
+    max-width: 42vw;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Navegação do admin: barra rolável horizontal, sempre acessível */
+  .admin-nav {
+    order: 3;
+    width: 100%;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+    scrollbar-width: none;
+  }
+  .admin-nav::-webkit-scrollbar { display: none; }
+  .admin-nav a { flex: 0 0 auto; }
+
+  /* ---------- Tabelas: scroll horizontal confiável ---------- */
+  /* As tabelas são geradas via JS (sem wrapper). Para rolar no toque sem
+     desalinhar colunas, o container que envolve cada tabela recebe o overflow
+     e a própria tabela mantém a estrutura nativa (thead/tbody alinhados). */
+  #lista-usuarios,
+  #lista-visitantes,
+  #lista-avisos,
+  #lista-previstas,
+  #lista-presentes,
+  #lista-historico,
+  #lista-encomendas,
+  #lista-frequentes {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  #lista-usuarios table,
+  #lista-visitantes table,
+  #lista-avisos table,
+  #lista-previstas table,
+  #lista-presentes table,
+  #lista-historico table,
+  #lista-encomendas table,
+  #lista-frequentes table {
+    min-width: 540px; /* garante leitura das colunas; abaixo disso, rola */
+  }
+  .card table th,
+  .card table td {
+    white-space: nowrap;
+    padding: 10px 8px;
+  }
+
+  /* Botões de ação dentro das linhas não quebram em pedacinhos */
+  td .row-inline { flex-wrap: nowrap; justify-content: flex-end; }
+  td .row-inline .mini,
+  td .mini { white-space: nowrap; }
+
+  /* ---------- Tabs do porteiro ---------- */
+  .tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    scrollbar-width: none;
+  }
+  .tabs::-webkit-scrollbar { display: none; }
+  .tabs button {
+    flex: 0 0 auto;
+    padding: 12px 16px;
+    font-size: 14px;
+    white-space: nowrap;
+  }
+
+  /* ---------- Formulários / inputs ---------- */
+  /* 16px evita o zoom automático do iOS ao focar um campo */
+  input, select, textarea { font-size: 16px; }
+  button { font-size: 15px; }
+
+  /* ---------- Modais (porteiro/morador) ---------- */
+  [id^="modal-"] > div,
+  #modal-data > div,
+  #modal-cancelar > div,
+  #modal-ifood > div,
+  #modal-encomenda > div,
+  #modal-retirada-encomenda > div {
+    width: 94% !important;
+    max-width: 94% !important;
+    margin: 0 auto !important;
+    max-height: 88vh;
+    overflow-y: auto;
+  }
+
+  /* Botões full width empilhados ficam confortáveis ao toque */
+  button.block { padding: 14px; }
+
+  /* Cards de resumo (4 indicadores): 2 por linha aproveita melhor o espaço */
+  .grid-4 { grid-template-columns: 1fr 1fr; gap: 12px; }
+
+  /* ---------- Login / cadastro ---------- */
+  .login-card { padding: 26px 20px; }
+}
+
+/* ---------- Landing page: refinamentos finos ---------- */
+@media (max-width: 760px) {
+  .lp-nav { padding: 12px 16px; gap: 12px; }
+  .lp-btn-acesso { margin-left: auto; padding: 8px 14px; }
+  .lp-hero { padding: 54px 18px 70px; }
+  .lp-hero p { font-size: 16px; }
+  .lp-secao { padding: 48px 18px; }
+  .lp-secao-titulo { margin-bottom: 30px; }
+  .lp-secao-titulo h2 { font-size: 26px; }
+  .lp-cta { padding: 54px 18px; }
+  .lp-cta h2 { font-size: 24px; }
+  .lp-footer-contato { text-align: left; }
+}
+
+/* ============================================================
+   CELULAR PEQUENO (<=480px)
+   ============================================================ */
+@media (max-width: 480px) {
+  .container { padding: 0 10px; }
+  .card { padding: 14px; }
+
+  /* Stat cards do painel: 2 por linha em vez de 1, melhor aproveitamento */
+  .grid-4 { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .stat { padding: 14px 10px; }
+  .stat .num { font-size: 24px; }
+  .stat .label { font-size: 12px; }
+
+  /* Landing: stats 2 por linha e tipografia menor */
+  .lp-stats-inner { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .lp-stat { padding: 16px 10px; }
+  .lp-stat .n { font-size: 24px; }
+  .lp-hero h1 { font-size: 28px; }
+  .lp-hero .lp-tag { font-size: 12px; }
+  .lp-mapa iframe { height: 230px; }
+  .lp-mapa-acoes { flex-direction: column; }
+  .lp-btn-waze, .lp-btn-maps { justify-content: center; }
+
+  /* Topbar ainda mais enxuta */
+  .topbar .brand { font-size: 14px; }
+
+  /* Botões de ação em linha podem rolar se forem muitos */
+  td .row-inline {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    max-width: 100%;
+  }
+}
