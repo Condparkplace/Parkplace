@@ -163,6 +163,18 @@ function cpfValido(cpf) {
   return true;
 }
 
+function formatarDocumento(doc) {
+  if (!doc) return null;
+  const limpo = String(doc).replace(/\D/g, '');
+  if (limpo.length === 11) {
+    return `${limpo.slice(0, 3)}.${limpo.slice(3, 6)}.${limpo.slice(6, 9)}-${limpo.slice(9, 11)}`;
+  }
+  if (limpo.length === 14) {
+    return `${limpo.slice(0, 2)}.${limpo.slice(2, 5)}.${limpo.slice(5, 8)}/${limpo.slice(8, 12)}-${limpo.slice(12, 14)}`;
+  }
+  return String(doc).trim();
+}
+
 app.post('/api/public/cadastro', async (req, res) => {
   const { nome, bloco, telefone, email, password } = req.body || {};
   const cpf = (req.body?.cpf || '').replace(/\D/g, '');
@@ -394,12 +406,13 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), as
     return res.status(400).json({ error: 'Informe o nome do visitante.' });
   }
 
+  const docFormatado = formatarDocumento(documento_visitante);
   const { data, error } = await req.supabase
     .from('avisos_visitas')
     .insert({
       morador_id: req.user.id,
       nome_visitante,
-      documento_visitante: documento_visitante || null,
+      documento_visitante: docFormatado || null,
       veiculo_placa: veiculo_placa || null,
       tipo: tipo || 'Visitante',
       data_prevista: data_prevista || null,
@@ -443,12 +456,13 @@ app.post('/api/public/avisos', async (req, res) => {
     return res.status(400).json({ error: 'Morador não encontrado.' });
   }
 
+  const docFormatado = formatarDocumento(documento_visitante);
   const { data, error } = await supabaseAdmin
     .from('avisos_visitas')
     .insert({
       morador_id,
       nome_visitante,
-      documento_visitante: documento_visitante || null,
+      documento_visitante: docFormatado || null,
       veiculo_placa: veiculo_placa || null,
       tipo: tipo || 'Visitante',
       data_prevista: data_prevista || null,
@@ -840,6 +854,7 @@ async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
 async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
   const agora = new Date().toISOString();
   const docLimpo = (documento || '').replace(/\D/g, '');
+  const docFormatado = formatarDocumento(documento);
   const nomeLimpo = (nome || '').trim();
   const nomeNorm = nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const finalChave = (chave || '').trim() || docLimpo || ('nome:' + nomeNorm);
@@ -847,7 +862,7 @@ async function salvarObservacaoVisitante(chave, nome, documento, observacao, use
   const registro = {
     chave: finalChave,
     nome: nomeLimpo,
-    documento: documento ? (documento || '').trim() : null,
+    documento: docFormatado || null,
     observacao: (observacao || '').trim(),
     atualizado_em: agora,
     atualizado_por: userId || null,
@@ -1030,13 +1045,14 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     return res.status(400).json({ error: 'O CPF informado no documento é inválido.' });
   }
 
+  const docFormatado = formatarDocumento(documento);
   const tipoFinal = tipo || 'Visitante';
   const isMorador = tipoFinal === 'Morador';
   const agora = new Date().toISOString();
   const insertPayload = {
     aviso_id: aviso_id || null,
     nome_pessoa,
-    documento: documento || null,
+    documento: docFormatado || null,
     tipo: tipoFinal,
     destino_bloco: destino_bloco || null,
     destino_apto: destino_apto || null,
@@ -1677,6 +1693,7 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
       if (nome === 'Entregador iFood') return; // entregas automaticas nao sao visitantes cadastrados
       const nomeLimpo = nome.trim();
       const docLimpo = (documento || '').replace(/\D/g, '');
+      const docFormatado = formatarDocumento(documento);
       const chave = docLimpo || ('nome:' + nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
 
       const existente = mapa.get(chave);
@@ -1684,7 +1701,7 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
         mapa.set(chave, {
           chave,
           nome: nomeLimpo,
-          documento: documento || null,
+          documento: docFormatado || null,
           veiculo_placa: placa || null,
           tipo: tipo || 'Visitante',
           vezes: 1,
@@ -1692,7 +1709,8 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
         });
       } else {
         existente.vezes += 1;
-        if (!existente.documento && documento) existente.documento = documento;
+        if (!existente.documento && docFormatado) existente.documento = docFormatado;
+        else if (docFormatado && docLimpo.length === 11) existente.documento = docFormatado;
         if (!existente.veiculo_placa && placa) existente.veiculo_placa = placa;
         if (quando && (!existente.ultima_vez || new Date(quando) > new Date(existente.ultima_vez))) {
           existente.ultima_vez = quando;
@@ -1833,7 +1851,7 @@ app.get('/api/admin/visitantes/detalhes', requireAuth, requireRole('admin'), asy
     const veiculoHabitual = listaVeiculos.length ? listaVeiculos[0] : '-';
 
     const nomeFinal = nome || registrosPessoa[0]?.nome_pessoa || avisosPessoa[0]?.nome_visitante || 'Visitante';
-    const docFinal = doc || registrosPessoa[0]?.documento || avisosPessoa[0]?.documento_visitante || null;
+    const docFinal = formatarDocumento(doc || registrosPessoa[0]?.documento || avisosPessoa[0]?.documento_visitante || null);
     const tipoFinal = registrosPessoa[0]?.tipo || avisosPessoa[0]?.tipo || 'Visitante';
 
     res.json({

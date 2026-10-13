@@ -85,26 +85,29 @@
     <div class="card">
       <h2>Avisar a portaria sobre uma visita</h2>
 
-      <div id="botoes-iniciais" style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; width: 100%; box-sizing: border-box;">
+      <div id="botoes-iniciais"
+        style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 16px; width: 100%; box-sizing: border-box;">
         <button id="btn-ifood" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #ea1d2c; border-color: #ea1d2c; color: white; width: 100%; box-sizing: border-box;"
           onclick="cadastrarIfood()">+ Cadastrar iFood</button>
-        <button id="btn-frequentes" class="block secundario" style="padding: 14px; font-size: 1.05em; margin: 0; width: 100%; box-sizing: border-box;"
+        <button id="btn-frequentes" class="block secundario"
+          style="padding: 14px; font-size: 1.05em; margin: 0; width: 100%; box-sizing: border-box;"
           onclick="abrirFrequentes()">&#128101; Visitas frequentes</button>
 
         <button id="btn-compartilhar-visita" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Visitante')">&#128242; Enviar Solicitação de cadastro de visita</button>
+          onclick="compartilharVisita('Visitante')">&#128242; Enviar Solicitação de cadastro ao visita</button>
 
         <button id="btn-compartilhar-prestador" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Prestador')">&#128242; Enviar solicitação de cadastro de prestador</button>
+          onclick="compartilharVisita('Prestador')">&#128242; Enviar solicitação de cadastro ao prestador</button>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; word-break: break-word;">
           <h3 style="margin-top:0; color:#d53f8c; display:flex; align-items:center; gap:8px; font-size:16px;">📦 Você
             tem encomendas na Portaria!</h3>
-          <div id="lista-encomendas-morador" style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;"></div>
+          <div id="lista-encomendas-morador"
+            style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;"></div>
         </div>
       </div>
 
@@ -118,7 +121,8 @@
 
         <label for="documento_visitante">Documento (RG/CPF)</label>
         <input type="text" id="documento_visitante" />
-        <span id="aviso-cpf-visitante" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
+        <span id="aviso-cpf-visitante" class="hidden"
+          style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
         <label for="veiculo_placa">Veículo / placa</label>
         <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" />
@@ -354,7 +358,7 @@
           body: JSON.stringify({
             nome_visitante: document.getElementById('nome_visitante').value.trim(),
             tipo: document.getElementById('tipo').value,
-            documento_visitante: document.getElementById('documento_visitante').value.trim(),
+            documento_visitante: formatarDocumento(document.getElementById('documento_visitante').value.trim()) || null,
             veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
             data_prevista: dt ? new Date(dt).toISOString() : null,
             endereco_visitante: montarEnderecoVisitante(),
@@ -525,7 +529,7 @@
         alvo.innerHTML = '<p class="vazio">Você ainda não avisou nenhuma visita.</p>';
         return;
       }
-      
+
       const avisosVisiveis = todosAvisos.slice(0, limiteAvisos);
 
       alvo.innerHTML = `

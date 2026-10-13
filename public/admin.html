@@ -846,11 +846,11 @@
             ${lista.map((v) => `
               <tr>
                 <td data-label="Nome">
-                  <a href="javascript:void(0)" onclick="abrirDashboardVisitante('${escapeAttr(v.chave || '')}', '${escapeAttr(v.nome)}', '${escapeAttr(v.documento || '')}')" style="font-weight:600; color:var(--azul, #2563eb); text-decoration:none; cursor:pointer;" title="Clique para abrir dashboard e observação do visitante">
+                  <a href="javascript:void(0)" onclick="abrirDashboardVisitante('${escapeAttr(v.chave || '')}', '${escapeAttr(v.nome)}', '${escapeAttr(formatarDocumento(v.documento) || '')}')" style="font-weight:600; color:var(--azul, #2563eb); text-decoration:none; cursor:pointer;" title="Clique para abrir dashboard e observação do visitante">
                     ${escapeHtml(v.nome)} <span style="font-size:12px; opacity:0.8;">🔎</span>
                   </a>
                 </td>
-                <td data-label="Documento">${escapeHtml(v.documento || '-')}</td>
+                <td data-label="Documento">${escapeHtml(formatarDocumento(v.documento) || '-')}</td>
                 <td data-label="Tipo"><span class="badge ${escapeHtml((v.tipo || '').toLowerCase())}">${escapeHtml(v.tipo || '-')}</span></td>
                 <td data-label="Veículo">${escapeHtml(v.veiculo_placa || '-')}</td>
                 <td data-label="Visitas"><strong>${v.vezes || 1}</strong></td>
@@ -886,7 +886,7 @@
       msgObs.style.display = 'none';
       msgObs.textContent = '';
       document.getElementById('modal-vis-nome').textContent = nome || 'Visitante';
-      document.getElementById('modal-vis-doc').textContent = documento ? ('Documento: ' + documento) : 'Documento: Não informado';
+      document.getElementById('modal-vis-doc').textContent = documento ? ('Documento: ' + formatarDocumento(documento)) : 'Documento: Não informado';
 
       modal.classList.remove('hidden');
       loading.style.display = 'block';
@@ -904,7 +904,7 @@
 
         // Atualiza cabeçalho
         document.getElementById('modal-vis-nome').textContent = vis.nome || nome;
-        document.getElementById('modal-vis-doc').textContent = vis.documento ? ('CPF / Documento: ' + vis.documento) : 'Documento não informado';
+        document.getElementById('modal-vis-doc').textContent = vis.documento ? ('CPF / Documento: ' + formatarDocumento(vis.documento)) : 'Documento não informado';
 
         const badgeTipo = document.getElementById('modal-vis-tipo-badge');
         badgeTipo.textContent = vis.tipo || 'Visitante';

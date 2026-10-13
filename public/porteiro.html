@@ -762,7 +762,7 @@
         aviso_id: document.getElementById('aviso_id').value || null,
         nome_pessoa: document.getElementById('nome_pessoa').value.trim(),
         tipo: document.getElementById('tipo').value,
-        documento: document.getElementById('documento').value.trim(),
+        documento: formatarDocumento(docForm) || null,
         veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
         destino_bloco: lote,
         endereco_visitante: montarEnderecoVisitante(),
