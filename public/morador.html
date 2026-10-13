@@ -92,22 +92,13 @@
         <button id="btn-frequentes" class="block secundario" style="padding: 16px; font-size: 1.1em; margin: 0;"
           onclick="abrirFrequentes()">&#128101; Visitas frequentes</button>
 
-        <div style="display: flex; gap: 8px;">
-          <button id="btn-mostrar-form" class="block" style="flex: 2; padding: 16px; font-size: 1.1em; margin: 0;"
-            onclick="mostrarForm()">+ Cadastrar visita</button>
-          <button id="btn-compartilhar-visita" class="block"
-            style="flex: 1; padding: 16px; font-size: 1.1em; margin: 0; background-color: #25d366; border-color: #25d366; color: white;"
-            onclick="compartilharVisita('Visitante')">&#128242; Enviar</button>
-        </div>
+        <button id="btn-compartilhar-visita" class="block"
+          style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #25d366; border-color: #25d366; color: white;"
+          onclick="compartilharVisita('Visitante')">&#128242; Enviar Solicitação de cadastro de visita</button>
 
-        <div style="display: flex; gap: 8px;">
-          <button id="btn-prestador" class="block"
-            style="flex: 2; padding: 16px; font-size: 1.1em; margin: 0; background-color: #2b6cb0; border-color: #2b6cb0; color: white;"
-            onclick="mostrarFormPrestador()">+ Cadastrar visita de Prestador</button>
-          <button id="btn-compartilhar-prestador" class="block"
-            style="flex: 1; padding: 16px; font-size: 1.1em; margin: 0; background-color: #25d366; border-color: #25d366; color: white;"
-            onclick="compartilharVisita('Prestador')">&#128242; Enviar</button>
-        </div>
+        <button id="btn-compartilhar-prestador" class="block"
+          style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #25d366; border-color: #25d366; color: white;"
+          onclick="compartilharVisita('Prestador')">&#128242; Enviar solicitação de cadastro de prestador</button>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px;">
@@ -539,11 +530,11 @@
           <tbody>
             ${avisosVisiveis.map((a) => `
               <tr>
-                <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
-                <td>${escapeHtml(a.tipo)}</td>
-                <td>${formatarData(a.data_prevista)}</td>
-                <td>${badgeStatus(a.status)}</td>
-                <td>${['Pendente', 'Autorizada'].includes(a.status)
+                <td data-label="Visitante">${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
+                <td data-label="Tipo">${escapeHtml(a.tipo)}</td>
+                <td data-label="Previsto">${formatarData(a.data_prevista)}</td>
+                <td data-label="Status">${badgeStatus(a.status)}</td>
+                <td data-label="">${['Pendente', 'Autorizada'].includes(a.status)
           ? `<button class="perigo mini" onclick="cancelar(${a.id})">Cancelar</button>`
           : ''
         }</td>
@@ -621,10 +612,10 @@
 
         return `
                 <tr>
-                  <td>${escapeHtml(f.nome_visitante)}</td>
-                  <td>${escapeHtml(f.tipo)}</td>
-                  <td>${f.count} visita(s)</td>
-                  <td>
+                  <td data-label="Nome">${escapeHtml(f.nome_visitante)}</td>
+                  <td data-label="Tipo">${escapeHtml(f.tipo)}</td>
+                  <td data-label="Vezes que veio">${f.count} visita(s)</td>
+                  <td data-label="">
                     <button class="mini block" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
                   </td>
                 </tr>
