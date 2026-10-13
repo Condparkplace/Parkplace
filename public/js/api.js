@@ -1,10 +1,15 @@
 // Helpers compartilhados de API e sessao para o frontend.
 
 async function api(path, options = {}) {
+  const opts = { ...options };
+  const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
+    opts.body = JSON.stringify(opts.body);
+  }
   const res = await fetch(path, {
     credentials: 'include',
-    headers: { 'Content-Type': 'application/json' },
-    ...options,
+    ...opts,
+    headers,
   });
   let body = null;
   try {

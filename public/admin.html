@@ -995,12 +995,12 @@
       try {
         const res = await api('/api/admin/visitantes/observacao', {
           method: 'POST',
-          body: {
+          body: JSON.stringify({
             chave: visitanteModalAtual.chave,
             nome: visitanteModalAtual.nome,
             documento: visitanteModalAtual.documento,
             observacao: obsValor,
-          },
+          }),
         });
 
         msg.textContent = 'Observação salva com sucesso no cadastro!';
