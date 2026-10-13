@@ -218,6 +218,29 @@
     </div>
   </div>
 
+  <!-- Modal: bloquear visitante (morador informa o motivo) -->
+  <div id="modal-bloqueio" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div class="card" style="width: 100%; max-width: 420px; margin: 20px;">
+      <h3 style="margin-top:0; color:var(--vermelho);">&#128683; Bloquear visitante</h3>
+      <p class="text-muted" style="margin:0 0 14px;">
+        Você está bloqueando <strong id="bloqueio-nome-visitante"></strong>.
+        O motivo abaixo ficará registrado no histórico de observações deste visitante,
+        visível para a administração e a portaria.
+      </p>
+
+      <label for="bloqueio-motivo">Motivo do bloqueio *</label>
+      <textarea id="bloqueio-motivo" placeholder="Ex: comportamento inadequado, não autorizado a entrar, etc." style="min-height:90px;"></textarea>
+
+      <div id="msg-bloqueio" class="msg hidden" style="margin-top:12px;"></div>
+
+      <div class="grid grid-2" style="margin-top:16px;">
+        <button type="button" class="secundario block" onclick="fecharBloqueio()">Cancelar</button>
+        <button type="button" class="perigo block" id="btn-confirmar-bloqueio">Confirmar bloqueio</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/api.js"></script>
   <script>
     let perfil = null;
@@ -265,12 +288,26 @@
     function mostrarForm() { abrirForm('Visitante'); }
     function mostrarFormPrestador() { abrirForm('Prestador'); }
 
-    function compartilharVisita(tipo) {
+    async function compartilharVisita(tipo) {
       if (!perfil || !perfil.id) return;
-      const baseUrl = window.location.origin;
-      const link = `${baseUrl}/cadastro-visita.html?morador=${perfil.id}&tipo=${tipo}`;
-      const texto = `Olá! Por favor, preencha seus dados neste link para liberar sua entrada na portaria do Park Place: ${link}`;
-      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+
+      // Abre a aba já (evita bloqueio de pop-up) e redireciona quando o link estiver pronto.
+      const janela = window.open('', '_blank');
+
+      try {
+        const { caminho } = await api('/api/morador/link-visita?tipo=' + encodeURIComponent(tipo));
+        const link = window.location.origin + caminho;
+        const texto = `Olá! Por favor, preencha seus dados neste link para liberar sua entrada na portaria do Park Place: ${link}\n\n⏳ Atenção: este link é válido por 2 horas. Após esse prazo, será necessário solicitar um novo.`;
+        const urlWhats = 'https://wa.me/?text=' + encodeURIComponent(texto);
+        if (janela) {
+          janela.location.href = urlWhats;
+        } else {
+          window.location.href = urlWhats;
+        }
+      } catch (err) {
+        if (janela) janela.close();
+        alert('Não foi possível gerar o link: ' + (err.message || 'tente novamente.'));
+      }
     }
 
     // Volta para a tela com os botoes de cadastro, sem enviar.
@@ -626,7 +663,10 @@
                   <td data-label="Tipo">${escapeHtml(f.tipo)}</td>
                   <td data-label="Vezes que veio">${f.count} visita(s)</td>
                   <td data-label="">
-                    <button class="mini block" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
+                    <div class="row-inline" style="justify-content:flex-end;">
+                      <button class="mini" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
+                      <button class="perigo mini" onclick="iniciarBloqueio(${realIndex})" title="Bloquear este visitante">&#128683; Bloquear</button>
+                    </div>
                   </td>
                 </tr>
               `;
@@ -677,6 +717,67 @@
       } finally {
         btn.disabled = false;
         btn.textContent = 'Confirmar';
+      }
+    });
+
+    // ---------- Bloquear visitante ----------
+    let bloqueioAtual = null;
+
+    function iniciarBloqueio(index) {
+      bloqueioAtual = frequentes[index];
+      document.getElementById('bloqueio-nome-visitante').textContent = bloqueioAtual.nome_visitante;
+      const campoMotivo = document.getElementById('bloqueio-motivo');
+      campoMotivo.value = '';
+      const msg = document.getElementById('msg-bloqueio');
+      msg.classList.add('hidden');
+      msg.textContent = '';
+
+      const modal = document.getElementById('modal-bloqueio');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      campoMotivo.focus();
+    }
+
+    function fecharBloqueio() {
+      const modal = document.getElementById('modal-bloqueio');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+      bloqueioAtual = null;
+    }
+
+    document.getElementById('btn-confirmar-bloqueio').addEventListener('click', async () => {
+      if (!bloqueioAtual) return;
+      const btn = document.getElementById('btn-confirmar-bloqueio');
+      const msg = document.getElementById('msg-bloqueio');
+      const motivo = document.getElementById('bloqueio-motivo').value.trim();
+
+      msg.classList.add('hidden');
+      if (!motivo) {
+        msg.textContent = 'Por favor, informe o motivo do bloqueio.';
+        msg.className = 'msg erro';
+        document.getElementById('bloqueio-motivo').focus();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Bloqueando...';
+      try {
+        await api('/api/morador/visitantes/bloquear', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome: bloqueioAtual.nome_visitante,
+            documento: bloqueioAtual.documento_visitante || null,
+            motivo: motivo,
+          }),
+        });
+        fecharBloqueio();
+        alert('Visitante bloqueado. O motivo foi registrado no histórico de observações.');
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar bloqueio';
       }
     });
 

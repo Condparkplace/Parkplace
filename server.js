@@ -4,6 +4,7 @@ const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const webpush = require('web-push');
 
 // Inicializa VAPID Keys para Push Notifications
@@ -27,6 +28,41 @@ const {
 const app = express();
 app.use(express.json());
 app.use(cookieParser());
+
+// ============================================================
+// LINKS DE CADASTRO DE VISITA COM VALIDADE (2 horas)
+// O link enviado ao visitante/prestador carrega: morador, tipo, exp (expiração)
+// e sig (assinatura HMAC). Sem a assinatura correta ou após a expiração o
+// backend recusa o envio do aviso, evitando burlar o prazo editando a URL.
+// ============================================================
+const LINK_VISITA_VALIDADE_MS = 2 * 60 * 60 * 1000; // 2 horas
+const LINK_SECRET = process.env.SESSION_SECRET || 'park-place-link-secret-troque-no-env';
+
+function assinarLinkVisita(moradorId, tipo, exp) {
+  return crypto
+    .createHmac('sha256', LINK_SECRET)
+    .update(`${moradorId}|${tipo}|${exp}`)
+    .digest('hex');
+}
+
+// Retorna { ok } ou { ok:false, motivo:'expirado'|'invalido' }
+function validarLinkVisita(moradorId, tipo, exp, sig) {
+  const expNum = Number(exp);
+  if (!moradorId || !exp || !sig || !Number.isFinite(expNum)) {
+    return { ok: false, motivo: 'invalido' };
+  }
+  const esperado = assinarLinkVisita(moradorId, tipo || 'Visitante', expNum);
+  // Comparação em tempo constante para evitar vazamento por timing.
+  const a = Buffer.from(String(sig));
+  const b = Buffer.from(esperado);
+  if (a.length !== b.length || !crypto.timingSafeEqual(a, b)) {
+    return { ok: false, motivo: 'invalido' };
+  }
+  if (Date.now() > expNum) {
+    return { ok: false, motivo: 'expirado' };
+  }
+  return { ok: true };
+}
 
 // ============================================================
 // AUTENTICACAO
@@ -389,6 +425,65 @@ app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', '
   }
 });
 
+// Gera um link de solicitação de cadastro (visitante/prestador) com validade de 2h.
+// O link é assinado no servidor para que o prazo não possa ser burlado na URL.
+app.get('/api/morador/link-visita', requireAuth, requireRole('morador', 'admin'), (req, res) => {
+  const tipo = (req.query.tipo === 'Prestador') ? 'Prestador' : 'Visitante';
+  const moradorId = req.user.id;
+  const exp = Date.now() + LINK_VISITA_VALIDADE_MS;
+  const sig = assinarLinkVisita(moradorId, tipo, exp);
+
+  const params = new URLSearchParams({
+    morador: moradorId,
+    tipo,
+    exp: String(exp),
+    sig,
+  });
+
+  res.json({
+    caminho: `/cadastro-visita.html?${params.toString()}`,
+    exp,
+    validade_minutos: Math.round(LINK_VISITA_VALIDADE_MS / 60000),
+  });
+});
+
+// Morador bloqueia um visitante: registra o motivo como observação-alerta no
+// histórico do visitante (mesmo histórico visto pelo admin/portaria).
+app.post('/api/morador/visitantes/bloquear', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const { nome, documento, motivo } = req.body || {};
+    const nomeLimpo = (nome || '').trim();
+    const motivoLimpo = (motivo || '').trim();
+
+    if (!nomeLimpo && !(documento || '').trim()) {
+      return res.status(400).json({ error: 'Visitante não identificado.' });
+    }
+    if (!motivoLimpo) {
+      return res.status(400).json({ error: 'Informe o motivo do bloqueio.' });
+    }
+
+    // Identifica de quem partiu o bloqueio (nome + lote do morador logado).
+    const origemMorador = req.perfil
+      ? `${req.perfil.nome}${req.perfil.bloco ? ' (' + req.perfil.bloco + ')' : ''}`
+      : 'Morador';
+
+    const texto = `[BLOQUEADO] Solicitado por ${origemMorador}. Motivo: ${motivoLimpo}`;
+
+    const salvo = await adicionarObservacaoAoHistorico({
+      nome: nomeLimpo,
+      documento: documento || null,
+      texto,
+      exibir_alerta: true,
+      userId: req.user.id,
+      origem: 'bloqueio_morador',
+    });
+
+    res.json({ ok: true, visitante: salvo });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Cria um novo aviso de visita
 app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   const {
@@ -440,10 +535,21 @@ app.post('/api/public/avisos', async (req, res) => {
     endereco_visitante,
     cep_visitante,
     observacao,
+    link_exp,
+    link_sig,
   } = req.body || {};
 
   if (!morador_id || !nome_visitante) {
     return res.status(400).json({ error: 'Morador e nome do visitante são obrigatórios.' });
+  }
+
+  // Valida o prazo (2h) e a assinatura do link antes de aceitar o cadastro.
+  const validacaoLink = validarLinkVisita(morador_id, tipo || 'Visitante', link_exp, link_sig);
+  if (!validacaoLink.ok) {
+    const msg = validacaoLink.motivo === 'expirado'
+      ? 'Este link expirou. Peça ao morador um novo link para solicitar o acesso ao condomínio.'
+      : 'Link inválido. Peça ao morador um novo link para solicitar o acesso ao condomínio.';
+    return res.status(403).json({ error: msg, motivo: validacaoLink.motivo });
   }
 
   const { data: morador, error: errMorador } = await supabaseAdmin
@@ -454,6 +560,14 @@ app.post('/api/public/avisos', async (req, res) => {
 
   if (errMorador || !morador) {
     return res.status(400).json({ error: 'Morador não encontrado.' });
+  }
+
+  // Impede o cadastro se o visitante/prestador estiver bloqueado.
+  const docLimpoVis = (documento_visitante || '').replace(/\D/g, '');
+  const nomeNormVis = (nome_visitante || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const obsBloqueio = await obterObservacaoVisitante(docLimpoVis, docLimpoVis, nomeNormVis);
+  if (visitanteEstaBloqueado(obsBloqueio)) {
+    return res.status(403).json({ error: MENSAGEM_BLOQUEIO, motivo: 'bloqueado' });
   }
 
   const docFormatado = formatarDocumento(documento_visitante);
@@ -540,11 +654,16 @@ app.get('/api/public/visitantes/verificar', async (req, res) => {
 
     // 4. Procura em observações cadastradas de visitantes
     const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, null);
+    const bloqueado = visitanteEstaBloqueado(obsVisitante);
+    const extraBloqueio = bloqueado
+      ? { bloqueado: true, mensagem_bloqueio: MENSAGEM_BLOQUEIO }
+      : { bloqueado: false };
 
     if (reg) {
       return res.json({
         cadastrado: true,
         eh_morador: false,
+        ...extraBloqueio,
         visitante: {
           nome: reg.nome_pessoa,
           documento: reg.documento || doc,
@@ -560,6 +679,7 @@ app.get('/api/public/visitantes/verificar', async (req, res) => {
       return res.json({
         cadastrado: true,
         eh_morador: false,
+        ...extraBloqueio,
         visitante: {
           nome: aviso.nome_visitante,
           documento: aviso.documento_visitante || doc,
@@ -575,6 +695,7 @@ app.get('/api/public/visitantes/verificar', async (req, res) => {
       return res.json({
         cadastrado: true,
         eh_morador: false,
+        ...extraBloqueio,
         visitante: {
           nome: obsVisitante.nome,
           documento: obsVisitante.documento || doc,
@@ -586,7 +707,7 @@ app.get('/api/public/visitantes/verificar', async (req, res) => {
       });
     }
 
-    return res.json({ cadastrado: false });
+    return res.json({ cadastrado: false, ...extraBloqueio });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -845,6 +966,21 @@ function montarTextoObservacaoAtiva(historico) {
       return `• ${dataStr}${autorStr}: ${h.texto.trim()}`;
     })
     .join('\n');
+}
+
+// Telefone/mensagem do administrador exibidos quando um visitante bloqueado
+// tenta solicitar entrada.
+const ADMIN_TELEFONE_BLOQUEIO = '11971537119';
+const MENSAGEM_BLOQUEIO = `Sua entrada encontra-se bloqueada. Favor ligar para o Administrador no telefone ${ADMIN_TELEFONE_BLOQUEIO} para liberar.`;
+
+// Um visitante está bloqueado se houver no histórico uma observação ATIVA
+// (exibir_alerta) cujo texto começa com "[BLOQUEADO]". Desmarcar o alerta ou
+// excluir a observação (pelo admin) remove o bloqueio.
+function visitanteEstaBloqueado(obsItem) {
+  if (!obsItem || !Array.isArray(obsItem.historico)) return false;
+  return obsItem.historico.some(
+    (h) => h && h.exibir_alerta && (h.texto || '').trim().toUpperCase().startsWith('[BLOQUEADO]')
+  );
 }
 
 carregarCacheObsVisitantes();

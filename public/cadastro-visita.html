@@ -141,12 +141,29 @@
       </div>
 
       <div id="area-erro-link" class="hidden" style="text-align:center;">
+        <div style="font-size:42px; margin-bottom:6px;">&#9203;</div>
         <div class="msg erro" style="font-size:15px;">
-          Link inválido.
+          Link expirado ou inválido.
         </div>
-        <p class="text-muted" style="margin-top:14px;">
-          Por favor, solicite um novo link de cadastro para o morador.
+        <p id="erro-link-msg" class="text-muted" style="margin-top:14px; font-size:14px;">
+          Este link tem validade de 2 horas. Por favor, solicite um novo link de cadastro ao morador para criar o seu acesso ao condomínio.
         </p>
+      </div>
+
+      <!-- Aviso de visitante/prestador bloqueado -->
+      <div id="area-bloqueado" class="hidden" style="text-align:center;">
+        <div style="font-size:46px; margin-bottom:6px;">&#128683;</div>
+        <div class="msg erro" style="font-size:16px; font-weight:600;">
+          Entrada bloqueada
+        </div>
+        <p class="text-muted" style="margin-top:14px; font-size:15px; line-height:1.6;">
+          Sua entrada encontra-se <strong>bloqueada</strong>. Favor ligar para o Administrador
+          no telefone <a href="tel:+5511971537119" style="color:var(--verde-escuro); font-weight:700; white-space:nowrap;">(11) 97153-7119</a>
+          para liberar.
+        </p>
+        <a href="tel:+5511971537119" class="block" style="display:inline-block; margin-top:16px; text-decoration:none; background:var(--verde); color:#fff; padding:12px 20px; border-radius:8px; font-weight:600;">
+          &#128222; Ligar para o Administrador
+        </a>
       </div>
     </div>
   </div>
@@ -156,12 +173,29 @@
     const urlParams = new URLSearchParams(window.location.search);
     const morador_id = urlParams.get('morador');
     const tipo = urlParams.get('tipo') || 'Visitante';
+    const linkExp = urlParams.get('exp');
+    const linkSig = urlParams.get('sig');
 
     let visitanteCadastradoCache = null;
 
-    if (!morador_id) {
+    // Mostra a tela de erro com uma mensagem específica (link inválido ou expirado).
+    function mostrarErroLink(mensagem) {
       document.getElementById('area-form').classList.add('hidden');
-      document.getElementById('area-erro-link').classList.remove('hidden');
+      const area = document.getElementById('area-erro-link');
+      if (mensagem) {
+        const alvo = document.getElementById('erro-link-msg');
+        if (alvo) alvo.textContent = mensagem;
+      }
+      area.classList.remove('hidden');
+    }
+
+    // O link precisa ter expiração/assinatura e não pode estar vencido (prazo de 2h).
+    const linkExpirado = !linkExp || !linkSig || Date.now() > Number(linkExp);
+
+    if (!morador_id) {
+      mostrarErroLink('Este link não é válido. Peça ao morador um novo link para solicitar o acesso ao condomínio.');
+    } else if (linkExpirado) {
+      mostrarErroLink('Este link expirou. Peça ao morador um novo link para solicitar o acesso ao condomínio.');
     } else {
       if (tipo === 'Prestador') {
         document.getElementById('titulo-pagina').textContent = 'Cadastro de Prestador';
@@ -225,6 +259,12 @@
 
       try {
         const res = await api(`/api/public/visitantes/verificar?cpf=${encodeURIComponent(cpfVal)}`);
+
+        // Visitante bloqueado: interrompe o fluxo e mostra o aviso.
+        if (res && res.bloqueado) {
+          mostrarBloqueio();
+          return;
+        }
 
         if (res && res.cadastrado && res.visitante) {
           visitanteCadastradoCache = res.visitante;
@@ -303,12 +343,22 @@
             data_prevista: dt ? new Date(dt).toISOString() : null,
             endereco_visitante: visitanteCadastradoCache.endereco_visitante || null,
             cep_visitante: visitanteCadastradoCache.cep_visitante || null,
+            link_exp: linkExp,
+            link_sig: linkSig,
           }),
         });
 
         document.getElementById('area-form').classList.add('hidden');
         document.getElementById('area-sucesso').classList.remove('hidden');
       } catch (err) {
+        if (ehErroDeBloqueio(err)) {
+          mostrarBloqueio();
+          return;
+        }
+        if (ehErroDeLink(err)) {
+          mostrarErroLink(err.message);
+          return;
+        }
         msgRapido.textContent = err.message || 'Erro ao confirmar solicitação.';
         msgRapido.className = 'msg erro';
         msgRapido.classList.remove('hidden');
@@ -462,13 +512,23 @@
             veiculo_placa: placaVal,
             data_prevista: new Date(dtVal).toISOString(),
             endereco_visitante: montarEnderecoVisitante(),
-            cep_visitante: tipo === 'Prestador' ? document.getElementById('cep').value.trim() || null : null
+            cep_visitante: tipo === 'Prestador' ? document.getElementById('cep').value.trim() || null : null,
+            link_exp: linkExp,
+            link_sig: linkSig,
           }),
         });
 
         document.getElementById('area-form').classList.add('hidden');
         document.getElementById('area-sucesso').classList.remove('hidden');
       } catch (err) {
+        if (ehErroDeBloqueio(err)) {
+          mostrarBloqueio();
+          return;
+        }
+        if (ehErroDeLink(err)) {
+          mostrarErroLink(err.message);
+          return;
+        }
         msg.textContent = err.message || 'Erro ao enviar cadastro.';
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
@@ -477,6 +537,26 @@
         btn.textContent = 'Enviar cadastro';
       }
     });
+
+    // Detecta erro de link expirado/inválido retornado pelo backend.
+    function ehErroDeLink(err) {
+      const m = (err && err.message ? err.message : '').toLowerCase();
+      return m.includes('link expirou') || m.includes('link inválido') || m.includes('link invalido');
+    }
+
+    // Mostra a tela de visitante bloqueado (esconde o formulário).
+    function mostrarBloqueio() {
+      document.getElementById('area-form').classList.add('hidden');
+      document.getElementById('area-sucesso').classList.add('hidden');
+      document.getElementById('area-erro-link').classList.add('hidden');
+      document.getElementById('area-bloqueado').classList.remove('hidden');
+    }
+
+    // Detecta erro de bloqueio retornado pelo backend.
+    function ehErroDeBloqueio(err) {
+      const m = (err && err.message ? err.message : '').toLowerCase();
+      return m.includes('bloqueada') || m.includes('bloqueado');
+    }
   </script>
 </body>
 </html>
