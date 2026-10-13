@@ -196,6 +196,10 @@ tr:last-child td { border-bottom: none; }
 .badge.admin { background: #e9d8fd; color: #6b46c1; }
 .badge.porteiro { background: #d6e9f8; color: var(--azul); }
 .badge.morador { background: var(--verde-claro); color: var(--verde-escuro); }
+.badge.visitante { background: var(--verde-claro); color: var(--verde-escuro); }
+.badge.prestador { background: #d6e9f8; color: var(--azul); }
+.badge.entregador { background: #fde8d7; color: #c05621; }
+.badge.outro { background: #e2e8f0; color: var(--texto-suave); }
 
 /* ---------- Avisos / mensagens ---------- */
 .msg { padding: 10px 12px; border-radius: 8px; font-size: 14px; margin-top: 10px; }

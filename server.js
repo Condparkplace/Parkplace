@@ -1041,6 +1041,89 @@ app.delete('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (
   res.json({ ok: true });
 });
 
+// Lista de visitantes cadastrados (agrega avisos de visita + registros da portaria).
+// Suporta busca por nome ou documento (CPF) via ?busca=
+app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const busca = (req.query.busca || '').trim();
+    const buscaNorm = busca.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const buscaDoc = busca.replace(/\D/g, '');
+
+    // Avisos cadastrados pelos moradores
+    const { data: avisos, error: errAv } = await supabaseAdmin
+      .from('avisos_visitas')
+      .select('nome_visitante, documento_visitante, veiculo_placa, tipo, criado_em')
+      .order('criado_em', { ascending: false })
+      .limit(2000);
+    if (errAv) throw errAv;
+
+    // Registros reais da portaria (entradas) - ignora encomendas
+    const { data: registros, error: errReg } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('nome_pessoa, documento, veiculo_placa, tipo, entrada')
+      .neq('nome_pessoa', 'Encomenda')
+      .order('entrada', { ascending: false })
+      .limit(2000);
+    if (errReg) throw errReg;
+
+    // Agrega por chave (documento quando houver; senao, nome normalizado).
+    const mapa = new Map();
+
+    const adicionar = (nome, documento, placa, tipo, quando) => {
+      if (!nome || !nome.trim()) return;
+      if (nome === 'Entregador iFood') return; // entregas automaticas nao sao visitantes cadastrados
+      const nomeLimpo = nome.trim();
+      const docLimpo = (documento || '').replace(/\D/g, '');
+      const chave = docLimpo || ('nome:' + nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+
+      const existente = mapa.get(chave);
+      if (!existente) {
+        mapa.set(chave, {
+          nome: nomeLimpo,
+          documento: documento || null,
+          veiculo_placa: placa || null,
+          tipo: tipo || 'Visitante',
+          vezes: 1,
+          ultima_vez: quando || null,
+        });
+      } else {
+        existente.vezes += 1;
+        if (!existente.documento && documento) existente.documento = documento;
+        if (!existente.veiculo_placa && placa) existente.veiculo_placa = placa;
+        if (quando && (!existente.ultima_vez || new Date(quando) > new Date(existente.ultima_vez))) {
+          existente.ultima_vez = quando;
+        }
+      }
+    };
+
+    (avisos || []).forEach((a) =>
+      adicionar(a.nome_visitante, a.documento_visitante, a.veiculo_placa, a.tipo, a.criado_em)
+    );
+    (registros || []).forEach((r) =>
+      adicionar(r.nome_pessoa, r.documento, r.veiculo_placa, r.tipo, r.entrada)
+    );
+
+    let visitantes = Array.from(mapa.values());
+
+    // Filtro por nome ou documento
+    if (busca) {
+      visitantes = visitantes.filter((v) => {
+        const nomeNorm = v.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const docNum = (v.documento || '').replace(/\D/g, '');
+        const casaNome = nomeNorm.includes(buscaNorm);
+        const casaDoc = buscaDoc && docNum.includes(buscaDoc);
+        return casaNome || casaDoc;
+      });
+    }
+
+    visitantes.sort((a, b) => a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    res.json({ visitantes });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Relatorio resumido para o admin
 app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res) => {
   const [{ count: totalMoradores }, { count: totalPorteiros }, { count: presentes }, { count: avisosPendentes }] =
