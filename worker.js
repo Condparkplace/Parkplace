@@ -5,4 +5,17 @@ import app from './server.js';
 const PORT = 3000;
 app.listen(PORT);
 
-export default httpServerHandler({ port: PORT });
+const handler = httpServerHandler({ port: PORT });
+
+export default {
+  async fetch(request, env, ctx) {
+    if (env) {
+      for (const [key, val] of Object.entries(env)) {
+        if (typeof val === 'string' && val) {
+          process.env[key] = val;
+        }
+      }
+    }
+    return handler.fetch(request, env, ctx);
+  }
+};
