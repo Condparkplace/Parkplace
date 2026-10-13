@@ -12,7 +12,7 @@ begin
     create type tipo_perfil as enum ('admin', 'porteiro', 'morador');
   end if;
   if not exists (select 1 from pg_type where typname = 'tipo_acesso') then
-    create type tipo_acesso as enum ('Visitante', 'Prestador', 'Entregador', 'Outro');
+    create type tipo_acesso as enum ('Morador', 'Visitante', 'Prestador', 'Entregador', 'Outro');
   end if;
   if not exists (select 1 from pg_type where typname = 'status_visita') then
     create type status_visita as enum ('Pendente', 'Autorizada', 'Entrada Realizada', 'Finalizada', 'Cancelada', 'Nao compareceu');
@@ -21,6 +21,9 @@ end$$;
 
 -- Migracao: garante o valor 'Nao compareceu' caso o enum ja exista.
 alter type status_visita add value if not exists 'Nao compareceu';
+
+-- Migracao: garante o valor 'Morador' no tipo de acesso.
+alter type tipo_acesso add value if not exists 'Morador';
 
 -- ------------------------------------------------------------
 -- 2) Tabela de perfis (liga auth.users ao tipo de usuario)

@@ -144,3 +144,14 @@ function toggleSenha(inputId, btn) {
   }
 }
 
+// Formata CPF no padrao 000.000.000-00
+function formatarCpf(v) {
+  if (!v) return '';
+  const d = String(v).replace(/\D/g, '').slice(0, 11);
+  return d
+    .replace(/^(\d{3})(\d)/, '$1.$2')
+    .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+    .replace(/\.(\d{3})(\d)/, '.$1-$2');
+}
+
+

@@ -557,16 +557,23 @@ async function comPorteiros(registros) {
   }));
 }
 
-// Quem esta dentro do condominio agora (saida nula)
+// Quem esta dentro do condominio agora (saida nula e nao e morador)
 app.get('/api/portaria/presentes', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const { data, error } = await req.supabase
     .from('registros_portaria')
     .select('*')
     .neq('nome_pessoa', 'Encomenda')
+    .neq('tipo', 'Morador')
     .is('saida', null)
     .order('entrada', { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ presentes: await comPorteiros(data || []) });
+
+  // Exclui moradores mesmo se salvos como 'Outro' pelo fallback do enum
+  const apenasVisitantes = (data || []).filter(
+    (r) => r.tipo !== 'Morador' && !(r.observacao || '').includes('[Entrada de Morador]')
+  );
+
+  res.json({ presentes: await comPorteiros(apenasVisitantes) });
 });
 // Historico completo (com filtro opcional por data e cpf).
 // Inclui os registros de entrada/saida E os avisos marcados como "Nao compareceu".
@@ -620,43 +627,111 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
     };
   });
 
-  const registros = [...(await comPorteiros(data || [])), ...naoCompareceu].sort(
+  const registrosComPorteiros = await comPorteiros(data || []);
+  const registrosNormalizados = registrosComPorteiros.map((r) => {
+    let tipo = r.tipo;
+    let observacao = r.observacao || '';
+    if (observacao.includes('[Entrada de Morador]')) {
+      tipo = 'Morador';
+      observacao = observacao.replace('[Entrada de Morador]', '').trim();
+    }
+    return {
+      ...r,
+      tipo,
+      observacao,
+    };
+  });
+
+  const registros = [...registrosNormalizados, ...naoCompareceu].sort(
     (x, y) => new Date(y.entrada) - new Date(x.entrada)
   ).slice(0, 40);
 
-  res.json({ registros });;
+  res.json({ registros });
 });
 
-// Busca o cadastro mais recente de uma pessoa pelo documento (CPF).
-// Usado na aba "Registrar entrada" para preencher dados de quem ja veio antes.
+// Busca o cadastro de uma pessoa pelo documento (CPF).
+// Verifica:
+// 1. Base oficial de MORADORES (perfis) -> Prioridade máxima para unificação de cadastro!
+// 2. Registros de portaria anteriores (para puxar placa de veículo ou histórico de visitantes)
+// 3. Avisos de visita cadastrados pelos moradores
 app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const doc = (req.query.documento || '').trim();
   if (!doc) return res.status(400).json({ error: 'Informe o documento para buscar.' });
 
-  // Normaliza para comparar ignorando pontuacao (123.456.789-00 == 12345678900)
   const docLimpo = doc.replace(/\D/g, '');
 
-  // Procura primeiro nos registros de portaria (quem ja entrou).
+  // 1. Procura primeiro na base oficial de MORADORES / ADMINS
+  const { data: perfis, error: errPerfis } = await supabaseAdmin
+    .from('perfis')
+    .select('id, nome, bloco, apartamento, telefone, cpf, tipo')
+    .not('cpf', 'is', null);
+
+  const moradorEncontrado = (perfis || []).find(
+    (p) => (p.cpf || '').replace(/\D/g, '') === docLimpo && docLimpo
+  );
+
+  // 2. Busca histórico nos registros de portaria (quem ja entrou)
   const { data: registros, error: errReg } = await req.supabase
     .from('registros_portaria')
     .select('*')
     .not('documento', 'is', null)
     .order('entrada', { ascending: false })
     .limit(500);
-  if (errReg) return res.status(400).json({ error: errReg.message });
 
   const achoReg = (registros || []).find(
-    (r) => (r.documento || '').replace(/\D/g, '') === docLimpo
+    (r) => (r.documento || '').replace(/\D/g, '') === docLimpo && docLimpo
   );
+
+  // 3. Busca nos avisos de visita cadastrados pelos moradores
+  const { data: avisos, error: errAv } = await req.supabase
+    .from('avisos_visitas')
+    .select('*, morador:perfis!avisos_visitas_morador_id_fkey(bloco, apartamento)')
+    .not('documento_visitante', 'is', null)
+    .order('criado_em', { ascending: false })
+    .limit(500);
+
+  const achoAviso = (avisos || []).find(
+    (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
+  );
+
+  // SE FOR MORADOR: Unifica o cadastro pelo perfil oficial do morador
+  if (moradorEncontrado) {
+    return res.json({
+      encontrado: true,
+      eh_morador: true,
+      origem: 'morador',
+      morador: {
+        nome: moradorEncontrado.nome,
+        bloco: moradorEncontrado.bloco,
+        apartamento: moradorEncontrado.apartamento,
+        telefone: moradorEncontrado.telefone,
+        cpf: moradorEncontrado.cpf,
+        tipo: moradorEncontrado.tipo,
+      },
+      pessoa: {
+        nome_pessoa: moradorEncontrado.nome,
+        documento: moradorEncontrado.cpf || doc,
+        tipo: 'Morador',
+        veiculo_placa: '',
+        destino_bloco: moradorEncontrado.bloco || null,
+        destino_apto: moradorEncontrado.apartamento || null,
+        endereco_visitante: null,
+        cep_visitante: null,
+      },
+    });
+  }
+
+  // SE NÃO FOR MORADOR: Busca no histórico de registros ou avisos
   if (achoReg) {
     return res.json({
       encontrado: true,
+      eh_morador: false,
       origem: 'registro',
       pessoa: {
         nome_pessoa: achoReg.nome_pessoa,
         documento: achoReg.documento,
         tipo: achoReg.tipo,
-        veiculo_placa: achoReg.veiculo_placa,
+        veiculo_placa: '',
         destino_bloco: achoReg.destino_bloco,
         destino_apto: achoReg.destino_apto,
         endereco_visitante: achoReg.endereco_visitante,
@@ -665,28 +740,17 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
     });
   }
 
-  // Se nao achou, procura nos avisos de visita cadastrados pelos moradores.
-  const { data: avisos, error: errAv } = await req.supabase
-    .from('avisos_visitas')
-    .select('*, morador:perfis!avisos_visitas_morador_id_fkey(bloco, apartamento)')
-    .not('documento_visitante', 'is', null)
-    .order('criado_em', { ascending: false })
-    .limit(500);
-  if (errAv) return res.status(400).json({ error: errAv.message });
-
-  const achoAviso = (avisos || []).find(
-    (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo
-  );
   if (achoAviso) {
     const m = achoAviso.morador || {};
     return res.json({
       encontrado: true,
+      eh_morador: false,
       origem: 'aviso',
       pessoa: {
         nome_pessoa: achoAviso.nome_visitante,
         documento: achoAviso.documento_visitante,
         tipo: achoAviso.tipo,
-        veiculo_placa: achoAviso.veiculo_placa,
+        veiculo_placa: '',
         destino_bloco: m.bloco || null,
         destino_apto: m.apartamento || null,
         endereco_visitante: achoAviso.endereco_visitante || null,
@@ -695,7 +759,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
     });
   }
 
-  res.json({ encontrado: false });
+  res.json({ encontrado: false, eh_morador: false });
 });
 
 // Registra entrada (pode vir de um aviso ou ser avulsa)
@@ -717,23 +781,45 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     return res.status(400).json({ error: 'Informe o nome da pessoa.' });
   }
 
-  const { data, error } = await req.supabase
+  const tipoFinal = tipo || 'Visitante';
+  const isMorador = tipoFinal === 'Morador';
+  const agora = new Date().toISOString();
+  const insertPayload = {
+    aviso_id: aviso_id || null,
+    nome_pessoa,
+    documento: documento || null,
+    tipo: tipoFinal,
+    destino_bloco: destino_bloco || null,
+    destino_apto: destino_apto || null,
+    veiculo_placa: veiculo_placa || null,
+    endereco_visitante: endereco_visitante || null,
+    cep_visitante: cep_visitante || null,
+    observacao: observacao || null,
+    registrado_por: req.user.id,
+    saida: isMorador ? agora : null,
+    saida_por: isMorador ? req.user.id : null,
+  };
+
+  let { data, error } = await req.supabase
     .from('registros_portaria')
-    .insert({
-      aviso_id: aviso_id || null,
-      nome_pessoa,
-      documento: documento || null,
-      tipo: tipo || 'Visitante',
-      destino_bloco: destino_bloco || null,
-      destino_apto: destino_apto || null,
-      veiculo_placa: veiculo_placa || null,
-      endereco_visitante: endereco_visitante || null,
-      cep_visitante: cep_visitante || null,
-      observacao: observacao || null,
-      registrado_por: req.user.id,
-    })
+    .insert(insertPayload)
     .select()
     .single();
+
+  // Fallback caso o banco ainda nao tenha a migracao do enum para 'Morador'
+  if (error && error.message && error.message.includes('tipo_acesso') && isMorador) {
+    insertPayload.tipo = 'Outro';
+    insertPayload.observacao = (insertPayload.observacao ? insertPayload.observacao + ' ' : '') + '[Entrada de Morador]';
+    const fallbackRes = await req.supabase
+      .from('registros_portaria')
+      .insert(insertPayload)
+      .select()
+      .single();
+    if (!fallbackRes.error) {
+      data = fallbackRes.data;
+      error = null;
+    }
+  }
 
   if (error) return res.status(400).json({ error: error.message });
 

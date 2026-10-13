@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Administração - Park Place</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
+
 <body>
   <div class="topbar">
     <div class="brand">
@@ -20,132 +22,172 @@
   <div class="container">
     <!-- Resumo -->
     <div class="grid grid-4" style="margin-bottom:18px;">
-      <div class="stat"><div class="num" id="st-moradores">-</div><div class="label">Moradores</div></div>
-      <div class="stat"><div class="num" id="st-porteiros">-</div><div class="label">Porteiros</div></div>
-      <div class="stat"><div class="num" id="st-presentes">-</div><div class="label">No condomínio agora</div></div>
-      <div class="stat"><div class="num" id="st-avisos">-</div><div class="label">Visitas previstas</div></div>
+      <div class="stat">
+        <div class="num" id="st-moradores">-</div>
+        <div class="label">Moradores</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="st-porteiros">-</div>
+        <div class="label">Porteiros</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="st-presentes">-</div>
+        <div class="label">No condomínio agora</div>
+      </div>
+      <div class="stat">
+        <div class="num" id="st-avisos">-</div>
+        <div class="label">Visitas previstas</div>
+      </div>
     </div>
 
     <div class="grid grid-2">
       <!-- Cadastro de usuario -->
       <div>
-      <div class="card">
-        <h2>Cadastrar usuário</h2>
-        <form id="form-usuario">
-          <label for="tipo">Perfil *</label>
-          <select id="tipo" onchange="atualizarCamposPorTipo()">
-            <option value="morador">Morador</option>
-            <option value="porteiro">Porteiro</option>
-            <option value="admin">Administrador</option>
-          </select>
+        <div class="card">
+          <h2>Cadastrar usuário</h2>
+          <form id="form-usuario">
+            <label for="tipo">Perfil *</label>
+            <select id="tipo" onchange="atualizarCamposPorTipo()">
+              <option value="morador">Morador</option>
+              <option value="porteiro">Porteiro</option>
+              <option value="admin">Administrador</option>
+            </select>
 
-          <!-- Busca de prestadores cadastrados (aparece quando tipo === porteiro) -->
-          <div id="wrap-busca-prestador" class="hidden" style="margin-top:12px; margin-bottom:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px;">
-            <label for="busca-prestador" style="margin:0 0 6px; font-weight:600; color:#166534; font-size:13px; display:flex; align-items:center; gap:6px;">
-              <span>🔍</span> <span>Buscar em Prestadores já cadastrados (opcional):</span>
-            </label>
-            <div style="position:relative;">
-              <input type="text" id="busca-prestador" placeholder="Digite nome ou CPF para buscar..." autocomplete="off" oninput="aoDigitarBuscaPrestador(this.value)" style="margin:0; background:#fff;" />
-              <div id="sugestoes-prestadores" class="hidden" style="position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin-top:4px;"></div>
-            </div>
-            <div id="aviso-prestador-selecionado" class="hidden" style="margin-top:8px; font-size:13px; color:#15803d; font-weight:500;"></div>
-            <p class="text-muted" style="margin:6px 0 0; font-size:12px;">
-              Selecione um prestador para autopreencher ou digite o Login manualmente abaixo.
-            </p>
-          </div>
-
-          <!-- Busca de moradores cadastrados (aparece quando tipo === admin) -->
-          <div id="wrap-busca-morador" class="hidden" style="margin-top:12px; margin-bottom:14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px;">
-            <label for="busca-morador" style="margin:0 0 6px; font-weight:600; color:#1e40af; font-size:13px; display:flex; align-items:center; gap:6px;">
-              <span>🔍</span> <span>Buscar em Moradores já cadastrados (opcional):</span>
-            </label>
-            <div style="position:relative;">
-              <input type="text" id="busca-morador" placeholder="Digite nome, lote ou e-mail..." autocomplete="off" onfocus="aoFocarBuscaMorador()" oninput="aoDigitarBuscaMorador(this.value)" style="margin:0; background:#fff;" />
-              <div id="sugestoes-moradores" class="hidden" style="position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin-top:4px;"></div>
-            </div>
-            <div id="aviso-morador-selecionado" class="hidden" style="margin-top:8px; font-size:13px; color:#1e40af; font-weight:500;"></div>
-            <p class="text-muted" style="margin:6px 0 0; font-size:12px;">
-              Selecione um morador para autopreencher seus dados e torná-lo Administrador.
-            </p>
-          </div>
-
-          <label for="nome" id="label-nome">Nome completo *</label>
-          <input type="text" id="nome" required />
-
-
-          <div id="campos-morador">
-            <div class="grid grid-2">
-              <div>
-                <label for="bloco">Lote</label>
-                <select id="bloco">
-                  <option value="">Selecione o Lote</option>
-                  <option value="Lote 01">Lote 01</option>
-                  <option value="Lote 02">Lote 02</option>
-                  <option value="Lote 03">Lote 03</option>
-                  <option value="Lote 04">Lote 04</option>
-                  <option value="Lote 05">Lote 05</option>
-                  <option value="Lote 06">Lote 06</option>
-                  <option value="Lote 07">Lote 07</option>
-                  <option value="Lote 08">Lote 08</option>
-                  <option value="Lote 09">Lote 09</option>
-                  <option value="Lote 10">Lote 10</option>
-                  <option value="Lote 11">Lote 11</option>
-                  <option value="Lote 12">Lote 12</option>
-                  <option value="Lote 13">Lote 13</option>
-                  <option value="Lote 14">Lote 14</option>
-                  <option value="Lote 15">Lote 15</option>
-                  <option value="Lote 16">Lote 16</option>
-                  <option value="Lote 17">Lote 17</option>
-                  <option value="Lote 18">Lote 18</option>
-                  <option value="Lote 19">Lote 19</option>
-                  <option value="Lote 20">Lote 20</option>
-                  <option value="Lote 21">Lote 21</option>
-                  <option value="Lote 22">Lote 22</option>
-                  <option value="Lote 23">Lote 23</option>
-                  <option value="Lote 24">Lote 24</option>
-                  <option value="Lote 25">Lote 25</option>
-                  <option value="Lote 26">Lote 26</option>
-                  <option value="Lote 27">Lote 27</option>
-                  <option value="Lote 28">Lote 28</option>
-                </select>
+            <!-- Busca de prestadores cadastrados (aparece quando tipo === porteiro) -->
+            <div id="wrap-busca-prestador" class="hidden"
+              style="margin-top:12px; margin-bottom:14px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px;">
+              <label for="busca-prestador"
+                style="margin:0 0 6px; font-weight:600; color:#166534; font-size:13px; display:flex; align-items:center; gap:6px;">
+                <span>🔍</span> <span>Buscar em Prestadores já cadastrados (opcional):</span>
+              </label>
+              <div style="position:relative;">
+                <input type="text" id="busca-prestador" placeholder="Digite nome ou CPF para buscar..."
+                  autocomplete="off" oninput="aoDigitarBuscaPrestador(this.value)" style="margin:0; background:#fff;" />
+                <div id="sugestoes-prestadores" class="hidden"
+                  style="position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin-top:4px;">
+                </div>
               </div>
-              <div>
-                <label for="cpf">CPF (opcional)</label>
-                <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" />
+              <div id="aviso-prestador-selecionado" class="hidden"
+                style="margin-top:8px; font-size:13px; color:#15803d; font-weight:500;"></div>
+              <p class="text-muted" style="margin:6px 0 0; font-size:12px;">
+                Selecione um prestador para autopreencher ou digite o Login manualmente abaixo.
+              </p>
+            </div>
+
+            <!-- Busca de moradores cadastrados (aparece quando tipo === admin) -->
+            <div id="wrap-busca-morador" class="hidden"
+              style="margin-top:12px; margin-bottom:14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px;">
+              <label for="busca-morador"
+                style="margin:0 0 6px; font-weight:600; color:#1e40af; font-size:13px; display:flex; align-items:center; gap:6px;">
+                <span>🔍</span> <span>Buscar em Moradores já cadastrados (opcional):</span>
+              </label>
+              <div style="position:relative;">
+                <input type="text" id="busca-morador" placeholder="Digite nome, lote ou e-mail..." autocomplete="off"
+                  onfocus="aoFocarBuscaMorador()" oninput="aoDigitarBuscaMorador(this.value)"
+                  style="margin:0; background:#fff;" />
+                <div id="sugestoes-moradores" class="hidden"
+                  style="position:absolute; top:100%; left:0; right:0; background:#fff; border:1px solid #cbd5e1; border-radius:6px; max-height:220px; overflow-y:auto; z-index:100; box-shadow:0 4px 14px rgba(0,0,0,0.15); margin-top:4px;">
+                </div>
               </div>
-            </div>
-          </div>
-
-          <label for="telefone">Telefone</label>
-          <input type="text" id="telefone" />
-
-          <div id="campos-login">
-            <div id="wrap-email">
-              <label for="email" id="label-email">E-mail (login) *</label>
-              <input type="email" id="email" required />
+              <div id="aviso-morador-selecionado" class="hidden"
+                style="margin-top:8px; font-size:13px; color:#1e40af; font-weight:500;"></div>
+              <p class="text-muted" style="margin:6px 0 0; font-size:12px;">
+                Selecione um morador para autopreencher seus dados e torná-lo Administrador.
+              </p>
             </div>
 
-            <div id="dica-porteiro" class="hidden" style="background:#e8f5e9; border:1px solid #c8e6c9; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; color:#2e7d32; line-height:1.4;">
-              &#128110; <strong>Acesso do Porteiro:</strong> O porteiro far&aacute; login usando apenas o <strong>Nome</strong> e a <strong>Senha</strong> informados aqui. O e-mail n&atilde;o &eacute; necess&aacute;rio.
-            </div>
+            <label for="nome" id="label-nome">Nome completo *</label>
+            <input type="text" id="nome" required />
 
-            <div id="wrap-password">
-              <label for="password" id="label-password">Senha inicial *</label>
-              <div class="password-wrap">
-                <input type="password" id="password" placeholder="Mínimo 6 caracteres" required />
-                <button type="button" class="btn-toggle-senha" onclick="toggleSenha('password', this)" title="Ver senha" aria-label="Mostrar ou ocultar senha">
-                  <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
-                  <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
-                </button>
+
+            <div id="campos-morador">
+              <div class="grid grid-2">
+                <div>
+                  <label for="bloco">Lote</label>
+                  <select id="bloco">
+                    <option value="">Selecione o Lote</option>
+                    <option value="Lote 01">Lote 01</option>
+                    <option value="Lote 02">Lote 02</option>
+                    <option value="Lote 03">Lote 03</option>
+                    <option value="Lote 04">Lote 04</option>
+                    <option value="Lote 05">Lote 05</option>
+                    <option value="Lote 06">Lote 06</option>
+                    <option value="Lote 07">Lote 07</option>
+                    <option value="Lote 08">Lote 08</option>
+                    <option value="Lote 09">Lote 09</option>
+                    <option value="Lote 10">Lote 10</option>
+                    <option value="Lote 11">Lote 11</option>
+                    <option value="Lote 12">Lote 12</option>
+                    <option value="Lote 13">Lote 13</option>
+                    <option value="Lote 14">Lote 14</option>
+                    <option value="Lote 15">Lote 15</option>
+                    <option value="Lote 16">Lote 16</option>
+                    <option value="Lote 17">Lote 17</option>
+                    <option value="Lote 18">Lote 18</option>
+                    <option value="Lote 19">Lote 19</option>
+                    <option value="Lote 20">Lote 20</option>
+                    <option value="Lote 21">Lote 21</option>
+                    <option value="Lote 22">Lote 22</option>
+                    <option value="Lote 23">Lote 23</option>
+                    <option value="Lote 24">Lote 24</option>
+                    <option value="Lote 25">Lote 25</option>
+                    <option value="Lote 26">Lote 26</option>
+                    <option value="Lote 27">Lote 27</option>
+                    <option value="Lote 28">Lote 28</option>
+                  </select>
+                </div>
+                <div>
+                  <label for="cpf">CPF (opcional)</label>
+                  <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" />
+                </div>
               </div>
             </div>
-          </div>
 
-          <button type="submit" class="block" id="btn-usuario">Cadastrar</button>
-          <button type="button" class="block secundario hidden" id="btn-cancelar-edicao" style="margin-top:10px;" onclick="cancelarEdicao()">Cancelar edição</button>
-        </form>
-        <div id="msg-usuario" class="msg hidden"></div>
-      </div>
+            <label for="telefone">Telefone</label>
+            <input type="text" id="telefone" />
+
+            <div id="campos-login">
+              <div id="wrap-email">
+                <label for="email" id="label-email">E-mail (login) *</label>
+                <input type="email" id="email" required />
+              </div>
+
+              <div id="dica-porteiro" class="hidden"
+                style="background:#e8f5e9; border:1px solid #c8e6c9; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; color:#2e7d32; line-height:1.4;">
+                &#128110; <strong>Acesso do Porteiro:</strong> O porteiro far&aacute; login usando apenas o
+                <strong>Nome</strong> e a <strong>Senha</strong> informados aqui. O e-mail n&atilde;o &eacute;
+                necess&aacute;rio.
+              </div>
+
+              <div id="wrap-password">
+                <label for="password" id="label-password">Senha inicial *</label>
+                <div class="password-wrap">
+                  <input type="password" id="password" placeholder="Mínimo 6 caracteres" required />
+                  <button type="button" class="btn-toggle-senha" onclick="toggleSenha('password', this)"
+                    title="Ver senha" aria-label="Mostrar ou ocultar senha">
+                    <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                      stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                    <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none"
+                      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path
+                        d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24">
+                      </path>
+                      <line x1="1" y1="1" x2="23" y2="23"></line>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <button type="submit" class="block" id="btn-usuario">Cadastrar</button>
+            <button type="button" class="block secundario hidden" id="btn-cancelar-edicao" style="margin-top:10px;"
+              onclick="cancelarEdicao()">Cancelar edição</button>
+          </form>
+          <div id="msg-usuario" class="msg hidden"></div>
+        </div>
 
         <!-- Link de cadastro para moradores -->
         <div class="card" style="margin-top:18px; border-left:4px solid var(--verde);">
@@ -157,22 +199,27 @@
           <input type="text" id="link-cadastro" readonly onclick="this.select()" />
           <div class="row-inline" style="margin-top:10px;">
             <button type="button" class="mini" id="btn-copiar-link" onclick="copiarLink()">Copiar link</button>
-            <button type="button" class="mini" style="background:#25d366;" onclick="enviarWhatsApp()">Enviar por WhatsApp</button>
-            <button type="button" class="secundario mini" onclick="window.open(linkCadastro(), '_blank')">Abrir página</button>
+            <button type="button" class="mini" style="background:#25d366;" onclick="enviarWhatsApp()">Enviar por
+              WhatsApp</button>
+            <button type="button" class="secundario mini" onclick="window.open(linkCadastro(), '_blank')">Abrir
+              página</button>
           </div>
         </div>
       </div>
 
       <!-- Lista de usuarios -->
       <div class="card">
-        <h2>Usuários cadastrados</h2>
-        <div id="lista-usuarios"><p class="vazio">Carregando...</p></div>
+        <h2>Moradores cadastrados</h2>
+        <div id="lista-usuarios">
+          <p class="vazio">Carregando...</p>
+        </div>
       </div>
     </div>
 
     <!-- Listagem de visitantes cadastrados -->
     <div class="card" style="margin-top:18px;">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
         <h2 style="margin:0;">&#128101; Visitantes cadastrados</h2>
         <span id="total-visitantes" class="text-muted" style="font-size:13px;"></span>
       </div>
@@ -180,10 +227,13 @@
         Pessoas que já foram avisadas pelos moradores ou que já tiveram entrada registrada na portaria.
       </p>
       <div class="row-inline" style="margin-bottom:16px;">
-        <input type="text" id="busca-visitante" placeholder="Buscar por nome ou CPF/documento..." style="flex:1; min-width:220px;" oninput="filtrarVisitantes()" />
+        <input type="text" id="busca-visitante" placeholder="Buscar por nome ou CPF/documento..."
+          style="flex:1; min-width:220px;" oninput="filtrarVisitantes()" />
         <button type="button" class="secundario mini" onclick="limparBuscaVisitante()">Limpar</button>
       </div>
-      <div id="lista-visitantes"><p class="vazio">Carregando...</p></div>
+      <div id="lista-visitantes">
+        <p class="vazio">Carregando...</p>
+      </div>
     </div>
   </div>
 
@@ -341,7 +391,7 @@
       if (m.email) document.getElementById('email').value = m.email;
       if (m.bloco) document.getElementById('bloco').value = m.bloco;
       if (m.cpf) document.getElementById('cpf').value = formatarCpf(m.cpf);
-      
+
       document.getElementById('busca-morador').value = `${m.nome} (${m.bloco || 'Sem lote'})`;
       document.getElementById('sugestoes-moradores').classList.add('hidden');
 
@@ -621,7 +671,7 @@
           alvo.innerHTML = '<p class="vazio">Nenhum usuário cadastrado.</p>';
           return;
         }
-        
+
         const pendente = (u) => u.tipo === 'morador' && u.aprovado === false;
         const pendentes = usuarios.filter(pendente);
         const aprovados = usuarios.filter(u => !pendente(u));
@@ -635,7 +685,7 @@
           const btnStatus = isPend
             ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
             : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
-          
+
           const cpfFormatado = u.cpf ? formatarCpf(u.cpf) : '';
           const subPartes = [];
           if (cpfFormatado) subPartes.push(`CPF: ${escapeHtml(cpfFormatado)}`);
@@ -662,7 +712,7 @@
         };
 
         let html = '';
-        
+
         if (pendentes.length > 0) {
           html += `
             <div style="margin-bottom: 24px;">
@@ -796,4 +846,5 @@
     }
   </script>
 </body>
+
 </html>
