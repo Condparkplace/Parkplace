@@ -723,6 +723,11 @@
           ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
           : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
 
+        // Botão de notificação disponível apenas para moradores já aprovados.
+        const btnNotificar = (u.tipo === 'morador' && !isPend)
+          ? `<button class="mini" style="background-color:#2b6cb0; color:#fff;" onclick="abrirNotificacao('${u.id}', '${escapeHtml(u.nome).replace(/'/g, "\\'")}')">&#128276; Notificar</button>`
+          : '';
+
         const cpfFormatado = u.cpf ? formatarDocumento(u.cpf) : '';
         const subPartes = [];
         if (cpfFormatado) subPartes.push(`CPF: ${escapeHtml(cpfFormatado)}`);
@@ -743,6 +748,7 @@
             <td class="row-inline" data-label="">
               <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>
               ${btnStatus}
+              ${btnNotificar}
               <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
             </td>
           </tr>`;
@@ -803,6 +809,105 @@
         carregarResumo();
       } catch (err) {
         alert(err.message);
+      }
+    }
+
+    // ---------- Notificar morador ----------
+    let notificacaoMoradorId = null;
+
+    function abrirNotificacao(moradorId, nome) {
+      notificacaoMoradorId = moradorId;
+      document.getElementById('notif-morador-nome').textContent = nome;
+      document.getElementById('notif-titulo').value = '';
+      document.getElementById('notif-texto').value = '';
+      document.getElementById('notif-dias').value = 7;
+      const msg = document.getElementById('msg-notif');
+      msg.classList.add('hidden');
+      msg.textContent = '';
+      document.getElementById('modal-notificacao').classList.remove('hidden');
+      carregarHistoricoNotificacoes(moradorId);
+      setTimeout(() => document.getElementById('notif-titulo').focus(), 50);
+    }
+
+    function fecharNotificacao() {
+      document.getElementById('modal-notificacao').classList.add('hidden');
+      notificacaoMoradorId = null;
+    }
+
+    async function carregarHistoricoNotificacoes(moradorId) {
+      const alvo = document.getElementById('notif-historico');
+      alvo.innerHTML = '<p class="text-muted" style="font-size:12px; margin:0;">Carregando histórico...</p>';
+      try {
+        const { notificacoes } = await api(`/api/admin/notificacoes/${moradorId}`);
+        if (!notificacoes.length) {
+          alvo.innerHTML = '<p class="text-muted" style="font-size:12px; margin:0;">Nenhuma notificação enviada ainda.</p>';
+          return;
+        }
+        alvo.innerHTML = notificacoes.map(n => {
+          const visto = n.visualizado_em
+            ? `<span style="color:var(--verde-escuro); font-weight:600;">✓ Visualizado em ${formatarData(n.visualizado_em)}</span>`
+            : '<span style="color:var(--amarelo); font-weight:600;">⏳ Ainda não visualizado</span>';
+          return `
+            <div style="border:1px solid var(--cinza-borda); border-radius:6px; padding:8px 10px; display:flex; justify-content:space-between; gap:8px; align-items:flex-start;">
+              <div style="min-width:0;">
+                <strong style="font-size:13px;">${escapeHtml(n.titulo)}</strong>
+                <div class="text-muted" style="font-size:12px;">Enviado ${formatarData(n.criado_em)} · ${n.dias} dia(s)</div>
+                <div style="font-size:12px; margin-top:2px;">${visto}</div>
+              </div>
+              <button class="perigo mini" style="flex-shrink:0;" onclick="removerNotificacao(${n.id})">Excluir</button>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro" style="font-size:12px;">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function removerNotificacao(id) {
+      if (!confirm('Excluir esta notificação?')) return;
+      try {
+        await api(`/api/admin/notificacoes/${id}`, { method: 'DELETE' });
+        if (notificacaoMoradorId) carregarHistoricoNotificacoes(notificacaoMoradorId);
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    async function enviarNotificacao() {
+      if (!notificacaoMoradorId) return;
+      const btn = document.getElementById('btn-enviar-notif');
+      const msg = document.getElementById('msg-notif');
+      const titulo = document.getElementById('notif-titulo').value.trim();
+      const texto = document.getElementById('notif-texto').value.trim();
+      const dias = parseInt(document.getElementById('notif-dias').value, 10) || 7;
+
+      msg.classList.add('hidden');
+      if (!titulo || !texto) {
+        msg.textContent = 'Preencha o título e o texto da notificação.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+      try {
+        await api('/api/admin/notificacoes', {
+          method: 'POST',
+          body: JSON.stringify({ morador_id: notificacaoMoradorId, titulo, texto, dias }),
+        });
+        document.getElementById('notif-titulo').value = '';
+        document.getElementById('notif-texto').value = '';
+        msg.textContent = 'Notificação enviada com sucesso!';
+        msg.className = 'msg ok';
+        msg.classList.remove('hidden');
+        carregarHistoricoNotificacoes(notificacaoMoradorId);
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Enviar notificação';
       }
     }
 
@@ -1288,6 +1393,41 @@
         <button type="button" class="secundario" onclick="fecharModalVisitante()">Fechar</button>
       </div>
 
+    </div>
+  </div>
+
+  <!-- Modal: Notificar morador -->
+  <div id="modal-notificacao" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:12px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 40px rgba(0,0,0,0.25); padding:22px 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="margin:0; font-size:18px;">&#128276; Notificar morador</h2>
+        <button type="button" class="secundario mini" onclick="fecharNotificacao()" style="border:none; font-size:20px; line-height:1; padding:4px 10px;">&times;</button>
+      </div>
+      <p class="text-muted" style="margin:0 0 14px; font-size:13px;">
+        Enviando para <strong id="notif-morador-nome" style="color:var(--verde-escuro);"></strong>.
+        Ao acessar, o morador verá um aviso que trava a tela até confirmar o recebimento.
+      </p>
+
+      <label for="notif-titulo">Título *</label>
+      <input type="text" id="notif-titulo" maxlength="120" placeholder="Ex: Assembleia do condomínio" />
+
+      <label for="notif-texto">Mensagem *</label>
+      <textarea id="notif-texto" rows="4" placeholder="Escreva o aviso para o morador..."></textarea>
+
+      <label for="notif-dias">Permanecer visível por (dias) *</label>
+      <input type="number" id="notif-dias" min="1" max="365" value="7" style="max-width:120px;" />
+
+      <div id="msg-notif" class="msg hidden" style="margin-top:12px;"></div>
+
+      <button type="button" class="block" id="btn-enviar-notif" onclick="enviarNotificacao()" style="margin-top:16px; background:#2b6cb0;">
+        Enviar notificação
+      </button>
+
+      <div style="margin-top:20px; border-top:1px solid var(--cinza-borda); padding-top:14px;">
+        <h3 style="margin:0 0 10px; font-size:14px; color:var(--texto-suave);">Notificações enviadas</h3>
+        <div id="notif-historico" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
     </div>
   </div>
 </body>

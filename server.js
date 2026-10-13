@@ -334,7 +334,46 @@ async function notificarLote(bloco, titulo, mensagem) {
 // MORADOR - avisos de visita
 // ============================================================
 
-// Lista os avisos do proprio morador (incluindo historico da portaria se for pro seu lote)
+// Busca registros de portaria (sem aviso) direcionados a UM morador específico.
+// - Novos registros: vínculo direto por destino_morador = id do morador.
+// - Registros antigos (sem destino_morador): fallback por lote + nome na observação,
+//   para preservar o histórico já existente sem vazar entre vizinhos de lote.
+async function buscarRegistrosDoMorador(perfil, moradorId) {
+  const resultados = new Map();
+
+  // 1) Vínculo direto (preferencial)
+  const { data: diretos } = await supabaseAdmin
+    .from('registros_portaria')
+    .select('*')
+    .eq('destino_morador', moradorId)
+    .is('aviso_id', null)
+    .order('entrada', { ascending: false });
+  (diretos || []).forEach((r) => resultados.set(r.id, r));
+
+  // 2) Fallback para registros antigos (sem destino_morador) do mesmo lote,
+  //    filtrando pelo nome do morador quando ele aparece na observação.
+  if (perfil && perfil.bloco && perfil.nome) {
+    const numeroBloco = perfil.bloco.replace(/lote\s*/i, '').trim();
+    const primeiroNome = perfil.nome.trim().split(/\s+/)[0];
+    const { data: antigos } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('*')
+      .ilike('destino_bloco', `%${numeroBloco}%`)
+      .is('aviso_id', null)
+      .is('destino_morador', null)
+      .ilike('observacao', `%${primeiroNome}%`)
+      .order('entrada', { ascending: false });
+    (antigos || []).forEach((r) => {
+      if (!resultados.has(r.id)) resultados.set(r.id, r);
+    });
+  }
+
+  return Array.from(resultados.values()).sort(
+    (a, b) => new Date(b.entrada) - new Date(a.entrada)
+  );
+}
+
+// Lista os avisos do proprio morador (incluindo historico da portaria direcionado a ele)
 app.get('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   try {
     const { data: avisosData, error: errAvisos } = await req.supabase
@@ -345,28 +384,23 @@ app.get('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), asy
 
     let historico = [...(avisosData || [])];
 
-    if (req.perfil && req.perfil.bloco) {
-      const numeroBloco = req.perfil.bloco.replace(/lote\s*/i, '').trim();
-      const { data: regData, error: errReg } = await supabaseAdmin
-        .from('registros_portaria')
-        .select('*')
-        .ilike('destino_bloco', `%${numeroBloco}%`)
-        .is('aviso_id', null)
-        .order('entrada', { ascending: false });
-
-      if (!errReg && regData) {
-        const diretos = regData.map(p => ({
-          id: `p_${p.id}`,
-          nome_visitante: p.nome_pessoa === 'Encomenda' ? p.observacao : p.nome_pessoa,
-          documento_visitante: p.documento,
-          veiculo_placa: p.veiculo_placa,
-          tipo: p.nome_pessoa === 'Encomenda' ? 'Encomenda' : p.tipo,
-          data_prevista: p.entrada,
-          status: p.saida ? 'Finalizada' : 'Entrada Realizada',
-          criado_em: p.entrada
-        }));
-        historico = historico.concat(diretos);
-      }
+    // Registros da portaria direcionados a ESTE morador especificamente.
+    // Preferência pelo vínculo direto (destino_morador = eu). Para registros
+    // antigos — anteriores a esse vínculo — mantemos um fallback por lote+nome,
+    // restrito aos que ainda não têm destino_morador, para não vazar entre vizinhos.
+    const regData = await buscarRegistrosDoMorador(req.perfil, req.user.id);
+    if (regData.length) {
+      const diretos = regData.map(p => ({
+        id: `p_${p.id}`,
+        nome_visitante: p.nome_pessoa === 'Encomenda' ? p.observacao : p.nome_pessoa,
+        documento_visitante: p.documento,
+        veiculo_placa: p.veiculo_placa,
+        tipo: p.nome_pessoa === 'Encomenda' ? 'Encomenda' : p.tipo,
+        data_prevista: p.entrada,
+        status: p.saida ? 'Finalizada' : 'Entrada Realizada',
+        criado_em: p.entrada
+      }));
+      historico = historico.concat(diretos);
     }
 
     historico.sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
@@ -753,25 +787,48 @@ app.post('/api/morador/avisos/:id/cancelar', requireAuth, requireRole('morador',
   res.json({ aviso: data });
 });
 
-// Lista de encomendas pendentes para o morador logado
+// Lista de encomendas pendentes para o morador logado (apenas as dele).
 app.get('/api/morador/encomendas', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   const { data: perfil } = await supabaseAdmin.from('perfis').select('bloco, nome').eq('id', req.user.id).single();
   const bloco = perfil?.bloco;
+  const nome = perfil?.nome;
 
-  if (!bloco) return res.json({ encomendas: [] });
+  const encomendas = new Map();
 
-  const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
-
-  const { data, error } = await supabaseAdmin
+  // 1) Encomendas vinculadas diretamente a este morador (destino_morador).
+  const { data: diretas, error: errDir } = await supabaseAdmin
     .from('registros_portaria')
     .select('*')
     .eq('nome_pessoa', 'Encomenda')
-    .ilike('destino_bloco', `%${numeroBloco}%`)
+    .eq('destino_morador', req.user.id)
     .is('saida', null)
     .order('entrada', { ascending: false });
+  if (errDir) return res.status(400).json({ error: errDir.message });
+  (diretas || []).forEach((e) => encomendas.set(e.id, e));
 
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ encomendas: await comPorteiros(data || []) });
+  // 2) Fallback para encomendas antigas (sem destino_morador) do mesmo lote,
+  //    filtrando pelo nome do morador na observação ("[ENCOMENDA] Para: Nome").
+  if (bloco && nome) {
+    const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
+    const primeiroNome = nome.trim().split(/\s+/)[0];
+    const { data: antigas } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('*')
+      .eq('nome_pessoa', 'Encomenda')
+      .ilike('destino_bloco', `%${numeroBloco}%`)
+      .is('destino_morador', null)
+      .ilike('observacao', `%${primeiroNome}%`)
+      .is('saida', null)
+      .order('entrada', { ascending: false });
+    (antigas || []).forEach((e) => {
+      if (!encomendas.has(e.id)) encomendas.set(e.id, e);
+    });
+  }
+
+  const lista = Array.from(encomendas.values()).sort(
+    (a, b) => new Date(b.entrada) - new Date(a.entrada)
+  );
+  res.json({ encomendas: await comPorteiros(lista) });
 });
 
 // ============================================================
@@ -1367,6 +1424,7 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     tipo,
     destino_bloco,
     destino_apto,
+    destino_morador,
     veiculo_placa,
     endereco_visitante,
     cep_visitante,
@@ -1393,6 +1451,7 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     tipo: tipoFinal,
     destino_bloco: destino_bloco || null,
     destino_apto: destino_apto || null,
+    destino_morador: destino_morador || null,
     veiculo_placa: veiculo_placa || null,
     endereco_visitante: endereco_visitante || null,
     cep_visitante: cep_visitante || null,
@@ -1407,6 +1466,18 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     .insert(insertPayload)
     .select()
     .single();
+
+  // Fallback caso o banco ainda nao tenha a coluna destino_morador migrada.
+  if (error && error.message && error.message.includes('destino_morador')) {
+    delete insertPayload.destino_morador;
+    const semMorador = await req.supabase
+      .from('registros_portaria')
+      .insert(insertPayload)
+      .select()
+      .single();
+    data = semMorador.data;
+    error = semMorador.error;
+  }
 
   // Fallback caso o banco ainda nao tenha a migracao do enum para 'Morador'
   if (error && error.message && error.message.includes('tipo_acesso') && isMorador) {
@@ -1512,6 +1583,35 @@ app.post('/api/portaria/saida/:id', requireAuth, requireRole('porteiro', 'admin'
   }
 
   res.json({ registro: data });
+});
+
+// Registra uma troca de turno no histórico da portaria.
+// Chamada pelo frontend logo após o novo porteiro assumir (já com a sessão dele).
+app.post('/api/portaria/troca-turno', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { porteiro_anterior } = req.body || {};
+  const anterior = (porteiro_anterior || '').trim() || 'Não informado';
+  const assumiu = req.perfil?.nome || 'Porteiro';
+  const agora = new Date().toISOString();
+
+  const insertPayload = {
+    nome_pessoa: 'Troca de turno',
+    tipo: 'Outro',
+    destino_bloco: null,
+    entrada: agora,
+    saida: agora, // evento pontual: não fica "no local"
+    registrado_por: req.user.id, // quem assumiu
+    saida_por: req.user.id,
+    observacao: `[TROCA DE TURNO] Saiu: ${anterior} | Assumiu: ${assumiu}`,
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from('registros_portaria')
+    .insert(insertPayload)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({ registro: data });
 });
 
 // Registra retirada de encomenda com nome de quem retirou
@@ -2337,6 +2437,113 @@ app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res)
     presentes: presentes || 0,
     avisosPendentes: avisosPendentes || 0,
   });
+});
+
+// ============================================================
+// NOTIFICAÇÕES DO ADMIN PARA MORADORES
+// ============================================================
+
+// Admin cria uma notificação para um morador (título, texto e validade em dias).
+app.post('/api/admin/notificacoes', requireAuth, requireRole('admin'), async (req, res) => {
+  const { morador_id, titulo, texto, dias } = req.body || {};
+  if (!morador_id) return res.status(400).json({ error: 'Morador não informado.' });
+  if (!titulo || !titulo.trim()) return res.status(400).json({ error: 'Informe o título.' });
+  if (!texto || !texto.trim()) return res.status(400).json({ error: 'Informe o texto da notificação.' });
+
+  const diasNum = Math.min(Math.max(parseInt(dias, 10) || 7, 1), 365); // entre 1 e 365 dias
+  const expiraEm = new Date(Date.now() + diasNum * 24 * 60 * 60 * 1000).toISOString();
+
+  // Confirma que o destinatário existe e é morador.
+  const { data: morador, error: errMor } = await supabaseAdmin
+    .from('perfis')
+    .select('id, tipo')
+    .eq('id', morador_id)
+    .single();
+  if (errMor || !morador) return res.status(400).json({ error: 'Morador não encontrado.' });
+
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .insert({
+      morador_id,
+      titulo: titulo.trim(),
+      texto: texto.trim(),
+      dias: diasNum,
+      expira_em: expiraEm,
+      criado_por: req.user.id,
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({ notificacao: data });
+});
+
+// Admin lista as notificações de um morador (com status de visualização).
+app.get('/api/admin/notificacoes/:moradorId', requireAuth, requireRole('admin'), async (req, res) => {
+  const { moradorId } = req.params;
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .select('*')
+    .eq('morador_id', moradorId)
+    .order('criado_em', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ notificacoes: data || [] });
+});
+
+// Admin remove uma notificação.
+app.delete('/api/admin/notificacoes/:id', requireAuth, requireRole('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .delete()
+    .eq('id', id);
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
+// Morador lista as próprias notificações ainda válidas (não expiradas).
+// Retorna separadas em: pendentes (não confirmadas, travam a tela) e ativas (já confirmadas, viram card).
+app.get('/api/morador/notificacoes', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const agora = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .select('*')
+    .eq('morador_id', req.user.id)
+    .gt('expira_em', agora)
+    .order('criado_em', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+
+  const todas = data || [];
+  const pendentes = todas.filter((n) => !n.visualizado_em);
+  const ativas = todas.filter((n) => n.visualizado_em);
+  res.json({ pendentes, ativas });
+});
+
+// Morador confirma o recebimento de uma notificação (grava data/hora de visualização).
+app.post('/api/morador/notificacoes/:id/confirmar', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const { id } = req.params;
+
+  // Garante que a notificação é deste morador e ainda não foi confirmada.
+  const { data: notif, error: errGet } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .select('*')
+    .eq('id', id)
+    .eq('morador_id', req.user.id)
+    .single();
+  if (errGet || !notif) return res.status(404).json({ error: 'Notificação não encontrada.' });
+
+  if (notif.visualizado_em) {
+    return res.json({ notificacao: notif }); // já confirmada: idempotente
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .update({ visualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ notificacao: data });
 });
 
 // ============================================================

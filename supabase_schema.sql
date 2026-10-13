@@ -80,6 +80,7 @@ create table if not exists public.registros_portaria (
   tipo           tipo_acesso not null default 'Visitante',
   destino_bloco  text,
   destino_apto   text,
+  destino_morador uuid references public.perfis(id) on delete set null, -- morador específico destinatário
   veiculo_placa  text,
   endereco_visitante text,
   cep_visitante  text,
@@ -96,9 +97,15 @@ create table if not exists public.registros_portaria (
 alter table public.registros_portaria add column if not exists saida_por uuid references public.perfis(id) on delete set null;
 alter table public.avisos_visitas add column if not exists nao_veio_por uuid references public.perfis(id) on delete set null;
 
+-- Migracao: morador especifico destinatario de uma entrada/encomenda (quando o
+-- porteiro seleciona o morador no modal). Permite que cada morador veja apenas
+-- os registros direcionados a ele, em vez de todos do mesmo lote.
+alter table public.registros_portaria add column if not exists destino_morador uuid references public.perfis(id) on delete set null;
+
 create index if not exists idx_avisos_morador on public.avisos_visitas(morador_id);
 create index if not exists idx_avisos_status on public.avisos_visitas(status);
 create index if not exists idx_registros_saida on public.registros_portaria(saida);
+create index if not exists idx_registros_destino_morador on public.registros_portaria(destino_morador);
 
 -- ------------------------------------------------------------
 -- 5) Funcao auxiliar: retorna o tipo do usuario logado
@@ -127,7 +134,7 @@ create policy perfis_self_select on public.perfis
     or public.meu_tipo() in ('admin', 'porteiro')
   );
 
-drop policy if exists perfis_self_update on public.pefis;
+drop policy if exists perfis_self_update on public.perfis;
 create policy perfis_self_update on public.perfis
   for update using (id = auth.uid() or public.meu_tipo() = 'admin');
 
@@ -236,3 +243,41 @@ create policy observacoes_visitantes_all on public.observacoes_visitantes
   for all using (public.meu_tipo() in ('admin', 'porteiro'))
   with check (public.meu_tipo() in ('admin', 'porteiro'));
 
+
+-- ------------------------------------------------------------
+-- 8) Notificações do admin para moradores
+-- ------------------------------------------------------------
+-- O admin envia uma notificação a um morador (título, texto e validade em dias).
+-- Ao fazer login, o morador vê um aviso que trava a tela até confirmar
+-- ("Recebi a notificação"); a confirmação grava a data/hora em visualizado_em.
+-- Depois de confirmada, aparece como card até expira_em.
+create table if not exists public.notificacoes_morador (
+  id            bigint generated always as identity primary key,
+  morador_id    uuid not null references public.perfis(id) on delete cascade,
+  titulo        text not null,
+  texto         text not null,
+  dias          integer not null default 7,
+  visualizado_em timestamptz,            -- quando o morador confirmou o recebimento
+  expira_em     timestamptz not null,    -- até quando a notificação fica visível
+  criado_por    uuid references public.perfis(id) on delete set null,
+  criado_em     timestamptz not null default now()
+);
+
+create index if not exists idx_notif_morador on public.notificacoes_morador(morador_id);
+create index if not exists idx_notif_expira on public.notificacoes_morador(expira_em);
+
+alter table public.notificacoes_morador enable row level security;
+
+-- Morador vê/atualiza (confirmar leitura) apenas as próprias; admin gerencia todas.
+drop policy if exists notif_morador_select on public.notificacoes_morador;
+create policy notif_morador_select on public.notificacoes_morador
+  for select using (morador_id = auth.uid() or public.meu_tipo() = 'admin');
+
+drop policy if exists notif_morador_update on public.notificacoes_morador;
+create policy notif_morador_update on public.notificacoes_morador
+  for update using (morador_id = auth.uid() or public.meu_tipo() = 'admin');
+
+drop policy if exists notif_morador_admin_all on public.notificacoes_morador;
+create policy notif_morador_admin_all on public.notificacoes_morador
+  for all using (public.meu_tipo() = 'admin')
+  with check (public.meu_tipo() = 'admin');

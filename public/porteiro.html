@@ -32,8 +32,12 @@
       <div
         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
         <h2 style="margin:0;">Registrar entrada</h2>
-        <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantão: <strong
-            id="porteiro-plantao"></strong></span>
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantão: <strong
+              id="porteiro-plantao"></strong></span>
+          <button type="button" class="secundario mini" id="btn-trocar-turno" onclick="abrirTrocaTurno()"
+            style="white-space:nowrap;">&#128260; Trocar turno</button>
+        </div>
       </div>
 
       <!-- Botoes de acao principais -->
@@ -48,9 +52,6 @@
         <button type="button"
           style="background-color: #2b6cb0; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
           onclick="abrirModalEncomenda()">Recebimento de Encomenda</button>
-        <button type="button"
-          style="background-color: #d53f8c; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
-          onclick="trocarAba('encomendas')">Retirada Encomenda</button>
       </div>
 
       <!-- Busca rapida por documento -->
@@ -843,7 +844,7 @@
           <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:12px 14px; border-radius:8px; border:1px solid var(--cinza-borda); gap:10px; cursor:pointer; transition:all 0.15s ease;"
                onmouseover="this.style.borderColor='var(--verde)';"
                onmouseout="this.style.borderColor='var(--cinza-borda)';"
-               onclick="confirmarEntradaFinal('${escapeHtml(m.nome).replace(/'/g, "\\'")}')">
+               onclick="confirmarEntradaFinal('${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">
             <div>
               <strong style="display:block; font-size:15px; color:var(--texto-escuro);">&#128100; ${escapeHtml(m.nome)}</strong>
               <span class="text-muted" style="font-size:12px;">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
@@ -875,14 +876,11 @@
         document.getElementById('modal-morador-outro-nome').focus();
         return;
       }
-      confirmarEntradaFinal(nomeOutro);
+      // Morador digitado manualmente não tem id vinculável; grava só o nome.
+      confirmarEntradaFinal(nomeOutro, null);
     }
 
-    function confirmarSemMorador() {
-      confirmarEntradaFinal(null);
-    }
-
-    async function confirmarEntradaFinal(nomeMorador) {
+    async function confirmarEntradaFinal(nomeMorador, moradorId) {
       if (!dadosEntradaPendente) return;
 
       const msgModal = document.getElementById('msg-modal-morador');
@@ -904,6 +902,7 @@
             documento: dadosEntradaPendente.documento,
             veiculo_placa: dadosEntradaPendente.veiculo_placa,
             destino_bloco: dadosEntradaPendente.destino_bloco,
+            destino_morador: moradorId || null,
             endereco_visitante: dadosEntradaPendente.endereco_visitante,
             cep_visitante: dadosEntradaPendente.cep_visitante,
             observacao: observacaoFinal,
@@ -966,7 +965,8 @@
                     <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
-                        <button class="perigo mini" onclick='abrirModalConfirmarSaida(${JSON.stringify(r).replace(/'/g, "&#39;")})'>Registrar saída</button>
+                        <button class="perigo mini" onclick="registrarSaidaDireta(${r.id})">Registrar saída</button>
+                        <button class="secundario mini" style="background-color:#fef3c7; color:#92400e;" onclick='abrirModalConfirmarSaida(${JSON.stringify(r).replace(/'/g, "&#39;")})' title="Registrar saída anotando uma ocorrência">Registrar Problema</button>
                       </div>
                     </td>
                   </tr>`;
@@ -979,6 +979,17 @@
     }
 
     let registroSaidaAtual = null;
+
+    // Registra a saída direto, sem abrir o pop-up (caso comum, sem ocorrência).
+    async function registrarSaidaDireta(id) {
+      try {
+        await api(`/api/portaria/saida/${id}`, { method: 'POST' });
+        carregarPresentes();
+        trocarAba('entrada');
+      } catch (err) {
+        alert('Erro ao registrar saída: ' + err.message);
+      }
+    }
 
     function abrirModalConfirmarSaida(r) {
       registroSaidaAtual = r;
@@ -1325,9 +1336,8 @@
 
       <div id="msg-modal-morador" class="msg hidden"></div>
 
-      <div class="row-inline" style="justify-content:space-between; align-items:center; margin-top:6px; padding-top:12px; border-top:1px solid var(--cinza-borda);">
+      <div class="row-inline" style="justify-content:flex-start; align-items:center; margin-top:6px; padding-top:12px; border-top:1px solid var(--cinza-borda);">
         <button type="button" class="secundario" onclick="fecharModalSelecionarMorador()">Voltar / Cancelar</button>
-        <button type="button" class="secundario mini" style="color:var(--texto-muted);" onclick="confirmarSemMorador()">Não especificado</button>
       </div>
     </div>
   </div>
@@ -1434,7 +1444,7 @@
               <strong style="display:block;">${escapeHtml(m.nome)}</strong>
               <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
-            <button class="mini" style="background-color: #2b6cb0; color: white;" onclick="registrarEncomenda('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}')">Receber</button>
+            <button class="mini" style="background-color: #2b6cb0; color: white;" onclick="registrarEncomenda('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Receber</button>
           </div>
         `).join('');
 
@@ -1445,7 +1455,7 @@
       }
     }
 
-    async function registrarEncomenda(lote, nomeMorador) {
+    async function registrarEncomenda(lote, nomeMorador, moradorId) {
       const msg = document.getElementById('msg-encomenda');
       const qtd = document.getElementById('encomenda-quantidade').value || 1;
       msg.classList.add('hidden');
@@ -1457,6 +1467,7 @@
             tipo: 'Outro',
             destino_bloco: lote,
             destino_apto: qtd + ' pacote(s)',
+            destino_morador: moradorId || null,
             observacao: '[ENCOMENDA] Para: ' + nomeMorador
           }),
         });
@@ -1590,7 +1601,7 @@
               <strong style="display:block;">${escapeHtml(m.nome)}</strong>
               <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
-            <button class="mini" style="background-color: #ea1d2c; color: white;" onclick="registrarIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}')">Selecionar</button>
+            <button class="mini" style="background-color: #ea1d2c; color: white;" onclick="registrarIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Selecionar</button>
           </div>
         `).join('');
 
@@ -1601,7 +1612,7 @@
       }
     }
 
-    async function registrarIfood(lote, nomeMorador) {
+    async function registrarIfood(lote, nomeMorador, moradorId) {
       const msg = document.getElementById('msg-ifood');
       msg.classList.add('hidden');
       try {
@@ -1611,6 +1622,7 @@
             nome_pessoa: 'Entregador iFood',
             tipo: 'Entregador',
             destino_bloco: lote,
+            destino_morador: moradorId || null,
             observacao: 'Solicitado por: ' + nomeMorador
           }),
         });
@@ -1621,7 +1633,129 @@
         msg.className = 'msg erro';
       }
     }
+
+    // ---------- Troca de turno ----------
+    // Abre uma tela de login sobreposta que trava o sistema até o próximo
+    // porteiro autenticar. A sessão atual só é substituída quando o novo
+    // login tem sucesso (se cancelar, nada é perdido).
+    function abrirTrocaTurno() {
+      const overlay = document.getElementById('overlay-troca-turno');
+      document.getElementById('turno-login').value = '';
+      document.getElementById('turno-senha').value = '';
+      document.getElementById('msg-turno').classList.add('hidden');
+      document.getElementById('turno-atual-nome').textContent = perfil ? perfil.nome : '';
+      overlay.classList.remove('hidden');
+      overlay.style.display = 'flex';
+      setTimeout(() => document.getElementById('turno-login').focus(), 50);
+    }
+
+    function cancelarTrocaTurno() {
+      const overlay = document.getElementById('overlay-troca-turno');
+      overlay.classList.add('hidden');
+      overlay.style.display = 'none';
+    }
+
+    async function confirmarTrocaTurno() {
+      const btn = document.getElementById('btn-confirmar-turno');
+      const msg = document.getElementById('msg-turno');
+      const loginValor = document.getElementById('turno-login').value.trim();
+      const senhaValor = document.getElementById('turno-senha').value;
+
+      msg.classList.add('hidden');
+      if (!loginValor || !senhaValor) {
+        msg.textContent = 'Informe login e senha do porteiro que vai assumir.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Entrando...';
+      try {
+        // Substitui a sessão atual pela do novo porteiro (o cookie é sobrescrito).
+        const { perfil: novoPerfil } = await api('/api/login', {
+          method: 'POST',
+          body: JSON.stringify({
+            login: loginValor,
+            email: loginValor,
+            password: senhaValor,
+            rememberMe: false,
+          }),
+        });
+
+        // Só porteiro/admin podem assumir a portaria.
+        if (novoPerfil.tipo !== 'porteiro' && novoPerfil.tipo !== 'admin') {
+          // Reverte: a sessão agora é de um não-porteiro; derruba por segurança.
+          try { await api('/api/logout', { method: 'POST' }); } catch {}
+          msg.textContent = 'Este usuário não tem acesso à portaria.';
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+          btn.disabled = false;
+          btn.textContent = 'Assumir plantão';
+          return;
+        }
+
+        // Registra a troca de turno no histórico (não bloqueia a troca se falhar).
+        const porteiroAnterior = perfil ? perfil.nome : null;
+        try {
+          await api('/api/portaria/troca-turno', {
+            method: 'POST',
+            body: JSON.stringify({ porteiro_anterior: porteiroAnterior }),
+          });
+        } catch (e) {
+          console.error('Falha ao registrar troca de turno no histórico:', e);
+        }
+
+        // Atualiza o plantão sem recarregar a página.
+        perfil = novoPerfil;
+        document.getElementById('porteiro-plantao').textContent = novoPerfil.nome;
+        document.getElementById('nome-usuario').textContent = novoPerfil.nome;
+        document.getElementById('btn-exportar').classList.toggle('hidden', novoPerfil.tipo !== 'admin');
+
+        cancelarTrocaTurno();
+        trocarAba('entrada');
+        msgEntrada.textContent = `Plantão assumido por ${novoPerfil.nome}.`;
+        msgEntrada.className = 'msg ok';
+        msgEntrada.classList.remove('hidden');
+      } catch (err) {
+        msg.textContent = err.message || 'Login ou senha inválidos.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Assumir plantão';
+      }
+    }
   </script>
+
+  <!-- Overlay de Troca de Turno (bloqueia o sistema até o próximo porteiro logar) -->
+  <div id="overlay-troca-turno" class="hidden"
+    style="position:fixed; inset:0; background:linear-gradient(135deg, var(--verde) 0%, var(--verde-escuro) 100%); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:14px; width:100%; max-width:380px; padding:28px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+      <div style="text-align:center; margin-bottom:16px;">
+        <div style="font-size:40px; line-height:1;">&#128260;</div>
+        <h2 style="margin:10px 0 4px; font-size:20px; color:var(--verde-escuro);">Troca de turno</h2>
+        <p class="text-muted" style="margin:0; font-size:13px;">
+          Saindo: <strong id="turno-atual-nome"></strong>.<br>
+          O próximo porteiro deve entrar com login e senha para assumir o plantão.
+        </p>
+      </div>
+
+      <label for="turno-login">Nome ou e-mail</label>
+      <input type="text" id="turno-login" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('turno-senha').focus();}" />
+
+      <label for="turno-senha">Senha</label>
+      <input type="password" id="turno-senha" autocomplete="off"
+        onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarTrocaTurno();}" />
+
+      <div id="msg-turno" class="msg hidden" style="margin-top:12px;"></div>
+
+      <button type="button" class="block" id="btn-confirmar-turno" onclick="confirmarTrocaTurno()" style="margin-top:18px;">
+        Assumir plantão
+      </button>
+    </div>
+  </div>
 </body>
 
 </html>

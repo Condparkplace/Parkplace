@@ -96,11 +96,11 @@
 
         <button id="btn-compartilhar-visita" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Visitante')">&#128242; Solicitação de cadastro ao Visitante</button>
+          onclick="compartilharVisita('Visitante')">&#128242; Convidar Visitante</button>
 
         <button id="btn-compartilhar-prestador" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Prestador')">&#128242; Solicitação de cadastro ao Prestador de serviço</button>
+          onclick="compartilharVisita('Prestador')">&#128242; Convidar Prestador de serviço</button>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; word-break: break-word;">
@@ -109,6 +109,10 @@
           <div id="lista-encomendas-morador"
             style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;"></div>
         </div>
+
+        <!-- Notificações ativas (já confirmadas) da administração -->
+        <div id="area-notificacoes-ativas"
+          style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;"></div>
       </div>
 
       <form id="form-aviso" class="hidden">
@@ -253,7 +257,82 @@
         perfil.nome + (perfil.bloco ? ` (${perfil.bloco})` : '');
       carregarAvisos();
       carregarMinhasEncomendas();
+      carregarNotificacoes();
     })();
+
+    // ---------- Notificações da administração ----------
+    async function carregarNotificacoes() {
+      try {
+        const { pendentes, ativas } = await api('/api/morador/notificacoes');
+        renderNotificacoesAtivas(ativas || []);
+        // Pendentes travam a tela, uma de cada vez, até o morador confirmar.
+        if (pendentes && pendentes.length) {
+          mostrarNotificacaoBloqueante(pendentes);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar notificações:', err);
+      }
+    }
+
+    function renderNotificacoesAtivas(ativas) {
+      const area = document.getElementById('area-notificacoes-ativas');
+      if (!ativas.length) { area.innerHTML = ''; return; }
+      area.innerHTML = ativas.map(n => `
+        <div style="margin-top:8px; background-color:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:16px; width:100%; box-sizing:border-box; word-break:break-word;">
+          <h3 style="margin-top:0; color:#1e40af; display:flex; align-items:center; gap:8px; font-size:16px;">
+            &#128276; ${escapeHtml(n.titulo)}
+          </h3>
+          <p style="margin:0; white-space:pre-wrap; color:#1e3a5f; font-size:14px;">${escapeHtml(n.texto)}</p>
+          <div class="text-muted" style="font-size:12px; margin-top:8px;">Aviso da administração${n.criado_em ? ' · ' + formatarData(n.criado_em) : ''}</div>
+        </div>
+      `).join('');
+    }
+
+    // Mostra as notificações pendentes em sequência, travando a tela até confirmar cada uma.
+    function mostrarNotificacaoBloqueante(pendentes) {
+      let indice = 0;
+
+      const overlay = document.getElementById('overlay-notificacao');
+      const tituloEl = document.getElementById('notif-bloq-titulo');
+      const textoEl = document.getElementById('notif-bloq-texto');
+      const btn = document.getElementById('btn-recebi-notificacao');
+
+      function exibir() {
+        const n = pendentes[indice];
+        tituloEl.textContent = n.titulo;
+        textoEl.textContent = n.texto;
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+      }
+
+      btn.onclick = async () => {
+        const n = pendentes[indice];
+        btn.disabled = true;
+        btn.textContent = 'Confirmando...';
+        try {
+          await api(`/api/morador/notificacoes/${n.id}/confirmar`, { method: 'POST' });
+          indice++;
+          if (indice < pendentes.length) {
+            btn.disabled = false;
+            btn.textContent = 'Recebi a notificação';
+            exibir();
+          } else {
+            overlay.classList.add('hidden');
+            overlay.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = 'Recebi a notificação';
+            // As que acabaram de ser confirmadas passam a aparecer como card.
+            carregarNotificacoes();
+          }
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Recebi a notificação';
+          alert('Erro ao confirmar: ' + err.message);
+        }
+      };
+
+      exibir();
+    }
 
     const form = document.getElementById('form-aviso');
     const msg = document.getElementById('msg');
@@ -830,6 +909,22 @@
     window.addEventListener('load', initPushNotifications);
 
   </script>
+
+  <!-- Overlay de notificação (trava a tela até o morador confirmar o recebimento) -->
+  <div id="overlay-notificacao" class="hidden"
+    style="position:fixed; inset:0; background:rgba(15,23,42,0.75); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 26px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center;">
+      <div style="font-size:44px; line-height:1;">&#128276;</div>
+      <h2 id="notif-bloq-titulo" style="margin:12px 0 10px; font-size:20px; color:var(--verde-escuro); word-break:break-word;"></h2>
+      <p id="notif-bloq-texto" style="margin:0 0 20px; font-size:15px; color:var(--texto); white-space:pre-wrap; word-break:break-word; text-align:left;"></p>
+      <button type="button" class="block" id="btn-recebi-notificacao" style="margin:0; background:var(--verde);">
+        &#9989; Recebi a notificação
+      </button>
+      <p class="text-muted" style="margin:12px 0 0; font-size:12px;">
+        Você precisa confirmar o recebimento para continuar.
+      </p>
+    </div>
+  </div>
 </body>
 
 </html>
