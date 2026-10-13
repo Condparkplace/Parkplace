@@ -966,7 +966,7 @@
                     <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
-                        <button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saída</button>
+                        <button class="perigo mini" onclick='abrirModalConfirmarSaida(${JSON.stringify(r).replace(/'/g, "&#39;")})'>Registrar saída</button>
                       </div>
                     </td>
                   </tr>`;
@@ -978,12 +978,63 @@
       }
     }
 
-    async function registrarSaida(id) {
+    let registroSaidaAtual = null;
+
+    function abrirModalConfirmarSaida(r) {
+      registroSaidaAtual = r;
+      document.getElementById('modal-saida-nome').textContent = r.nome_pessoa || 'Visitante';
+      document.getElementById('modal-saida-destino').textContent = r.destino_bloco ? `Destino: ${r.destino_bloco}` : 'Sem lote';
+      document.getElementById('modal-saida-placa').textContent = r.veiculo_placa ? `Placa: ${r.veiculo_placa}` : 'Sem veículo';
+
+      const badgeTipo = document.getElementById('modal-saida-tipo-badge');
+      if (badgeTipo) {
+        badgeTipo.textContent = r.tipo || 'Visitante';
+        badgeTipo.className = 'badge ' + (r.tipo || '').toLowerCase();
+      }
+
+      document.getElementById('modal-saida-obs').value = '';
+      document.getElementById('modal-saida-exibir-alerta').checked = true;
+      document.getElementById('msg-modal-saida').classList.add('hidden');
+
+      document.getElementById('modal-confirmar-saida').classList.remove('hidden');
+      setTimeout(() => document.getElementById('modal-saida-obs').focus(), 50);
+    }
+
+    function fecharModalConfirmarSaida() {
+      document.getElementById('modal-confirmar-saida').classList.add('hidden');
+      registroSaidaAtual = null;
+    }
+
+    async function executarConfirmarSaida() {
+      if (!registroSaidaAtual) return;
+      const btn = document.getElementById('btn-modal-confirmar-saida');
+      const msg = document.getElementById('msg-modal-saida');
+      const obsTexto = document.getElementById('modal-saida-obs').value.trim();
+      const exibirAlerta = document.getElementById('modal-saida-exibir-alerta').checked;
+
+      btn.disabled = true;
+      btn.textContent = 'Registrando saída...';
+      msg.classList.add('hidden');
+
       try {
-        await api(`/api/portaria/saida/${id}`, { method: 'POST' });
+        await api(`/api/portaria/saida/${registroSaidaAtual.id}`, {
+          method: 'POST',
+          body: JSON.stringify({
+            observacao_saida: obsTexto,
+            exibir_alerta: exibirAlerta,
+          }),
+        });
+
+        fecharModalConfirmarSaida();
+        carregarPresentes();
         trocarAba('entrada');
       } catch (err) {
-        alert(err.message);
+        msg.textContent = 'Erro ao registrar saída: ' + err.message;
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar Saída';
       }
     }
 
@@ -1278,6 +1329,67 @@
         <button type="button" class="secundario" onclick="fecharModalSelecionarMorador()">Voltar / Cancelar</button>
         <button type="button" class="secundario mini" style="color:var(--texto-muted);" onclick="confirmarSemMorador()">Não especificado</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Confirmar Saída com Observação / Ocorrência -->
+  <div id="modal-confirmar-saida" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div
+      style="background:#fff; border-radius:12px; width:100%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; display:flex; flex-direction:column;">
+      
+      <!-- Cabeçalho do Modal -->
+      <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+        <div style="display:flex; align-items:center; gap:10px;">
+          <span style="font-size:22px;">🚪</span>
+          <h3 style="margin:0; font-size:17px; font-weight:700; color:#0f172a;">Confirmar Saída</h3>
+        </div>
+        <button type="button" class="secundario mini" onclick="fecharModalConfirmarSaida()"
+          style="border:none; font-size:20px; line-height:1; padding:4px 8px; cursor:pointer;" title="Fechar">&times;</button>
+      </div>
+
+      <!-- Corpo -->
+      <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
+        <!-- Card com identificação da pessoa -->
+        <div style="background:#f1f5f9; border-radius:8px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div>
+            <div style="font-size:15px; font-weight:700; color:#0f172a;" id="modal-saida-nome">-</div>
+            <div style="font-size:13px; color:#64748b; margin-top:2px;">
+              <span id="modal-saida-destino">-</span> &bull; <span id="modal-saida-placa">-</span>
+            </div>
+          </div>
+          <span id="modal-saida-tipo-badge" class="badge" style="font-weight:600;">Visitante</span>
+        </div>
+
+        <!-- Pergunta e Campo de Observação -->
+        <div>
+          <label for="modal-saida-obs" style="font-weight:700; color:#92400e; font-size:14px; margin-bottom:6px; display:block;">
+            ⚠️ Escreva aqui se o visitante / prestador aprontou algo de errado:
+          </label>
+          <p style="font-size:12px; color:#64748b; margin:0 0 8px;">
+            Se correu tudo bem, deixe em branco. Se preencher, o sistema salvará o histórico com data e hora para alertar a portaria em futuras entradas.
+          </p>
+          <textarea id="modal-saida-obs" rows="3"
+            placeholder="Ex: Correu acima da velocidade permitida, desrespeitou morador, estacionou na calçada..."
+            style="width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:6px; padding:10px; font-size:13px;"></textarea>
+          
+          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#1e293b; margin-top:8px;">
+            <input type="checkbox" id="modal-saida-exibir-alerta" checked style="width:16px; height:16px; cursor:pointer;" />
+            Exibir no aviso da portaria quando esta pessoa voltar
+          </label>
+        </div>
+
+        <div id="msg-modal-saida" class="msg hidden" style="margin:0;"></div>
+      </div>
+
+      <!-- Rodapé com Botões -->
+      <div style="padding:14px 20px; border-top:1px solid #e2e8f0; background:#f8fafc; display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="secundario" onclick="fecharModalConfirmarSaida()" style="margin:0;">Cancelar</button>
+        <button type="button" class="perigo" id="btn-modal-confirmar-saida" onclick="executarConfirmarSaida()" style="margin:0; background:#dc2626; color:#fff;">
+          Confirmar Saída
+        </button>
+      </div>
+
     </div>
   </div>
 

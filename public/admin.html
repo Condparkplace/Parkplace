@@ -948,15 +948,17 @@
         document.getElementById('modal-kpi-destino').textContent = kpis.destino_habitual || '-';
         document.getElementById('modal-kpi-veiculos').textContent = (kpis.veiculos && kpis.veiculos.length) ? kpis.veiculos.join(', ') : 'Nenhum';
 
-        // Campo de observação cadastral fixa
-        const textareaObs = document.getElementById('modal-vis-obs');
-        textareaObs.value = vis.observacao_cadastro || '';
+        // Histórico de observações cadastrais e alertas
+        renderizarHistoricoObs(vis.historico_observacoes || [], vis);
         const obsData = document.getElementById('modal-vis-obs-data');
         if (vis.observacao_atualizada_em) {
-          obsData.textContent = 'Atualizado em: ' + formatarData(vis.observacao_atualizada_em);
+          obsData.textContent = 'Última atualização: ' + formatarData(vis.observacao_atualizada_em);
         } else {
           obsData.textContent = '';
         }
+        document.getElementById('modal-vis-nova-obs').value = '';
+        document.getElementById('modal-vis-nova-obs-alerta').checked = true;
+        document.getElementById('modal-vis-obs-msg').style.display = 'none';
 
         // Tabela do histórico de acessos na portaria
         const containerHist = document.getElementById('modal-tabela-historico');
@@ -1004,47 +1006,169 @@
       document.getElementById('modal-visitante').classList.add('hidden');
     }
 
-    async function salvarObservacaoVisitanteModal() {
+    function renderizarHistoricoObs(historico, vis) {
+      const container = document.getElementById('modal-vis-lista-obs');
+      if (!historico || !historico.length) {
+        container.innerHTML = `
+          <div style="background:#fff; border:1px dashed #fcd34d; border-radius:8px; padding:12px; text-align:center; color:#92400e; font-size:13px;">
+            Nenhuma observação ou ocorrência registrada até o momento.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = historico.map(h => {
+        const isAtivo = Boolean(h.exibir_alerta);
+        const dataFmt = formatarData(h.data);
+        const autor = h.autor_nome || 'Portaria';
+        const origemBadge = h.origem === 'saida_portaria'
+          ? '<span style="background:#fee2e2; color:#b91c1c; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:600;">Registrado na Saída</span>'
+          : '<span style="background:#e0f2fe; color:#0369a1; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:600;">Administração</span>';
+
+        return `
+          <div style="background:#fff; border:1px solid ${isAtivo ? '#f59e0b' : '#e2e8f0'}; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05); transition:border 0.2s;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+                <strong style="font-size:12px; color:#1e293b;">📅 ${dataFmt}</strong>
+                <span style="font-size:12px; color:#64748b;">• Por: <strong>${escapeHtml(autor)}</strong></span>
+                ${origemBadge}
+              </div>
+              <button type="button" onclick="excluirObservacaoModal('${escapeHtml(h.id)}')" title="Excluir do histórico"
+                style="background:transparent; border:none; color:#ef4444; cursor:pointer; font-size:15px; padding:2px 6px;">
+                🗑️
+              </button>
+            </div>
+
+            <div style="font-size:13px; color:#334155; line-height:1.5; white-space:pre-wrap; margin-bottom:10px; font-weight:500;">
+              ${escapeHtml(h.texto || '-')}
+            </div>
+
+            <div style="border-top:1px dashed #f1f5f9; padding-top:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
+              <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; font-weight:700; padding:4px 10px; border-radius:6px; background:${isAtivo ? '#fef3c7' : '#f1f5f9'}; color:${isAtivo ? '#92400e' : '#64748b'};">
+                <input type="checkbox" ${isAtivo ? 'checked' : ''} onchange="toggleAlertaObs('${escapeHtml(h.id)}', this.checked)" style="cursor:pointer;" />
+                ${isAtivo ? '⚠️ Alerta ATIVO na portaria' : '⚪ Alerta INATIVO (não exibe na portaria)'}
+              </label>
+              ${isAtivo ? '<span style="font-size:11px; color:#b45309; font-weight:500;">Aparecerá no alerta ao dar nova entrada</span>' : ''}
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    async function toggleAlertaObs(obsId, checked) {
       if (!visitanteModalAtual) return;
-      const btn = document.getElementById('btn-salvar-obs-visitante');
-      const msg = document.getElementById('modal-vis-obs-msg');
-      const obsValor = document.getElementById('modal-vis-obs').value.trim();
-
-      btn.disabled = true;
-      btn.textContent = 'Salvando...';
-      msg.style.display = 'none';
-
       try {
-        const res = await api('/api/admin/visitantes/observacao', {
+        const res = await api('/api/admin/visitantes/observacao/toggle-alerta', {
           method: 'POST',
           body: JSON.stringify({
             chave: visitanteModalAtual.chave,
-            nome: visitanteModalAtual.nome,
-            documento: visitanteModalAtual.documento,
-            observacao: obsValor,
+            obs_id: obsId,
+            exibir_alerta: checked,
           }),
         });
 
-        msg.textContent = 'Observação salva com sucesso no cadastro!';
-        msg.className = 'msg ok';
-        msg.style.display = 'inline-block';
-        document.getElementById('modal-vis-obs-data').textContent = 'Atualizado em: ' + formatarData(res.observacao?.atualizado_em || new Date().toISOString());
+        visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
+        visitanteModalAtual.observacao_cadastro = res.visitante?.observacao || '';
+        renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
 
-        // Atualiza na lista local e re-renderiza para refletir na tabela
         const item = todosVisitantes.find(v =>
           (v.chave && v.chave === visitanteModalAtual.chave) ||
           (v.documento && v.documento === visitanteModalAtual.documento) ||
           (v.nome === visitanteModalAtual.nome)
         );
         if (item) {
-          item.observacao_cadastro = obsValor;
-          item.observacao_atualizada_em = res.observacao?.atualizado_em;
+          item.observacao_cadastro = res.visitante?.observacao || '';
+          filtrarVisitantes();
+        }
+      } catch (err) {
+        alert('Erro ao atualizar alerta: ' + err.message);
+      }
+    }
+
+    async function excluirObservacaoModal(obsId) {
+      if (!visitanteModalAtual) return;
+      if (!confirm('Deseja realmente excluir esta observação do histórico?')) return;
+      try {
+        const res = await api('/api/admin/visitantes/observacao/excluir', {
+          method: 'POST',
+          body: JSON.stringify({
+            chave: visitanteModalAtual.chave,
+            obs_id: obsId,
+          }),
+        });
+
+        visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
+        visitanteModalAtual.observacao_cadastro = res.visitante?.observacao || '';
+        renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
+
+        const item = todosVisitantes.find(v =>
+          (v.chave && v.chave === visitanteModalAtual.chave) ||
+          (v.documento && v.documento === visitanteModalAtual.documento) ||
+          (v.nome === visitanteModalAtual.nome)
+        );
+        if (item) {
+          item.observacao_cadastro = res.visitante?.observacao || '';
+          filtrarVisitantes();
+        }
+      } catch (err) {
+        alert('Erro ao excluir: ' + err.message);
+      }
+    }
+
+    async function adicionarObservacaoModal() {
+      if (!visitanteModalAtual) return;
+      const btn = document.getElementById('btn-adicionar-obs-visitante');
+      const msg = document.getElementById('modal-vis-obs-msg');
+      const textarea = document.getElementById('modal-vis-nova-obs');
+      const checkboxAlerta = document.getElementById('modal-vis-nova-obs-alerta');
+      const texto = textarea.value.trim();
+
+      if (!texto) {
+        msg.textContent = 'Por favor, digite o texto da observação.';
+        msg.className = 'msg erro';
+        msg.style.display = 'block';
+        textarea.focus();
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      msg.style.display = 'none';
+
+      try {
+        const res = await api('/api/admin/visitantes/observacao/adicionar', {
+          method: 'POST',
+          body: JSON.stringify({
+            chave: visitanteModalAtual.chave,
+            nome: visitanteModalAtual.nome,
+            documento: visitanteModalAtual.documento,
+            texto: texto,
+            exibir_alerta: checkboxAlerta.checked,
+          }),
+        });
+
+        textarea.value = '';
+        visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
+        visitanteModalAtual.observacao_cadastro = res.visitante?.observacao || '';
+        renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
+
+        msg.textContent = 'Observação adicionada com sucesso ao histórico!';
+        msg.className = 'msg ok';
+        msg.style.display = 'block';
+
+        const item = todosVisitantes.find(v =>
+          (v.chave && v.chave === visitanteModalAtual.chave) ||
+          (v.documento && v.documento === visitanteModalAtual.documento) ||
+          (v.nome === visitanteModalAtual.nome)
+        );
+        if (item) {
+          item.observacao_cadastro = res.visitante?.observacao || '';
           filtrarVisitantes();
         }
       } catch (err) {
         msg.textContent = 'Erro ao salvar: ' + err.message;
         msg.className = 'msg erro';
-        msg.style.display = 'inline-block';
+        msg.style.display = 'block';
       } finally {
         btn.disabled = false;
         btn.textContent = 'Salvar Observação';
@@ -1106,26 +1230,44 @@
           </div>
         </div>
 
-        <!-- CAMPO DE OBSERVAÇÃO DO VISITANTE (CADASTRO FIXO) -->
+        <!-- HISTÓRICO DE OBSERVAÇÕES E ALERTAS (OCORRÊNCIAS) -->
         <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:10px; padding:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
-            <label for="modal-vis-obs" style="font-weight:700; color:#92400e; margin:0; display:flex; align-items:center; gap:6px; font-size:14px;">
-              📝 Observação do Visitante (Fixa no Cadastro)
+            <label style="font-weight:700; color:#92400e; margin:0; display:flex; align-items:center; gap:6px; font-size:15px;">
+              📝 Histórico de Observações e Alertas do Visitante
             </label>
             <span id="modal-vis-obs-data" style="font-size:11px; color:#b45309;"></span>
           </div>
-          <p style="font-size:12px; color:#78350f; margin:0 0 10px;">
-            Esta observação fica gravada no perfil desta pessoa. Ela será exibida ao porteiro na busca da portaria e nos registros de entrada.
+          <p style="font-size:12px; color:#78350f; margin:0 0 14px;">
+            Ocorrências registradas na saída da portaria ou cadastradas pela administração.
+            Marque ou desmarque a caixa de seleção (checkbox) para definir o que <strong>vai aparecendo ou não no aviso da portaria</strong> ao dar uma nova entrada.
           </p>
-          <textarea id="modal-vis-obs" rows="3"
-            placeholder="Ex: Mãe da moradora do Lote 12; Prestador oficial de jardinagem; Autorizado sem necessidade de confirmação prévia..."
-            style="width:100%; box-sizing:border-box; border:1px solid #fcd34d; border-radius:6px; padding:10px; font-size:14px; background:#fff;"></textarea>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:8px;">
-            <span id="modal-vis-obs-msg" class="msg" style="margin:0; padding:6px 12px; font-size:12px; display:none;"></span>
-            <button type="button" class="primario mini" id="btn-salvar-obs-visitante" onclick="salvarObservacaoVisitanteModal()"
-              style="margin-left:auto; background:var(--verde); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer;">
-              Salvar Observação
-            </button>
+
+          <!-- Lista do Histórico de Observações com Checkbox -->
+          <div id="modal-vis-lista-obs" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
+          </div>
+
+          <!-- Adicionar Nova Observação / Ocorrência Manualmente -->
+          <div style="background:#fff; border:1px solid #fcd34d; border-radius:8px; padding:12px;">
+            <label for="modal-vis-nova-obs" style="font-weight:600; color:#854d0e; font-size:13px; margin:0 0 6px; display:block;">
+              + Adicionar nova observação ou ocorrência:
+            </label>
+            <textarea id="modal-vis-nova-obs" rows="2"
+              placeholder="Escreva aqui caso queira cadastrar uma ocorrência, aviso ou observação para este perfil..."
+              style="width:100%; box-sizing:border-box; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; font-size:13px; background:#fff;"></textarea>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:10px;">
+              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#1e293b;">
+                <input type="checkbox" id="modal-vis-nova-obs-alerta" checked style="width:16px; height:16px; cursor:pointer;" />
+                Exibir no aviso da portaria ao dar nova entrada
+              </label>
+
+              <button type="button" class="primario mini" id="btn-adicionar-obs-visitante" onclick="adicionarObservacaoModal()"
+                style="background:var(--verde); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">
+                Salvar Observação
+              </button>
+            </div>
+            <div id="modal-vis-obs-msg" class="msg" style="margin-top:10px; padding:6px 12px; font-size:12px; display:none;"></div>
           </div>
         </div>
 

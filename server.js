@@ -805,6 +805,48 @@ function salvarCacheObsVisitantes() {
   }
 }
 
+function formatarDataHoraSimples(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d)) return '';
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}
+
+function normalizarRegistroObs(item) {
+  if (!item) return null;
+  if (!Array.isArray(item.historico)) {
+    item.historico = [];
+    if (item.observacao && item.observacao.trim()) {
+      item.historico.push({
+        id: 'obs_inicial',
+        data: item.atualizado_em || new Date().toISOString(),
+        autor_id: item.atualizado_por || null,
+        autor_nome: 'Cadastro',
+        texto: item.observacao.trim(),
+        exibir_alerta: true,
+        origem: 'cadastro',
+      });
+    }
+  }
+  return item;
+}
+
+function montarTextoObservacaoAtiva(historico) {
+  if (!Array.isArray(historico)) return '';
+  const ativas = historico.filter((h) => h && h.exibir_alerta && (h.texto || '').trim());
+  if (!ativas.length) return '';
+  return ativas
+    .map((h) => {
+      const dataStr = formatarDataHoraSimples(h.data);
+      const autorStr = h.autor_nome ? ` (${h.autor_nome})` : '';
+      return `• ${dataStr}${autorStr}: ${h.texto.trim()}`;
+    })
+    .join('\n');
+}
+
 carregarCacheObsVisitantes();
 
 async function obterTodasObservacoesVisitantes() {
@@ -812,10 +854,18 @@ async function obterTodasObservacoesVisitantes() {
   try {
     const { data, error } = await supabaseAdmin
       .from('observacoes_visitantes')
-      .select('chave, nome, documento, observacao, atualizado_em, atualizado_por');
+      .select('*');
     if (!error && Array.isArray(data)) {
       data.forEach((item) => {
         if (item.chave) {
+          normalizarRegistroObs(item);
+          const cached = cacheObsVisitantes.get(item.chave);
+          if (cached && Array.isArray(cached.historico) && cached.historico.length > (item.historico || []).length) {
+            item.historico = cached.historico;
+          }
+          if (!item.observacao && Array.isArray(item.historico)) {
+            item.observacao = montarTextoObservacaoAtiva(item.historico);
+          }
           mapa.set(item.chave, item);
           cacheObsVisitantes.set(item.chave, item);
         }
@@ -830,28 +880,34 @@ async function obterTodasObservacoesVisitantes() {
 
 async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
   const todas = await obterTodasObservacoesVisitantes();
-  if (chave && todas.has(chave)) return todas.get(chave);
-  if (docLimpo && todas.has(docLimpo)) return todas.get(docLimpo);
-  if (nomeNorm && todas.has('nome:' + nomeNorm)) return todas.get('nome:' + nomeNorm);
-
-  const docPuro = (docLimpo || '').replace(/\D/g, '');
-  const chavePura = (chave || '').replace(/\D/g, '');
-
-  for (const item of todas.values()) {
-    const itemDoc = (item.documento || '').replace(/\D/g, '');
-    const itemChave = (item.chave || '').replace(/\D/g, '');
-    if (docPuro && ((itemDoc && itemDoc === docPuro) || (itemChave && itemChave === docPuro))) {
-      return item;
-    }
-    const itemNome = (item.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-    if (nomeNorm && itemNome && itemNome === nomeNorm) {
-      return item;
+  let item = null;
+  if (chave && todas.has(chave)) item = todas.get(chave);
+  else if (docLimpo && todas.has(docLimpo)) item = todas.get(docLimpo);
+  else if (nomeNorm && todas.has('nome:' + nomeNorm)) item = todas.get('nome:' + nomeNorm);
+  else {
+    const docPuro = (docLimpo || '').replace(/\D/g, '');
+    const chavePura = (chave || '').replace(/\D/g, '');
+    for (const cad of todas.values()) {
+      const itemDoc = (cad.documento || '').replace(/\D/g, '');
+      const itemChave = (cad.chave || '').replace(/\D/g, '');
+      if (docPuro && ((itemDoc && itemDoc === docPuro) || (itemChave && itemChave === docPuro))) {
+        item = cad;
+        break;
+      }
+      const itemNome = (cad.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      if (nomeNorm && itemNome && itemNome === nomeNorm) {
+        item = cad;
+        break;
+      }
     }
   }
-  return null;
+  if (item) {
+    normalizarRegistroObs(item);
+  }
+  return item;
 }
 
-async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
+async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, exibir_alerta = true, userId = null, origem = 'manual' }) {
   const agora = new Date().toISOString();
   const docLimpo = (documento || '').replace(/\D/g, '');
   const docFormatado = formatarDocumento(documento);
@@ -859,33 +915,154 @@ async function salvarObservacaoVisitante(chave, nome, documento, observacao, use
   const nomeNorm = nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const finalChave = (chave || '').trim() || docLimpo || ('nome:' + nomeNorm);
 
-  const registro = {
-    chave: finalChave,
-    nome: nomeLimpo,
-    documento: docFormatado || null,
-    observacao: (observacao || '').trim(),
-    atualizado_em: agora,
-    atualizado_por: userId || null,
+  if (!finalChave && !nomeLimpo) {
+    throw new Error('Identificação do visitante não informada.');
+  }
+
+  let item = await obterObservacaoVisitante(finalChave, docLimpo, nomeNorm);
+  if (!item) {
+    item = {
+      chave: finalChave,
+      nome: nomeLimpo,
+      documento: docFormatado || null,
+      observacao: '',
+      historico: [],
+      atualizado_em: agora,
+      atualizado_por: userId || null,
+    };
+  } else {
+    normalizarRegistroObs(item);
+  }
+
+  let autorNome = origem === 'saida_portaria' ? 'Porteiro' : 'Administração';
+  if (userId) {
+    const nomes = await mapaNomes([userId]);
+    if (nomes[userId]) autorNome = nomes[userId];
+  }
+
+  const novoItem = {
+    id: 'obs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    data: agora,
+    autor_id: userId || null,
+    autor_nome: autorNome,
+    texto: (texto || '').trim(),
+    exibir_alerta: Boolean(exibir_alerta),
+    origem: origem,
   };
 
-  cacheObsVisitantes.set(finalChave, registro);
-  if (docLimpo && docLimpo !== finalChave) {
-    cacheObsVisitantes.set(docLimpo, registro);
-  }
-  if (nomeNorm) {
-    cacheObsVisitantes.set('nome:' + nomeNorm, registro);
-  }
+  item.historico = [novoItem, ...(item.historico || [])];
+  item.observacao = montarTextoObservacaoAtiva(item.historico);
+  item.atualizado_em = agora;
+  item.atualizado_por = userId || item.atualizado_por;
+  if (nomeLimpo && !item.nome) item.nome = nomeLimpo;
+  if (docFormatado && !item.documento) item.documento = docFormatado;
+
+  cacheObsVisitantes.set(finalChave, item);
+  if (docLimpo && docLimpo !== finalChave) cacheObsVisitantes.set(docLimpo, item);
+  if (nomeNorm) cacheObsVisitantes.set('nome:' + nomeNorm, item);
   salvarCacheObsVisitantes();
 
   try {
-    await supabaseAdmin
+    const payload = {
+      chave: item.chave,
+      nome: item.nome,
+      documento: item.documento,
+      observacao: item.observacao,
+      historico: item.historico,
+      atualizado_em: item.atualizado_em,
+      atualizado_por: item.atualizado_por,
+    };
+    const { error: errUp } = await supabaseAdmin
       .from('observacoes_visitantes')
-      .upsert(registro, { onConflict: 'chave' });
+      .upsert(payload, { onConflict: 'chave' });
+    if (errUp) {
+      const { historico: _, ...basePayload } = payload;
+      await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
+    }
   } catch (err) {
     console.warn('[Obs Visitantes] Erro ao sincronizar com Supabase:', err.message);
   }
 
-  return registro;
+  return item;
+}
+
+async function alternarAlertaObservacao({ chave, obs_id, exibir_alerta }) {
+  let item = await obterObservacaoVisitante(chave, chave, null);
+  if (!item) throw new Error('Cadastro do visitante não encontrado.');
+
+  normalizarRegistroObs(item);
+  const obs = item.historico.find((h) => h.id === obs_id);
+  if (!obs) throw new Error('Observação não encontrada no histórico.');
+
+  obs.exibir_alerta = Boolean(exibir_alerta);
+  item.observacao = montarTextoObservacaoAtiva(item.historico);
+  item.atualizado_em = new Date().toISOString();
+
+  cacheObsVisitantes.set(item.chave, item);
+  salvarCacheObsVisitantes();
+
+  try {
+    const payload = {
+      chave: item.chave,
+      nome: item.nome,
+      documento: item.documento,
+      observacao: item.observacao,
+      historico: item.historico,
+      atualizado_em: item.atualizado_em,
+      atualizado_por: item.atualizado_por,
+    };
+    const { error: errUp } = await supabaseAdmin.from('observacoes_visitantes').upsert(payload, { onConflict: 'chave' });
+    if (errUp) {
+      const { historico: _, ...basePayload } = payload;
+      await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
+    }
+  } catch (err) {}
+
+  return item;
+}
+
+async function excluirObservacaoDoHistorico({ chave, obs_id }) {
+  let item = await obterObservacaoVisitante(chave, chave, null);
+  if (!item) throw new Error('Cadastro do visitante não encontrado.');
+
+  normalizarRegistroObs(item);
+  item.historico = item.historico.filter((h) => h.id !== obs_id);
+  item.observacao = montarTextoObservacaoAtiva(item.historico);
+  item.atualizado_em = new Date().toISOString();
+
+  cacheObsVisitantes.set(item.chave, item);
+  salvarCacheObsVisitantes();
+
+  try {
+    const payload = {
+      chave: item.chave,
+      nome: item.nome,
+      documento: item.documento,
+      observacao: item.observacao,
+      historico: item.historico,
+      atualizado_em: item.atualizado_em,
+      atualizado_por: item.atualizado_por,
+    };
+    const { error: errUp } = await supabaseAdmin.from('observacoes_visitantes').upsert(payload, { onConflict: 'chave' });
+    if (errUp) {
+      const { historico: _, ...basePayload } = payload;
+      await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
+    }
+  } catch (err) {}
+
+  return item;
+}
+
+async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
+  return adicionarObservacaoAoHistorico({
+    chave,
+    nome,
+    documento,
+    texto: observacao,
+    exibir_alerta: true,
+    userId,
+    origem: 'admin_direto',
+  });
 }
 
 // Busca o cadastro de uma pessoa pelo documento (CPF).
@@ -1122,13 +1299,50 @@ app.get('/api/portaria/encomendas/pendentes', requireAuth, requireRole('porteiro
 // Registra saida
 app.post('/api/portaria/saida/:id', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const { id } = req.params;
+  const { observacao_saida, exibir_alerta } = req.body || {};
+
+  const { data: regAtual, error: errGet } = await supabaseAdmin
+    .from('registros_portaria')
+    .select('*')
+    .eq('id', id)
+    .single();
+  if (errGet || !regAtual) return res.status(400).json({ error: 'Registro não encontrado.' });
+
+  const agora = new Date().toISOString();
+  let novaObsAcesso = (regAtual.observacao || '').trim();
+  const obsSaidaTexto = (observacao_saida || '').trim();
+
+  if (obsSaidaTexto) {
+    novaObsAcesso = (novaObsAcesso ? novaObsAcesso + ' | ' : '') + `[Saída: ${obsSaidaTexto}]`;
+  }
+
   const { data, error } = await req.supabase
     .from('registros_portaria')
-    .update({ saida: new Date().toISOString(), saida_por: req.user.id })
+    .update({
+      saida: agora,
+      saida_por: req.user.id,
+      observacao: novaObsAcesso || null,
+    })
     .eq('id', id)
     .select()
     .single();
   if (error) return res.status(400).json({ error: error.message });
+
+  // Se o porteiro registrou ocorrência/observação na saída, salva no cadastro do visitante
+  if (obsSaidaTexto) {
+    try {
+      await adicionarObservacaoAoHistorico({
+        nome: regAtual.nome_pessoa,
+        documento: regAtual.documento,
+        texto: obsSaidaTexto,
+        exibir_alerta: exibir_alerta !== false,
+        userId: req.user.id,
+        origem: 'saida_portaria',
+      });
+    } catch (e) {
+      console.error('[Portaria Saida] Erro ao registrar observação no cadastro do visitante:', e);
+    }
+  }
 
   if (data?.aviso_id) {
     await req.supabase
@@ -1862,6 +2076,7 @@ app.get('/api/admin/visitantes/detalhes', requireAuth, requireRole('admin'), asy
         tipo: tipoFinal,
         observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
         observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
+        historico_observacoes: obsObj ? (obsObj.historico || []) : [],
       },
       kpis: {
         total_visitas: registrosPessoa.length,
@@ -1882,7 +2097,7 @@ app.get('/api/admin/visitantes/detalhes', requireAuth, requireRole('admin'), asy
   }
 });
 
-// Salva observação cadastral fixa de um visitante
+// Salva observação cadastral fixa de um visitante (legado / fallback)
 app.post('/api/admin/visitantes/observacao', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { chave, nome, documento, observacao } = req.body || {};
@@ -1892,6 +2107,56 @@ app.post('/api/admin/visitantes/observacao', requireAuth, requireRole('admin'), 
 
     const salvo = await salvarObservacaoVisitante(chave, nome, documento, observacao, req.user.id);
     res.json({ ok: true, observacao: salvo });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Adiciona nova observação ao histórico de um visitante
+app.post('/api/admin/visitantes/observacao/adicionar', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { chave, nome, documento, texto, exibir_alerta } = req.body || {};
+    if (!texto || !texto.trim()) {
+      return res.status(400).json({ error: 'Digite o texto da observação.' });
+    }
+    const salvo = await adicionarObservacaoAoHistorico({
+      chave,
+      nome,
+      documento,
+      texto,
+      exibir_alerta: exibir_alerta !== false,
+      userId: req.user.id,
+      origem: 'admin',
+    });
+    res.json({ ok: true, visitante: salvo });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Alterna checkbox exibir_alerta de uma ocorrência no histórico
+app.post('/api/admin/visitantes/observacao/toggle-alerta', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { chave, obs_id, exibir_alerta } = req.body || {};
+    if (!chave || !obs_id) {
+      return res.status(400).json({ error: 'Chave e ID da observação são obrigatórios.' });
+    }
+    const salvo = await alternarAlertaObservacao({ chave, obs_id, exibir_alerta });
+    res.json({ ok: true, visitante: salvo });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Exclui uma ocorrência do histórico do visitante
+app.post('/api/admin/visitantes/observacao/excluir', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { chave, obs_id } = req.body || {};
+    if (!chave || !obs_id) {
+      return res.status(400).json({ error: 'Chave e ID da observação são obrigatórios.' });
+    }
+    const salvo = await excluirObservacaoDoHistorico({ chave, obs_id });
+    res.json({ ok: true, visitante: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

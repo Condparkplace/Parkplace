@@ -127,7 +127,7 @@ create policy perfis_self_select on public.perfis
     or public.meu_tipo() in ('admin', 'porteiro')
   );
 
-drop policy if exists perfis_self_update on public.perfis;
+drop policy if exists perfis_self_update on public.pefis;
 create policy perfis_self_update on public.perfis
   for update using (id = auth.uid() or public.meu_tipo() = 'admin');
 
