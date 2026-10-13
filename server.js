@@ -3,6 +3,17 @@ require('dotenv').config();
 const express = require('express');
 const cookieParser = require('cookie-parser');
 const path = require('path');
+const webpush = require('web-push');
+
+// Inicializa VAPID Keys para Push Notifications
+// Substitua as chaves públicas e privadas abaixo se precisar (foram geradas no backend)
+const vapidPublicKey = 'BIOSYWts_mjXNf9VlPkqU_jnGCsXVaf64QLsyw-hI7AbyCbh0D0XufMoWEXWO0RJmJd3RPsQVRp9wgOLEIhe-O0';
+const vapidPrivateKey = 'a12m4cF5E3njmkKf8P2SKRcid34mRAualhbIm05NLsI';
+webpush.setVapidDetails(
+  'mailto:contato@parkplace.com',
+  vapidPublicKey,
+  vapidPrivateKey
+);
 
 const { supabaseAnon, supabaseAdmin } = require('./src/supabase');
 const {
@@ -22,7 +33,7 @@ app.use(cookieParser());
 
 // Login (todos os perfis usam a mesma rota)
 app.post('/api/login', async (req, res) => {
-  const { email, password } = req.body || {};
+  const { email, password, rememberMe } = req.body || {};
   if (!email || !password) {
     return res.status(400).json({ error: 'Informe e-mail e senha.' });
   }
@@ -51,7 +62,7 @@ app.post('/api/login', async (req, res) => {
     return res.status(403).json({ error: 'Usuario desativado. Procure a administracao.' });
   }
 
-  setSessionCookie(res, data.session);
+  setSessionCookie(res, data.session, rememberMe);
   res.json({ perfil });
 });
 
@@ -131,21 +142,147 @@ app.put('/api/me', requireAuth, async (req, res) => {
 });
 
 // ============================================================
+// PUSH NOTIFICATIONS
+// ============================================================
+app.post('/api/push/subscribe', requireAuth, async (req, res) => {
+  const subscription = req.body;
+  if (!subscription) return res.status(400).json({ error: 'Subscription missing' });
+  
+  // Salva no perfil do morador (a coluna push_subscription deve existir como JSONB)
+  const { error } = await req.supabase
+    .from('perfis')
+    .update({ push_subscription: subscription })
+    .eq('id', req.user.id);
+    
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({});
+});
+
+// Funcao auxiliar para notificar moradores de um lote
+async function notificarLote(bloco, titulo, mensagem) {
+  if (!bloco) return;
+  const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
+  const { data: moradores } = await supabaseAdmin
+    .from('perfis')
+    .select('push_subscription')
+    .ilike('bloco', `%${numeroBloco}%`)
+    .not('push_subscription', 'is', null);
+
+  if (moradores && moradores.length > 0) {
+    const payload = JSON.stringify({ title: titulo, body: mensagem });
+    moradores.forEach(m => {
+      webpush.sendNotification(m.push_subscription, payload).catch(err => console.error("Erro push:", err));
+    });
+  }
+}
+
+// ============================================================
 // MORADOR - avisos de visita
 // ============================================================
 
-// Lista os avisos do proprio morador
+// Lista os avisos do proprio morador (incluindo historico da portaria se for pro seu lote)
 app.get('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
-  const { data, error } = await req.supabase
-    .from('avisos_visitas')
-    .select('*')
-    .order('criado_em', { ascending: false });
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ avisos: data });
+  try {
+    const { data: avisosData, error: errAvisos } = await req.supabase
+      .from('avisos_visitas')
+      .select('*')
+      .order('criado_em', { ascending: false });
+    if (errAvisos) throw errAvisos;
+
+    let historico = [...(avisosData || [])];
+
+    if (req.perfil && req.perfil.bloco) {
+      const numeroBloco = req.perfil.bloco.replace(/lote\s*/i, '').trim();
+      const { data: regData, error: errReg } = await supabaseAdmin
+        .from('registros_portaria')
+        .select('*')
+        .ilike('destino_bloco', `%${numeroBloco}%`)
+        .is('aviso_id', null)
+        .order('entrada', { ascending: false });
+
+      if (!errReg && regData) {
+        const diretos = regData.map(p => ({
+          id: `p_${p.id}`,
+          nome_visitante: p.nome_pessoa === 'Encomenda' ? p.observacao : p.nome_pessoa,
+          documento_visitante: p.documento,
+          veiculo_placa: p.veiculo_placa,
+          tipo: p.nome_pessoa === 'Encomenda' ? 'Encomenda' : p.tipo,
+          data_prevista: p.entrada,
+          status: p.saida ? 'Finalizada' : 'Entrada Realizada',
+          criado_em: p.entrada
+        }));
+        historico = historico.concat(diretos);
+      }
+    }
+
+    historico.sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+    res.json({ avisos: historico });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Busca visitas frequentes agregadas por nome/documento para o morador
+app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const { data: avisosData } = await req.supabase
+      .from('avisos_visitas')
+      .select('*')
+      .order('criado_em', { ascending: false });
+
+    let regData = [];
+    if (req.perfil && req.perfil.bloco) {
+      const { data } = await supabaseAdmin
+        .from('registros_portaria')
+        .select('*')
+        .eq('destino_bloco', req.perfil.bloco)
+        .is('aviso_id', null)
+        .order('entrada', { ascending: false });
+      regData = data || [];
+    }
+
+    // Agrupar por nome (ou documento)
+    const map = {};
+
+    (avisosData || []).forEach(a => {
+      const nome = a.nome_visitante.trim().toLowerCase();
+      if (!map[nome]) {
+        map[nome] = { count: 0, ultimo: a };
+      }
+      map[nome].count++;
+    });
+
+    regData.forEach(r => {
+      const nome = r.nome_pessoa.trim().toLowerCase();
+      if (!map[nome]) {
+        map[nome] = {
+          count: 0,
+          ultimo: {
+            nome_visitante: r.nome_pessoa,
+            documento_visitante: r.documento,
+            veiculo_placa: r.veiculo_placa,
+            tipo: r.tipo,
+            endereco_visitante: r.endereco_visitante,
+            cep_visitante: r.cep_visitante
+          }
+        };
+      }
+      map[nome].count++;
+    });
+
+    const frequentes = Object.values(map)
+      .sort((a, b) => b.count - a.count)
+      .map(x => ({ ...x.ultimo, count: x.count }))
+      .filter(x => x.tipo !== 'Entregador');
+
+    res.json({ frequentes });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Cria um novo aviso de visita
-app.post('/api/morador/avisos', requireAuth, requireRole('morador'), async (req, res) => {
+app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   const {
     nome_visitante,
     documento_visitante,
@@ -182,6 +319,68 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador'), async (req,
   res.status(201).json({ aviso: data });
 });
 
+// Criar aviso via link publico (visitante se cadastra)
+app.post('/api/public/avisos', async (req, res) => {
+  const {
+    morador_id,
+    nome_visitante,
+    documento_visitante,
+    veiculo_placa,
+    tipo,
+    data_prevista,
+    endereco_visitante,
+    cep_visitante,
+    observacao,
+  } = req.body || {};
+
+  if (!morador_id || !nome_visitante) {
+    return res.status(400).json({ error: 'Morador e nome do visitante sao obrigatorios.' });
+  }
+
+  const { data: morador, error: errMorador } = await supabaseAdmin
+    .from('perfis')
+    .select('id')
+    .eq('id', morador_id)
+    .single();
+
+  if (errMorador || !morador) {
+    return res.status(400).json({ error: 'Morador nao encontrado.' });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('avisos_visitas')
+    .insert({
+      morador_id,
+      nome_visitante,
+      documento_visitante: documento_visitante || null,
+      veiculo_placa: veiculo_placa || null,
+      tipo: tipo || 'Visitante',
+      data_prevista: data_prevista || null,
+      endereco_visitante: endereco_visitante || null,
+      cep_visitante: cep_visitante || null,
+      observacao: observacao || null,
+      status: 'Pendente',
+    })
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({ aviso: data });
+});
+
+// Informacoes basicas do morador para exibicao publica (cadastro de visita)
+app.get('/api/public/moradores/:id', async (req, res) => {
+  const { id } = req.params;
+  const { data, error } = await supabaseAdmin
+    .from('perfis')
+    .select('nome, bloco')
+    .eq('id', id)
+    .single();
+
+  if (error || !data) return res.status(404).json({ error: 'Morador não encontrado' });
+  res.json({ morador: data });
+});
+
 // Cancela um aviso (apenas o dono)
 app.post('/api/morador/avisos/:id/cancelar', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   const { id } = req.params;
@@ -193,6 +392,29 @@ app.post('/api/morador/avisos/:id/cancelar', requireAuth, requireRole('morador',
     .single();
   if (error) return res.status(400).json({ error: error.message });
   res.json({ aviso: data });
+});
+
+// Lista de encomendas pendentes para o morador logado
+app.get('/api/morador/encomendas', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const { data: perfil } = await req.supabase.from('perfis').select('bloco, nome').eq('id', req.user.id).single();
+  const bloco = perfil?.bloco;
+  const nome = perfil?.nome;
+
+  if (!bloco) return res.json({ encomendas: [] });
+
+  const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
+
+  const { data, error } = await req.supabase
+    .from('registros_portaria')
+    .select('*')
+    .eq('nome_pessoa', 'Encomenda')
+    .ilike('destino_bloco', `%${numeroBloco}%`)
+    .ilike('observacao', `%${nome}%`)
+    .is('saida', null)
+    .order('entrada', { ascending: false });
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ encomendas: await comPorteiros(data || []) });
 });
 
 // ============================================================
@@ -245,23 +467,26 @@ app.get('/api/portaria/presentes', requireAuth, requireRole('porteiro', 'admin')
   const { data, error } = await req.supabase
     .from('registros_portaria')
     .select('*')
+    .neq('nome_pessoa', 'Encomenda')
     .is('saida', null)
     .order('entrada', { ascending: false });
   if (error) return res.status(400).json({ error: error.message });
   res.json({ presentes: await comPorteiros(data || []) });
 });
-
-// Historico completo (com filtro opcional por data).
+// Historico completo (com filtro opcional por data e cpf).
 // Inclui os registros de entrada/saida E os avisos marcados como "Nao compareceu".
 app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   let query = req.supabase
     .from('registros_portaria')
     .select('*')
-    .order('entrada', { ascending: false })
-    .limit(500);
+    .order('entrada', { ascending: false });
 
   if (req.query.de) query = query.gte('entrada', req.query.de);
   if (req.query.ate) query = query.lte('entrada', req.query.ate);
+  if (req.query.cpf) query = query.ilike('documento', `%${req.query.cpf}%`);
+  if (req.query.lote) query = query.ilike('destino_bloco', `%${req.query.lote}%`);
+
+  query = query.limit(40);
 
   const { data, error } = await query;
   if (error) return res.status(400).json({ error: error.message });
@@ -269,11 +494,15 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
   // Avisos que nao compareceram, no mesmo intervalo de data (por data_prevista).
   let qAvisos = req.supabase
     .from('avisos_visitas')
-    .select('*, morador:perfis!avisos_visitas_morador_id_fkey(bloco, apartamento)')
-    .eq('status', 'Nao compareceu')
-    .limit(500);
+    .select('*, morador:perfis!avisos_visitas_morador_id_fkey!inner(bloco, apartamento)')
+    .eq('status', 'Nao compareceu');
+
   if (req.query.de) qAvisos = qAvisos.gte('data_prevista', req.query.de);
   if (req.query.ate) qAvisos = qAvisos.lte('data_prevista', req.query.ate);
+  if (req.query.cpf) qAvisos = qAvisos.ilike('documento_visitante', `%${req.query.cpf}%`);
+  if (req.query.lote) qAvisos = qAvisos.ilike('perfis.bloco', `%${req.query.lote}%`);
+
+  qAvisos = qAvisos.limit(40);
 
   const { data: avisos, error: errAv } = await qAvisos;
   if (errAv) return res.status(400).json({ error: errAv.message });
@@ -292,16 +521,18 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
       saida: null,
       status: 'Nao compareceu',
       porteiro_nao_veio: nomesNaoVeio[a.nao_veio_por] || null,
+      observacao: a.observacao
     };
   });
 
   const registros = [...(await comPorteiros(data || [])), ...naoCompareceu].sort(
     (x, y) => new Date(y.entrada) - new Date(x.entrada)
-  );
-  res.json({ registros });
+  ).slice(0, 40);
+
+  res.json({ registros });;
 });
 
-// Busca o cadastro mais recente de uma pessoa pelo documento (CPF/RG).
+// Busca o cadastro mais recente de uma pessoa pelo documento (CPF).
 // Usado na aba "Registrar entrada" para preencher dados de quem ja veio antes.
 app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const doc = (req.query.documento || '').trim();
@@ -419,7 +650,27 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
       .eq('id', aviso_id);
   }
 
+  // Disparar notificação push se for encomenda
+  if (nome_pessoa === 'Encomenda') {
+    notificarLote(destino_bloco, '📦 Nova Encomenda', 'Você tem uma encomenda na portaria!');
+  } else {
+    notificarLote(destino_bloco, '🛎️ Nova Visita', `O visitante ${nome_pessoa} chegou na portaria.`);
+  }
+
   res.status(201).json({ registro: data });
+});
+
+// Lista de encomendas pendentes
+app.get('/api/portaria/encomendas/pendentes', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { data, error } = await req.supabase
+    .from('registros_portaria')
+    .select('*')
+    .eq('nome_pessoa', 'Encomenda')
+    .is('saida', null)
+    .order('entrada', { ascending: false });
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ registros: await comPorteiros(data || []) });
 });
 
 // Registra saida
@@ -441,6 +692,106 @@ app.post('/api/portaria/saida/:id', requireAuth, requireRole('porteiro', 'admin'
   }
 
   res.json({ registro: data });
+});
+
+// Registra retirada de encomenda com nome de quem retirou
+app.post('/api/portaria/encomendas/:id/retirada', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { id } = req.params;
+  const { retiradoPor, observacaoAtual } = req.body || {};
+  
+  // Exemplo da observacao atual: [ENCOMENDA] Para: Fabio Camargo
+  // Nova: [ENCOMENDA] de : Fabio Camargo retirado por {retiradoPor}
+  let novaObs = observacaoAtual || '';
+  if (novaObs.startsWith('[ENCOMENDA] Para: ')) {
+    const nomeDestino = novaObs.replace('[ENCOMENDA] Para: ', '').trim();
+    novaObs = `[ENCOMENDA] de : ${nomeDestino} retirado por ${retiradoPor || 'Morador'}`;
+  }
+
+  const { data, error } = await req.supabase
+    .from('registros_portaria')
+    .update({ 
+      saida: new Date().toISOString(), 
+      saida_por: req.user.id,
+      observacao: novaObs 
+    })
+    .eq('id', id)
+    .select()
+    .single();
+    
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ registro: data });
+});
+
+// Cancela a entrada registrada (reverte status do aviso e exclui registro)
+app.post('/api/portaria/entrada/:id/cancelar', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { id } = req.params;
+  const { motivo } = req.body || {};
+
+  // Busca o registro para saber se estava atrelado a um aviso
+  const { data: reg, error: errFetch } = await req.supabase
+    .from('registros_portaria')
+    .select('aviso_id')
+    .eq('id', id)
+    .single();
+
+  if (errFetch) return res.status(400).json({ error: errFetch.message });
+
+  // Marca o registro como finalizado e insere a observacao de cancelamento
+  const ts = new Date().toLocaleString('pt-BR');
+  const msgCancelamento = `[Cancelado]: ${motivo || 'Sem motivo'}`;
+
+  const { error: errUpd } = await req.supabase
+    .from('registros_portaria')
+    .update({ 
+      saida: new Date().toISOString(),
+      observacao: msgCancelamento
+    })
+    .eq('id', id);
+
+  if (errUpd) return res.status(400).json({ error: errUpd.message });
+
+  // Se tinha um aviso, atualiza o status para Cancelada e salva o motivo
+  if (reg?.aviso_id) {
+    const { data: aviso } = await req.supabase
+      .from('avisos_visitas')
+      .select('observacao')
+      .eq('id', reg.aviso_id)
+      .single();
+
+    let obs = aviso?.observacao || '';
+    obs = obs ? `${obs}\n${msgCancelamento} (${ts})` : `${msgCancelamento} (${ts})`;
+
+    await req.supabase
+      .from('avisos_visitas')
+      .update({ status: 'Cancelada', observacao: obs })
+      .eq('id', reg.aviso_id);
+  }
+
+  res.json({ sucesso: true });
+});
+
+// Lista moradores de um lote especifico (usado para entregas rapidas como iFood)
+app.get('/api/portaria/moradores', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  let lote = req.query.lote;
+  if (!lote) return res.status(400).json({ error: 'Lote nao informado.' });
+
+  // Se o porteiro digitou apenas um numero, formata para "Lote XX"
+  if (/^\d+$/.test(lote.trim())) {
+    lote = `Lote ${String(lote.trim()).padStart(2, '0')}`;
+  } else if (/^lote\s*\d+$/i.test(lote.trim())) {
+    // Caso tenha digitado "lote 1" vira "Lote 01"
+    const num = lote.replace(/\D/g, '');
+    lote = `Lote ${String(num).padStart(2, '0')}`;
+  }
+
+  const { data, error } = await req.supabase
+    .from('perfis')
+    .select('id, nome, bloco, telefone')
+    .eq('bloco', lote)
+    .order('nome', { ascending: true });
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ moradores: data });
 });
 
 // ============================================================

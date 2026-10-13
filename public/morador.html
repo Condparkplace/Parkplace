@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Painel do Morador - Park Place</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
+
 <body>
   <div class="topbar">
     <div class="brand">
@@ -71,7 +73,8 @@
         </p>
 
         <button type="submit" class="block" id="btn-cad-salvar">Salvar alteracoes</button>
-        <button type="button" class="block secundario" style="margin-top:10px;" onclick="fecharMeuCadastro()">&#8592; Voltar</button>
+        <button type="button" class="block secundario" style="margin-top:10px;" onclick="fecharMeuCadastro()">&#8592;
+          Voltar</button>
       </form>
       <div id="msg-cadastro" class="msg hidden"></div>
     </div>
@@ -83,9 +86,35 @@
       <h2>Avisar a portaria sobre uma visita</h2>
 
       <div id="botoes-iniciais" style="display: flex; flex-direction: column; gap: 16px; margin-bottom: 16px;">
-        <button id="btn-mostrar-form" class="block" style="padding: 16px; font-size: 1.1em; margin: 0;" onclick="mostrarForm()">+ Cadastrar visita</button>
-        <button id="btn-ifood" class="block" style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #ea1d2c; border-color: #ea1d2c; color: white;" onclick="cadastrarIfood()">+ Cadastrar iFood</button>
-        <button id="btn-prestador" class="block" style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #2b6cb0; border-color: #2b6cb0; color: white;" onclick="mostrarFormPrestador()">+ Cadastrar visita de Prestador</button>
+        <button id="btn-ifood" class="block"
+          style="padding: 16px; font-size: 1.1em; margin: 0; background-color: #ea1d2c; border-color: #ea1d2c; color: white;"
+          onclick="cadastrarIfood()">+ Cadastrar iFood</button>
+        <button id="btn-frequentes" class="block secundario" style="padding: 16px; font-size: 1.1em; margin: 0;"
+          onclick="abrirFrequentes()">&#128101; Visitas frequentes</button>
+
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-mostrar-form" class="block" style="flex: 2; padding: 16px; font-size: 1.1em; margin: 0;"
+            onclick="mostrarForm()">+ Cadastrar visita</button>
+          <button id="btn-compartilhar-visita" class="block"
+            style="flex: 1; padding: 16px; font-size: 1.1em; margin: 0; background-color: #25d366; border-color: #25d366; color: white;"
+            onclick="compartilharVisita('Visitante')">&#128242; Enviar</button>
+        </div>
+
+        <div style="display: flex; gap: 8px;">
+          <button id="btn-prestador" class="block"
+            style="flex: 2; padding: 16px; font-size: 1.1em; margin: 0; background-color: #2b6cb0; border-color: #2b6cb0; color: white;"
+            onclick="mostrarFormPrestador()">+ Cadastrar visita de Prestador</button>
+          <button id="btn-compartilhar-prestador" class="block"
+            style="flex: 1; padding: 16px; font-size: 1.1em; margin: 0; background-color: #25d366; border-color: #25d366; color: white;"
+            onclick="compartilharVisita('Prestador')">&#128242; Enviar</button>
+        </div>
+        <!-- Alerta de Encomendas -->
+        <div id="alerta-encomendas" class="hidden"
+          style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px;">
+          <h3 style="margin-top:0; color:#d53f8c; display:flex; align-items:center; gap:8px; font-size:16px;">📦 Você
+            tem encomendas na Portaria!</h3>
+          <div id="lista-encomendas-morador" style="display:flex; flex-direction:column; gap:8px;"></div>
+        </div>
       </div>
 
       <form id="form-aviso" class="hidden">
@@ -105,34 +134,33 @@
         <label for="data_prevista">Data/hora prevista</label>
         <input type="datetime-local" id="data_prevista" />
 
-        <!-- Endereco do visitante (busca por CEP) -->
-        <h3 style="margin:18px 0 4px;">Endereco do visitante</h3>
-        <div class="grid grid-2">
-          <div>
-            <label for="cep">CEP</label>
-            <div class="row-inline" style="align-items:center;">
-              <input type="text" id="cep" placeholder="00000-000" maxlength="9" style="flex:1; min-width:120px;" />
-              <button type="button" class="mini" id="btn-buscar-cep" onclick="buscarPorCep()">Buscar CEP</button>
+        <div id="area-endereco" class="hidden">
+          <h3 style="margin:18px 0 4px; font-size:16px;">Endereço do Prestador</h3>
+          <div class="grid grid-2">
+            <div>
+              <label for="cep">CEP</label>
+              <input type="text" id="cep" placeholder="00000-000" maxlength="9" />
+              <span id="msg-cep" class="text-muted" style="display:block; margin-top:4px; font-size:13px;"></span>
             </div>
-            <span id="msg-cep" class="text-muted"></span>
-          </div>
-          <div>
-            <label for="end_numero">Numero</label>
-            <input type="text" id="end_numero" placeholder="Ex: 123" />
-          </div>
-          <div>
-            <label for="end_logradouro">Logradouro</label>
-            <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
-          </div>
-          <div>
-            <label for="end_bairro">Bairro</label>
-            <input type="text" id="end_bairro" />
-          </div>
-          <div>
-            <label for="end_cidade">Cidade / UF</label>
-            <div class="row-inline">
-              <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
-              <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+            <div>
+              <label for="end_numero">Número</label>
+              <input type="text" id="end_numero" placeholder="Ex: 123" />
+            </div>
+            <div>
+              <label for="end_logradouro">Logradouro</label>
+              <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
+            </div>
+            <div>
+              <label for="end_bairro">Bairro</label>
+              <input type="text" id="end_bairro" />
+            </div>
+            <div>
+              <label for="end_cidade">Cidade / UF</label>
+              <div class="row-inline">
+                <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
+                <input type="text" id="end_uf" placeholder="UF" maxlength="2"
+                  style="flex:1; min-width:56px; text-transform:uppercase;" />
+              </div>
             </div>
           </div>
         </div>
@@ -141,16 +169,55 @@
         <textarea id="observacao" placeholder="Alguma informacao extra para a portaria"></textarea>
 
         <button type="submit" class="block" id="btn-salvar">Enviar aviso</button>
-        <button type="button" class="block secundario" style="margin-top:10px;" onclick="voltarCadastros()">&#8592; Voltar aos cadastros</button>
+        <button type="button" class="block secundario" style="margin-top:10px;" onclick="voltarCadastros()">&#8592;
+          Voltar aos cadastros</button>
       </form>
       <div id="msg" class="msg hidden"></div>
     </div>
 
     <!-- Lista de avisos -->
-    <div class="card">
-      <h2>Minhas visitas avisadas</h2>
+    <div class="card" id="card-avisos">
+      <h2>Minhas visitas</h2>
       <div id="lista-avisos">
         <p class="vazio">Carregando...</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Area de Visitas Frequentes -->
+  <div class="container hidden" id="area-frequentes">
+    <div class="card" style="margin-top: 30px;">
+      <h2>Visitas Frequentes</h2>
+      <p class="text-muted" style="margin-bottom: 20px; font-size: 14px;">
+        Pessoas que já visitaram o seu lote. Clique em "Agendar de novo" para recadastrar rapidamente.
+      </p>
+
+      <input type="text" id="busca-frequentes" placeholder="Buscar por nome..." style="margin-bottom: 20px;"
+        oninput="filtrarFrequentes()" />
+
+      <div id="lista-frequentes">
+        <p class="vazio">Buscando...</p>
+      </div>
+
+      <button type="button" class="block secundario" style="margin-top: 20px;" onclick="fecharFrequentes()">&#8592;
+        Voltar</button>
+    </div>
+  </div>
+
+  <!-- Modal simplificado para pedir a data -->
+  <div id="modal-data" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div class="card" style="width: 100%; max-width: 400px; margin: 20px;">
+      <h3 style="margin-top:0;">Reagendar Visita</h3>
+      <p class="text-muted" id="modal-nome-visitante" style="margin-bottom:15px;"></p>
+
+      <label>Quando essa pessoa virá? (Deixe em branco para agora)</label>
+      <input type="datetime-local" id="modal-data-prevista" style="margin-bottom: 20px;" />
+
+      <div class="grid grid-2">
+        <button type="button" class="secundario block"
+          onclick="document.getElementById('modal-data').style.display='none'">Cancelar</button>
+        <button type="button" class="block" id="btn-confirmar-reagendamento">Confirmar</button>
       </div>
     </div>
   </div>
@@ -162,9 +229,11 @@
     (async () => {
       perfil = await protegerPagina('morador');
       if (!perfil) return;
+      navAdmin(perfil, 'morador');
       document.getElementById('nome-usuario').textContent =
         perfil.nome + (perfil.bloco ? ` (${perfil.bloco})` : '');
       carregarAvisos();
+      carregarMinhasEncomendas();
     })();
 
     const form = document.getElementById('form-aviso');
@@ -186,16 +255,31 @@
       msg.classList.add('hidden');
       document.getElementById('tipo').value = tipo;
       document.getElementById('tipo_label').value = ROTULO_TIPO[tipo] || tipo;
+
+      const areaEndereco = document.getElementById('area-endereco');
+      if (tipo === 'Prestador') {
+        areaEndereco.classList.remove('hidden');
+      } else {
+        areaEndereco.classList.add('hidden');
+      }
+
       document.getElementById('nome_visitante').focus();
     }
 
     function mostrarForm() { abrirForm('Visitante'); }
     function mostrarFormPrestador() { abrirForm('Prestador'); }
 
+    function compartilharVisita(tipo) {
+      if (!perfil || !perfil.id) return;
+      const baseUrl = window.location.origin;
+      const link = `${baseUrl}/cadastro-visita.html?morador=${perfil.id}&tipo=${tipo}`;
+      const texto = `Ola! Por favor, preencha seus dados neste link para liberar sua entrada na portaria do Park Place: ${link}`;
+      window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
+    }
+
     // Volta para a tela com os botoes de cadastro, sem enviar.
     function voltarCadastros() {
       form.reset();
-      document.getElementById('msg-cep').textContent = '';
       form.classList.add('hidden');
       document.getElementById('botoes-iniciais').classList.remove('hidden');
       msg.classList.add('hidden');
@@ -250,77 +334,6 @@
       }
     });
 
-    // ---------- Busca por CEP (ViaCEP) ----------
-    const campoCep = document.getElementById('cep');
-
-    // Mascara simples 00000-000
-    campoCep.addEventListener('input', () => {
-      let v = campoCep.value.replace(/\D/g, '').slice(0, 8);
-      if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
-      campoCep.value = v;
-    });
-
-    // Busca automatica ao sair do campo (se tiver 8 digitos) e com Enter.
-    campoCep.addEventListener('blur', () => {
-      if (campoCep.value.replace(/\D/g, '').length === 8) buscarPorCep();
-    });
-    campoCep.addEventListener('keydown', (e) => {
-      if (e.key === 'Enter') { e.preventDefault(); buscarPorCep(); }
-    });
-
-    async function buscarPorCep() {
-      const msgCep = document.getElementById('msg-cep');
-      const btnCep = document.getElementById('btn-buscar-cep');
-      const cep = campoCep.value.replace(/\D/g, '');
-      msgCep.textContent = '';
-      msgCep.style.color = '';
-      if (cep.length !== 8) {
-        msgCep.textContent = 'Digite um CEP com 8 digitos.';
-        msgCep.style.color = 'var(--vermelho)';
-        return;
-      }
-      btnCep.disabled = true;
-      btnCep.textContent = 'Buscando...';
-      try {
-        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-        const dados = await resp.json();
-        if (dados.erro) {
-          msgCep.textContent = 'CEP nao encontrado.';
-          msgCep.style.color = 'var(--vermelho)';
-          return;
-        }
-        document.getElementById('end_logradouro').value = dados.logradouro || '';
-        document.getElementById('end_bairro').value = dados.bairro || '';
-        document.getElementById('end_cidade').value = dados.localidade || '';
-        document.getElementById('end_uf').value = dados.uf || '';
-        msgCep.textContent = 'Endereco preenchido. Informe o numero.';
-        msgCep.style.color = 'var(--verde-escuro)';
-        document.getElementById('end_numero').focus();
-      } catch (err) {
-        msgCep.textContent = 'Nao foi possivel consultar o CEP (verifique a internet).';
-        msgCep.style.color = 'var(--vermelho)';
-      } finally {
-        btnCep.disabled = false;
-        btnCep.textContent = 'Buscar CEP';
-      }
-    }
-
-    // Monta o endereco completo em uma string para salvar no aviso.
-    function montarEnderecoVisitante() {
-      const cep = document.getElementById('cep').value.trim();
-      const log = document.getElementById('end_logradouro').value.trim();
-      const num = document.getElementById('end_numero').value.trim();
-      const bairro = document.getElementById('end_bairro').value.trim();
-      const cidade = document.getElementById('end_cidade').value.trim();
-      const uf = document.getElementById('end_uf').value.trim().toUpperCase();
-
-      if (!log && !cidade && !cep) return null;
-      let linha = log;
-      if (num) linha += ', ' + num;
-      const partes = [linha, bairro, [cidade, uf].filter(Boolean).join('/')]
-        .filter(Boolean).join(', ');
-      return (partes + (cep ? ' - CEP ' + cep : '')).trim();
-    }
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
@@ -338,18 +351,17 @@
             veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
             data_prevista: dt ? new Date(dt).toISOString() : null,
             endereco_visitante: montarEnderecoVisitante(),
-            cep_visitante: document.getElementById('cep').value.trim() || null,
+            cep_visitante: document.getElementById('tipo').value === 'Prestador' ? document.getElementById('cep').value.replace(/\D/g, '') : null,
             observacao: document.getElementById('observacao').value.trim(),
           }),
         });
         form.reset();
-        document.getElementById('msg-cep').textContent = '';
         msg.textContent = 'Aviso enviado! A portaria ja pode ver.';
         msg.className = 'msg ok';
-        
+
         form.classList.add('hidden');
         document.getElementById('botoes-iniciais').classList.remove('hidden');
-        
+
         carregarAvisos();
       } catch (err) {
         msg.textContent = err.message;
@@ -359,6 +371,65 @@
         btn.textContent = 'Enviar aviso';
       }
     });
+
+    // ---------- Busca por CEP (ViaCEP) ----------
+    const campoCep = document.getElementById('cep');
+
+    campoCep.addEventListener('input', () => {
+      let v = campoCep.value.replace(/\D/g, '').slice(0, 8);
+      if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+      campoCep.value = v;
+
+      if (v.replace(/\D/g, '').length === 8) {
+        buscarPorCep();
+      }
+    });
+
+    async function buscarPorCep() {
+      const msgCep = document.getElementById('msg-cep');
+      const cep = campoCep.value.replace(/\D/g, '');
+      msgCep.textContent = 'Buscando...';
+      msgCep.style.color = '';
+
+      if (cep.length !== 8) return;
+
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await resp.json();
+        if (dados.erro) {
+          msgCep.textContent = 'CEP não encontrado.';
+          msgCep.style.color = 'var(--vermelho)';
+          return;
+        }
+        document.getElementById('end_logradouro').value = dados.logradouro || '';
+        document.getElementById('end_bairro').value = dados.bairro || '';
+        document.getElementById('end_cidade').value = dados.localidade || '';
+        document.getElementById('end_uf').value = dados.uf || '';
+        msgCep.textContent = 'Endereço preenchido. Informe o número.';
+        msgCep.style.color = 'var(--verde-escuro)';
+        document.getElementById('end_numero').focus();
+      } catch (err) {
+        msgCep.textContent = 'Não foi possível consultar o CEP.';
+        msgCep.style.color = 'var(--vermelho)';
+      }
+    }
+
+    function montarEnderecoVisitante() {
+      if (document.getElementById('tipo').value !== 'Prestador') return null;
+      const cep = document.getElementById('cep').value.trim();
+      const log = document.getElementById('end_logradouro').value.trim();
+      const num = document.getElementById('end_numero').value.trim();
+      const bairro = document.getElementById('end_bairro').value.trim();
+      const cidade = document.getElementById('end_cidade').value.trim();
+      const uf = document.getElementById('end_uf').value.trim().toUpperCase();
+
+      if (!log && !cidade && !cep) return null;
+      let linha = log;
+      if (num) linha += ', ' + num;
+      const partes = [linha, bairro, [cidade, uf].filter(Boolean).join('/')]
+        .filter(Boolean).join(', ');
+      return (partes + (cep ? ' - CEP ' + cep : '')).trim();
+    }
 
     async function cadastrarIfood() {
       const btnIfood = document.getElementById('btn-ifood');
@@ -393,38 +464,83 @@
       }
     }
 
+    async function carregarMinhasEncomendas() {
+      const alerta = document.getElementById('alerta-encomendas');
+      const lista = document.getElementById('lista-encomendas-morador');
+      try {
+        const { encomendas } = await api('/api/morador/encomendas');
+        if (encomendas && encomendas.length > 0) {
+          alerta.classList.remove('hidden');
+          lista.innerHTML = encomendas.map(e => `
+            <div style="background:white; padding:12px; border-radius:6px; border:1px solid #fbcfe8; display:flex; flex-direction:column; gap:4px;">
+              <strong style="color:#2d3748;">${escapeHtml(e.destino_apto || '1 pacote(s)')}</strong>
+              <span style="font-size:13px; color:#4a5568;">Recebido em: ${formatarData(e.entrada)}</span>
+              <span style="font-size:13px; color:#4a5568;">Recebido por: ${escapeHtml(e.porteiro_entrada || 'Portaria')}</span>
+            </div>
+          `).join('');
+        } else {
+          alerta.classList.add('hidden');
+          lista.innerHTML = '';
+        }
+      } catch (err) {
+        console.error('Erro ao buscar encomendas', err);
+      }
+    }
+
+    let todosAvisos = [];
+    let limiteAvisos = 10;
+
     async function carregarAvisos() {
       const alvo = document.getElementById('lista-avisos');
       try {
         const { avisos } = await api('/api/morador/avisos');
-        if (!avisos.length) {
-          alvo.innerHTML = '<p class="vazio">Voce ainda nao avisou nenhuma visita.</p>';
-          return;
-        }
-        alvo.innerHTML = `
-          <table>
-            <thead>
-              <tr><th>Visitante</th><th>Tipo</th><th>Previsto</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              ${avisos.map((a) => `
-                <tr>
-                  <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
-                  <td>${escapeHtml(a.tipo)}</td>
-                  <td>${formatarData(a.data_prevista)}</td>
-                  <td>${badgeStatus(a.status)}</td>
-                  <td>${
-                    ['Pendente', 'Autorizada'].includes(a.status)
-                      ? `<button class="perigo mini" onclick="cancelar(${a.id})">Cancelar</button>`
-                      : ''
-                  }</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>`;
+        todosAvisos = avisos || [];
+        renderizarAvisos();
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
+    }
+
+    function carregarMaisAvisos() {
+      limiteAvisos += 10;
+      renderizarAvisos();
+    }
+
+    function renderizarAvisos() {
+      const alvo = document.getElementById('lista-avisos');
+      if (!todosAvisos.length) {
+        alvo.innerHTML = '<p class="vazio">Voce ainda nao avisou nenhuma visita.</p>';
+        return;
+      }
+      
+      const avisosVisiveis = todosAvisos.slice(0, limiteAvisos);
+
+      alvo.innerHTML = `
+        <table>
+          <thead>
+            <tr><th>Visitante</th><th>Tipo</th><th>Previsto</th><th>Status</th><th></th></tr>
+          </thead>
+          <tbody>
+            ${avisosVisiveis.map((a) => `
+              <tr>
+                <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
+                <td>${escapeHtml(a.tipo)}</td>
+                <td>${formatarData(a.data_prevista)}</td>
+                <td>${badgeStatus(a.status)}</td>
+                <td>${['Pendente', 'Autorizada'].includes(a.status)
+          ? `<button class="perigo mini" onclick="cancelar(${a.id})">Cancelar</button>`
+          : ''
+        }</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+        ${limiteAvisos < todosAvisos.length ? `
+          <div style="text-align: center; margin-top: 15px;">
+            <button class="secundario" onclick="carregarMaisAvisos()">Ver mais 10...</button>
+          </div>
+        ` : ''}
+      `;
     }
 
     async function cancelar(id) {
@@ -436,6 +552,160 @@
         alert(err.message);
       }
     }
+
+    // ---------- Visitas Frequentes ----------
+    let frequentes = [];
+    let reagendamentoAtual = null;
+
+    async function abrirFrequentes() {
+      document.getElementById('area-visitas').classList.add('hidden');
+      document.getElementById('area-frequentes').classList.remove('hidden');
+      document.getElementById('lista-frequentes').innerHTML = '<p class="vazio">Buscando...</p>';
+
+      try {
+        const res = await api('/api/morador/visitas-frequentes');
+        frequentes = res.frequentes || [];
+        renderFrequentes(frequentes);
+      } catch (err) {
+        document.getElementById('lista-frequentes').innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function fecharFrequentes() {
+      document.getElementById('area-frequentes').classList.add('hidden');
+      document.getElementById('area-visitas').classList.remove('hidden');
+    }
+
+    function filtrarFrequentes() {
+      const q = document.getElementById('busca-frequentes').value.toLowerCase();
+      const filtrados = frequentes.filter(f => f.nome_visitante.toLowerCase().includes(q));
+      renderFrequentes(filtrados);
+    }
+
+    function renderFrequentes(lista) {
+      const alvo = document.getElementById('lista-frequentes');
+      if (!lista.length) {
+        alvo.innerHTML = '<p class="vazio">Nenhum visitante encontrado.</p>';
+        return;
+      }
+
+      // Armazena no array global para podermos acessar ao clicar no botao (usando index no array `frequentes`)
+      alvo.innerHTML = `
+        <table>
+          <thead>
+            <tr><th>Nome</th><th>Tipo</th><th>Vezes que veio</th><th>Ação</th></tr>
+          </thead>
+          <tbody>
+            ${lista.map((f, index) => {
+        // Encontra o index real no array original
+        const realIndex = frequentes.findIndex(x => x.nome_visitante === f.nome_visitante);
+        const btnStyle = f.tipo === 'Prestador'
+          ? 'background-color: #2b6cb0; border-color: #2b6cb0;'
+          : '';
+
+        return `
+                <tr>
+                  <td>${escapeHtml(f.nome_visitante)}</td>
+                  <td>${escapeHtml(f.tipo)}</td>
+                  <td>${f.count} visita(s)</td>
+                  <td>
+                    <button class="mini block" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
+                  </td>
+                </tr>
+              `;
+      }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function iniciarReagendamento(index) {
+      reagendamentoAtual = frequentes[index];
+      document.getElementById('modal-nome-visitante').textContent = reagendamentoAtual.nome_visitante;
+      document.getElementById('modal-data-prevista').value = '';
+
+      const modal = document.getElementById('modal-data');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    }
+
+    document.getElementById('btn-confirmar-reagendamento').addEventListener('click', async () => {
+      const btn = document.getElementById('btn-confirmar-reagendamento');
+      const dataVal = document.getElementById('modal-data-prevista').value;
+
+      btn.disabled = true;
+      btn.textContent = 'Enviando...';
+
+      try {
+        await api('/api/morador/avisos', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_visitante: reagendamentoAtual.nome_visitante,
+            tipo: reagendamentoAtual.tipo,
+            documento_visitante: reagendamentoAtual.documento_visitante || '',
+            veiculo_placa: reagendamentoAtual.veiculo_placa || '',
+            data_prevista: dataVal ? new Date(dataVal).toISOString() : null,
+            endereco_visitante: reagendamentoAtual.endereco_visitante || null,
+            cep_visitante: reagendamentoAtual.cep_visitante || null,
+            observacao: 'Visita reagendada pelo atalho de frequentes.',
+          }),
+        });
+
+        document.getElementById('modal-data').style.display = 'none';
+        fecharFrequentes();
+        carregarAvisos();
+        alert('Visita agendada com sucesso!');
+      } catch (err) {
+        alert(err.message);
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Confirmar';
+      }
+    });
+
+    // PUSH NOTIFICATIONS
+    const publicVapidKey = 'BIOSYWts_mjXNf9VlPkqU_jnGCsXVaf64QLsyw-hI7AbyCbh0D0XufMoWEXWO0RJmJd3RPsQVRp9wgOLEIhe-O0';
+
+    function urlBase64ToUint8Array(base64String) {
+      const padding = '='.repeat((4 - base64String.length % 4) % 4);
+      const base64 = (base64String + padding).replace(/\-/g, '+').replace(/_/g, '/');
+      const rawData = window.atob(base64);
+      const outputArray = new Uint8Array(rawData.length);
+      for (let i = 0; i < rawData.length; ++i) {
+        outputArray[i] = rawData.charCodeAt(i);
+      }
+      return outputArray;
+    }
+
+    async function initPushNotifications() {
+      if ('serviceWorker' in navigator && 'PushManager' in window) {
+        try {
+          const register = await navigator.serviceWorker.register('/sw.js');
+          console.log('Service Worker registrado com sucesso');
+
+          const permission = await Notification.requestPermission();
+          if (permission === 'granted') {
+            const subscription = await register.pushManager.subscribe({
+              userVisibleOnly: true,
+              applicationServerKey: urlBase64ToUint8Array(publicVapidKey)
+            });
+
+            await api('/api/push/subscribe', {
+              method: 'POST',
+              body: JSON.stringify(subscription)
+            });
+            console.log('Push subscription enviada para o backend!');
+          }
+        } catch (err) {
+          console.error('Erro no Push:', err);
+        }
+      }
+    }
+
+    // Tentar inicializar o push ao carregar
+    window.addEventListener('load', initPushNotifications);
+
   </script>
 </body>
+
 </html>

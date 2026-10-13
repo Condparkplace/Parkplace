@@ -22,6 +22,13 @@
         <label for="password">Senha</label>
         <input type="password" id="password" placeholder="Sua senha" autocomplete="current-password" required />
 
+        <div style="margin-bottom:16px;">
+          <label class="row-inline" style="justify-content:flex-start; align-items:center; cursor:pointer; font-weight:normal; user-select:none;">
+            <input type="checkbox" id="rememberMe" style="width:auto; margin:0 8px 0 0;" />
+            Manter-me logado (confiar neste navegador)
+          </label>
+        </div>
+
         <button type="submit" class="block" id="btn-entrar">Entrar</button>
       </form>
 
@@ -64,6 +71,7 @@
           body: JSON.stringify({
             email: document.getElementById('email').value.trim(),
             password: document.getElementById('password').value,
+            rememberMe: document.getElementById('rememberMe').checked,
           }),
         });
         redirecionarPorTipo(perfil.tipo);

@@ -34,6 +34,52 @@ async function protegerPagina(tipoEsperado) {
   }
 }
 
+// Botoes de navegacao entre as paginas (apenas para administradores).
+function navAdmin(perfil, atual) {
+  if (!perfil || perfil.tipo !== 'admin') return;
+  const topbar = document.querySelector('.topbar');
+  if (!topbar || topbar.querySelector('.admin-nav')) return;
+  const links = [
+    { id: 'admin', href: '/admin.html', txt: '&#9881;&#65039; Administracao' },
+    { id: 'porteiro', href: '/porteiro.html', txt: '&#128682; Portaria' },
+    { id: 'morador', href: '/morador.html', txt: '&#127968; Area do morador' },
+    { id: 'cadastro', href: '/cadastro.html', txt: '&#128221; Cadastro de morador', novaAba: true },
+    { id: 'site', href: '/', txt: '&#127760; Site' },
+  ];
+  const nav = document.createElement('nav');
+  nav.className = 'admin-nav';
+  nav.setAttribute('aria-label', 'Navegacao do administrador');
+  nav.innerHTML = links
+    .map((l) => `<a id="nav-${l.id}" href="${l.href}"${l.id === atual ? ' class="ativo" aria-current="page"' : ''}${l.novaAba ? ' target="_blank"' : ''}>${l.txt}</a>`)
+    .join('');
+  const userArea = topbar.querySelector('.user-area');
+  topbar.insertBefore(nav, userArea);
+}
+
+// Para paginas sem barra superior (Site, Cadastro): se o admin estiver logado,
+// cria uma barra fina no topo com o mesmo menu.
+async function navAdminAuto(atual) {
+  let perfil;
+  try {
+    ({ perfil } = await api('/api/me'));
+  } catch {
+    return; // nao logado: nao mostra nada
+  }
+  if (!perfil || perfil.tipo !== 'admin') return;
+  if (!document.querySelector('.topbar')) {
+    const bar = document.createElement('div');
+    bar.className = 'topbar';
+    bar.innerHTML = `
+      <div class="brand">&#9881;&#65039; Park Place <span class="sub">&middot; Administracao</span></div>
+      <div class="user-area">
+        <span>${escapeHtml(perfil.nome)}</span>
+        <button class="secundario mini" onclick="logout()">Sair</button>
+      </div>`;
+    document.body.prepend(bar);
+  }
+  navAdmin(perfil, atual);
+}
+
 function redirecionarPorTipo(tipo) {
   if (tipo === 'admin') window.location.href = '/admin.html';
   else if (tipo === 'porteiro') window.location.href = '/porteiro.html';

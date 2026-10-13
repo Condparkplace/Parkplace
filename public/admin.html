@@ -129,6 +129,7 @@
     (async () => {
       perfil = await protegerPagina('admin');
       if (!perfil) return;
+      navAdmin(perfil, 'admin');
       document.getElementById('nome-usuario').textContent = perfil.nome;
       carregarResumo();
       carregarUsuarios();
@@ -279,42 +280,67 @@
           alvo.innerHTML = '<p class="vazio">Nenhum usuario cadastrado.</p>';
           return;
         }
-        // Pendentes de aprovacao aparecem primeiro.
+        
         const pendente = (u) => u.tipo === 'morador' && u.aprovado === false;
-        usuarios.sort((a, b) => pendente(b) - pendente(a));
-        const qtdPendentes = usuarios.filter(pendente).length;
+        const pendentes = usuarios.filter(pendente);
+        const aprovados = usuarios.filter(u => !pendente(u));
 
-        alvo.innerHTML = `
-          ${qtdPendentes ? `<div class="msg" style="background:#fef3cd; color:var(--amarelo); margin:0 0 12px;">&#9203; ${qtdPendentes} morador(es) aguardando aprovacao.</div>` : ''}
-          <table>
-            <thead>
-              <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
-            </thead>
-            <tbody>
-              ${usuarios.map((u) => {
-                const local = u.bloco || '-';
-                const isPend = pendente(u);
-                const status = isPend
-                  ? '<span class="badge pendente">Pendente</span>'
-                  : u.ativo ? '<span class="badge entrada">Ativo</span>' : '<span class="badge cancelada">Inativo</span>';
-                const btnStatus = isPend
-                  ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
-                  : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
-                return `
-                  <tr${isPend ? ' style="background:#fffbea;"' : ''}>
-                    <td>${escapeHtml(u.nome)}${isPend && u.telefone ? `<div class="text-muted" style="font-size:12px;">${escapeHtml(u.telefone)}</div>` : ''}</td>
-                    <td><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
-                    <td>${escapeHtml(local)}</td>
-                    <td>${status}</td>
-                    <td class="row-inline">
-                      <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>
-                      ${btnStatus}
-                      <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
-                    </td>
-                  </tr>`;
-              }).join('')}
-            </tbody>
-          </table>`;
+        const renderLinha = (u) => {
+          const local = u.bloco || '-';
+          const isPend = pendente(u);
+          const status = isPend
+            ? '<span class="badge pendente">Pendente</span>'
+            : u.ativo ? '<span class="badge entrada">Ativo</span>' : '<span class="badge cancelada">Inativo</span>';
+          const btnStatus = isPend
+            ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
+            : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
+          return `
+            <tr${isPend ? ' style="background:#fffbea;"' : ''}>
+              <td>${escapeHtml(u.nome)}${isPend && u.telefone ? `<div class="text-muted" style="font-size:12px;">${escapeHtml(u.telefone)}</div>` : ''}</td>
+              <td><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
+              <td>${escapeHtml(local)}</td>
+              <td>${status}</td>
+              <td class="row-inline">
+                <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>
+                ${btnStatus}
+                <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
+              </td>
+            </tr>`;
+        };
+
+        let html = '';
+        
+        if (pendentes.length > 0) {
+          html += `
+            <div style="margin-bottom: 24px;">
+              <h3 style="color:var(--amarelo); margin-bottom:12px; font-size:16px;">&#9203; Aguardando Aprovação (${pendentes.length})</h3>
+              <table>
+                <thead>
+                  <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                  ${pendentes.map(renderLinha).join('')}
+                </tbody>
+              </table>
+            </div>`;
+        }
+
+        if (aprovados.length > 0) {
+          html += `
+            <div>
+              <h3 style="color:var(--verde); margin-bottom:12px; font-size:16px;">&#10004; Já Aprovados (${aprovados.length})</h3>
+              <table>
+                <thead>
+                  <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
+                </thead>
+                <tbody>
+                  ${aprovados.map(renderLinha).join('')}
+                </tbody>
+              </table>
+            </div>`;
+        }
+
+        alvo.innerHTML = html;
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }

@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
+
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portaria - Park Place</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
+
 <body>
   <div class="topbar">
     <div class="brand">
@@ -21,19 +23,31 @@
     <div class="tabs">
       <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
       <button data-tab="presentes" onclick="trocarAba('presentes')">No condominio</button>
+      <button data-tab="encomendas" onclick="trocarAba('encomendas')">Retirada Encomendas</button>
       <button data-tab="historico" onclick="trocarAba('historico')">Historico</button>
     </div>
 
     <!-- Registrar entrada (unificada com busca) -->
     <section id="tab-entrada" class="card">
-      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
         <h2 style="margin:0;">Registrar entrada</h2>
-        <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantao: <strong id="porteiro-plantao"></strong></span>
+        <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantao: <strong
+            id="porteiro-plantao"></strong></span>
+      </div>
+
+      <!-- Botoes de acao principais -->
+      <div class="row-inline" style="margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
+        <button type="button" style="background-color: var(--verde); color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;" onclick="document.getElementById('area-busca-cpf').classList.toggle('hidden')">Visita / Prestadores</button>
+        <button type="button" style="background-color: #ea1d2c; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;" onclick="abrirModalIfood()">iFood</button>
+        <button type="button" style="background-color: #2b6cb0; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;" onclick="abrirModalEncomenda()">Recebimento de Encomenda</button>
+        <button type="button" style="background-color: #d53f8c; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;" onclick="trocarAba('encomendas')">Retirada Encomenda</button>
       </div>
 
       <!-- Busca rapida por documento -->
-      <div style="background:var(--verde-claro); border-radius:8px; padding:14px; margin:0 0 18px;">
-        <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automatico se ja tiver cadastro)</label>
+      <div id="area-busca-cpf" class="hidden" style="background:var(--verde-claro); border-radius:8px; padding:14px; margin:0 0 18px;">
+        <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automatico se ja tiver
+          cadastro)</label>
         <div class="row-inline" style="align-items:center;">
           <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" style="flex:1; min-width:200px;" />
           <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
@@ -49,12 +63,12 @@
             <input type="text" id="nome_pessoa" required />
           </div>
           <div>
-            <label for="tipo">Tipo</label>
-            <select id="tipo">
+            <label for="tipo">Tipo *</label>
+            <select id="tipo" required onchange="toggleEndereco()">
+              <option value="" disabled selected>Selecionar</option>
               <option value="Visitante">Visitante</option>
               <option value="Prestador">Prestador de servico</option>
               <option value="Entregador">Entregador</option>
-              <option value="Outro">Outro</option>
             </select>
           </div>
           <div>
@@ -66,69 +80,73 @@
             <input type="text" id="veiculo_placa" />
           </div>
           <div>
-            <label for="destino_bloco">Lote de destino</label>
-            <select id="destino_bloco">
-              <option value="">Selecione o Lote</option>
-              <option value="Lote 01">Lote 01</option>
-              <option value="Lote 02">Lote 02</option>
-              <option value="Lote 03">Lote 03</option>
-              <option value="Lote 04">Lote 04</option>
-              <option value="Lote 05">Lote 05</option>
-              <option value="Lote 06">Lote 06</option>
-              <option value="Lote 07">Lote 07</option>
-              <option value="Lote 08">Lote 08</option>
-              <option value="Lote 09">Lote 09</option>
-              <option value="Lote 10">Lote 10</option>
-              <option value="Lote 11">Lote 11</option>
-              <option value="Lote 12">Lote 12</option>
-              <option value="Lote 13">Lote 13</option>
-              <option value="Lote 14">Lote 14</option>
-              <option value="Lote 15">Lote 15</option>
-              <option value="Lote 16">Lote 16</option>
-              <option value="Lote 17">Lote 17</option>
-              <option value="Lote 18">Lote 18</option>
-              <option value="Lote 19">Lote 19</option>
-              <option value="Lote 20">Lote 20</option>
-              <option value="Lote 21">Lote 21</option>
-              <option value="Lote 22">Lote 22</option>
-              <option value="Lote 23">Lote 23</option>
-              <option value="Lote 24">Lote 24</option>
-              <option value="Lote 25">Lote 25</option>
-              <option value="Lote 26">Lote 26</option>
-              <option value="Lote 27">Lote 27</option>
-              <option value="Lote 28">Lote 28</option>
-            </select>
+            <label for="destino_bloco">Lote de destino *</label>
+            <input type="text" id="destino_bloco" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..."
+              autocomplete="off" required />
+            <datalist id="lotes-list">
+              <option value="Lote 01"></option>
+              <option value="Lote 02"></option>
+              <option value="Lote 03"></option>
+              <option value="Lote 04"></option>
+              <option value="Lote 05"></option>
+              <option value="Lote 06"></option>
+              <option value="Lote 07"></option>
+              <option value="Lote 08"></option>
+              <option value="Lote 09"></option>
+              <option value="Lote 10"></option>
+              <option value="Lote 11"></option>
+              <option value="Lote 12"></option>
+              <option value="Lote 13"></option>
+              <option value="Lote 14"></option>
+              <option value="Lote 15"></option>
+              <option value="Lote 16"></option>
+              <option value="Lote 17"></option>
+              <option value="Lote 18"></option>
+              <option value="Lote 19"></option>
+              <option value="Lote 20"></option>
+              <option value="Lote 21"></option>
+              <option value="Lote 22"></option>
+              <option value="Lote 23"></option>
+              <option value="Lote 24"></option>
+              <option value="Lote 25"></option>
+              <option value="Lote 26"></option>
+              <option value="Lote 27"></option>
+              <option value="Lote 28"></option>
+            </datalist>
           </div>
         </div>
 
         <!-- Endereco do visitante (busca por CEP) -->
-        <h3 style="margin:18px 0 4px;">Endereco do visitante</h3>
-        <div class="grid grid-2">
-          <div>
-            <label for="cep">CEP</label>
-            <div class="row-inline" style="align-items:center;">
-              <input type="text" id="cep" placeholder="00000-000" maxlength="9" style="flex:1; min-width:120px;" />
-              <button type="button" class="mini" id="btn-buscar-cep" onclick="buscarPorCep()">Buscar CEP</button>
+        <div id="area-endereco" class="hidden">
+          <h3 style="margin:18px 0 4px;">Endereco do visitante</h3>
+          <div class="grid grid-2">
+            <div>
+              <label for="cep">CEP</label>
+              <div class="row-inline" style="align-items:center;">
+                <input type="text" id="cep" placeholder="00000-000" maxlength="9" style="flex:1; min-width:120px;" />
+                <button type="button" class="mini" id="btn-buscar-cep" onclick="buscarPorCep()">Buscar CEP</button>
+              </div>
+              <span id="msg-cep" class="text-muted"></span>
             </div>
-            <span id="msg-cep" class="text-muted"></span>
-          </div>
-          <div>
-            <label for="end_numero">Numero</label>
-            <input type="text" id="end_numero" placeholder="Ex: 123" />
-          </div>
-          <div>
-            <label for="end_logradouro">Logradouro</label>
-            <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
-          </div>
-          <div>
-            <label for="end_bairro">Bairro</label>
-            <input type="text" id="end_bairro" />
-          </div>
-          <div>
-            <label for="end_cidade">Cidade / UF</label>
-            <div class="row-inline">
-              <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
-              <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+            <div>
+              <label for="end_numero">Numero</label>
+              <input type="text" id="end_numero" placeholder="Ex: 123" />
+            </div>
+            <div>
+              <label for="end_logradouro">Logradouro</label>
+              <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
+            </div>
+            <div>
+              <label for="end_bairro">Bairro</label>
+              <input type="text" id="end_bairro" />
+            </div>
+            <div>
+              <label for="end_cidade">Cidade / UF</label>
+              <div class="row-inline">
+                <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
+                <input type="text" id="end_uf" placeholder="UF" maxlength="2"
+                  style="flex:1; min-width:56px; text-transform:uppercase;" />
+              </div>
             </div>
           </div>
         </div>
@@ -143,20 +161,35 @@
       <!-- Lista de visitas previstas (sempre visivel) -->
       <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
         <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
-        <div id="lista-previstas"><p class="vazio">Carregando...</p></div>
+        <div style="margin-bottom:12px;">
+          <input type="text" id="busca-morador-previstas" placeholder="Buscar por nome do morador..." oninput="carregarPrevistas(null, true)" style="max-width:300px; width:100%;" />
+        </div>
+        <div id="lista-previstas">
+          <p class="vazio">Carregando...</p>
+        </div>
       </div>
     </section>
 
     <!-- Presentes -->
     <section id="tab-presentes" class="card hidden">
       <h2>Pessoas atualmente no condominio</h2>
-      <div id="lista-presentes"><p class="vazio">Carregando...</p></div>
+      <div id="lista-presentes">
+        <p class="vazio">Carregando...</p>
+      </div>
+    </section>
+
+    <!-- Retirada Encomendas -->
+    <section id="tab-encomendas" class="card hidden">
+      <h2>Encomendas Pendentes de Retirada</h2>
+      <div id="lista-encomendas">
+        <p class="vazio">Carregando...</p>
+      </div>
     </section>
 
     <!-- Historico -->
     <section id="tab-historico" class="card hidden">
       <h2>Historico de acessos</h2>
-      <div class="row-inline" style="margin-bottom:14px;">
+      <div class="row-inline" style="margin-bottom:14px; flex-wrap: wrap;">
         <div>
           <label for="de">De</label>
           <input type="date" id="de" />
@@ -165,11 +198,22 @@
           <label for="ate">Ate</label>
           <input type="date" id="ate" />
         </div>
-        <div style="display:flex; align-items:flex-end;">
-          <button class="mini" onclick="carregarHistorico()">Filtrar</button>
+        <div>
+          <label for="busca-cpf-historico">Documento (CPF)</label>
+          <input type="text" id="busca-cpf-historico" placeholder="Somente números" />
+        </div>
+        <div>
+          <label for="busca-lote-historico">Lote</label>
+          <input type="text" id="busca-lote-historico" placeholder="Ex: 12" style="max-width: 120px;" />
+        </div>
+        <div style="display:flex; align-items:flex-end; gap: 8px;">
+          <button onclick="carregarHistorico()">Filtrar</button>
+          <button id="btn-exportar" class="hidden" style="background-color: #2b6cb0;" onclick="exportarExcel()">Excel</button>
         </div>
       </div>
-      <div id="lista-historico"><p class="vazio">Carregando...</p></div>
+      <div id="lista-historico">
+        <p class="vazio">Carregando...</p>
+      </div>
     </section>
   </div>
 
@@ -180,8 +224,12 @@
     (async () => {
       perfil = await protegerPagina('porteiro');
       if (!perfil) return;
+      navAdmin(perfil, 'porteiro');
       document.getElementById('nome-usuario').textContent = perfil.nome;
       document.getElementById('porteiro-plantao').textContent = perfil.nome;
+      if (perfil.tipo === 'admin') {
+        document.getElementById('btn-exportar').classList.remove('hidden');
+      }
       document.getElementById('busca-doc').focus();
       carregarPrevistas();
     })();
@@ -190,17 +238,28 @@
       document.querySelectorAll('.tabs button').forEach((b) =>
         b.classList.toggle('ativo', b.dataset.tab === aba)
       );
-      ['entrada', 'presentes', 'historico'].forEach((t) =>
+      ['entrada', 'presentes', 'encomendas', 'historico'].forEach((t) =>
         document.getElementById('tab-' + t).classList.toggle('hidden', t !== aba)
       );
       if (aba === 'entrada') { document.getElementById('busca-doc').focus(); carregarPrevistas(); }
       if (aba === 'presentes') carregarPresentes();
+      if (aba === 'encomendas') carregarEncomendas();
       if (aba === 'historico') carregarHistorico();
     }
 
     // Exibe o formulario de entrada (chamado apos buscar ou escolher um aviso).
     function mostrarFormEntrada() {
       document.getElementById('form-entrada').classList.remove('hidden');
+    }
+
+    function toggleEndereco() {
+      const tipo = document.getElementById('tipo').value;
+      const areaEndereco = document.getElementById('area-endereco');
+      if (tipo === 'Prestador') {
+        areaEndereco.classList.remove('hidden');
+      } else {
+        areaEndereco.classList.add('hidden');
+      }
     }
 
     // ---------- Visitas previstas ----------
@@ -216,25 +275,29 @@
         && d.getDate() === h.getDate();
     }
 
-    // Renderiza a lista. Se filtroCpf for informado, mostra so a linha daquele CPF.
-    async function carregarPrevistas(filtroCpf) {
+    // Renderiza a lista. Se docEmDestaque for informado, destaca a linha dele.
+    async function carregarPrevistas(docEmDestaque = null, pularFetch = false) {
       const alvo = document.getElementById('lista-previstas');
       try {
-        const { avisos } = await api('/api/portaria/avisos');
-        avisosHoje = (avisos || []).filter((a) => ehHoje(a.data_prevista));
+        if (!pularFetch) {
+          const { avisos } = await api('/api/portaria/avisos');
+          avisosHoje = (avisos || []).filter((a) => ehHoje(a.data_prevista));
+        }
 
         let lista = avisosHoje;
-        if (filtroCpf) {
-          const alvoCpf = filtroCpf.replace(/\D/g, '');
-          lista = avisosHoje.filter(
-            (a) => (a.documento_visitante || '').replace(/\D/g, '') === alvoCpf
-          );
+        
+        let alvoCpf = null;
+        if (docEmDestaque) {
+          alvoCpf = docEmDestaque.replace(/\D/g, '');
+        }
+
+        const buscaMorador = document.getElementById('busca-morador-previstas')?.value.toLowerCase() || '';
+        if (buscaMorador) {
+          lista = lista.filter(a => (a.morador?.nome || '').toLowerCase().includes(buscaMorador));
         }
 
         if (!lista.length) {
-          alvo.innerHTML = filtroCpf
-            ? '<p class="vazio">Nenhuma visita prevista para hoje com este documento.</p>'
-            : '<p class="vazio">Nenhuma visita prevista para hoje.</p>';
+          alvo.innerHTML = '<p class="vazio">Nenhuma visita prevista para hoje.</p>';
           return;
         }
         alvo.innerHTML = `
@@ -244,18 +307,23 @@
             </thead>
             <tbody>
               ${lista.map((a) => {
-                const m = a.morador || {};
-                const destino = m.bloco || '';
-                
-                let btnStyle = '';
-                if (a.nome_visitante === 'Entregador iFood') {
-                  btnStyle = 'background-color: #ea1d2c; color: white;';
-                } else if (a.tipo === 'Prestador') {
-                  btnStyle = 'background-color: #2b6cb0; color: white;';
-                }
+          const m = a.morador || {};
+          const destino = m.bloco || '';
 
-                return `
-                  <tr>
+          let btnStyle = '';
+          if (a.nome_visitante === 'Entregador iFood') {
+            btnStyle = 'background-color: #ea1d2c; color: white;';
+          } else if (a.tipo === 'Prestador') {
+            btnStyle = 'background-color: #2b6cb0; color: white;';
+          }
+
+          let trStyle = '';
+          if (alvoCpf && (a.documento_visitante || '').replace(/\D/g, '') === alvoCpf) {
+            trStyle = 'background-color: #e6f7ff;';
+          }
+
+          return `
+                  <tr style="${trStyle}">
                     <td>${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
                     <td>${escapeHtml(a.tipo)}</td>
                     <td>${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + escapeHtml(m.telefone) : ''}</span></td>
@@ -268,18 +336,18 @@
                       </div>
                     </td>
                   </tr>`;
-              }).join('')}
+        }).join('')}
             </tbody>
-          </table>
-          ${filtroCpf ? '<p class="text-muted" style="margin-top:10px;">Mostrando so a visita prevista para este documento. <a href="#" onclick="limparFiltroPrevistas(event)">Ver todas</a></p>' : ''}`;
+          </table>`;
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
     }
 
-    // Remove o filtro por CPF da lista de previstas.
+    // Limpa a busca rapida de previstas
     function limparFiltroPrevistas(ev) {
       if (ev) ev.preventDefault();
+      document.getElementById('busca-morador-previstas').value = '';
       carregarPrevistas();
     }
 
@@ -301,32 +369,40 @@
           }),
         });
         carregarPrevistas();
-        alert('Entrada rápida registrada com sucesso por ' + perfil.nome + '!');
+        trocarAba('presentes');
       } catch (err) {
         alert('Erro: ' + err.message);
       }
     }
 
-    function registrarDeAviso(aviso) {
+    async function registrarDeAviso(aviso) {
       if (aviso.nome_visitante === 'Entregador iFood') {
         registrarEntradaRapida(aviso);
         return;
       }
+
       const m = aviso.morador || {};
-      document.getElementById('nome_pessoa').value = aviso.nome_visitante || '';
-      document.getElementById('tipo').value = aviso.tipo || 'Visitante';
-      document.getElementById('documento').value = aviso.documento_visitante || '';
-      document.getElementById('veiculo_placa').value = aviso.veiculo_placa || '';
-      document.getElementById('destino_bloco').value = m.bloco || '';
-      if (aviso.cep_visitante) document.getElementById('cep').value = aviso.cep_visitante;
-      if (aviso.endereco_visitante) {
-        document.getElementById('msg-cep').textContent = 'Endereco informado pelo morador: ' + aviso.endereco_visitante;
-        document.getElementById('msg-cep').style.color = 'var(--verde-escuro)';
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            aviso_id: aviso.id,
+            nome_pessoa: aviso.nome_visitante,
+            tipo: aviso.tipo || 'Visitante',
+            documento: aviso.documento_visitante || '',
+            veiculo_placa: aviso.veiculo_placa || '',
+            destino_bloco: m.bloco || '',
+            endereco_visitante: aviso.endereco_visitante || null,
+            cep_visitante: aviso.cep_visitante || null,
+            observacao: aviso.observacao || ''
+          }),
+        });
+
+        carregarPrevistas();
+        trocarAba('presentes');
+      } catch (err) {
+        alert('Erro ao registrar entrada: ' + err.message);
       }
-      document.getElementById('aviso_id').value = aviso.id || '';
-      // Revela o formulario preenchido.
-      mostrarFormEntrada();
-      document.getElementById('form-entrada').scrollIntoView({ behavior: 'smooth' });
     }
 
     // Marca a visita como "nao compareceu" e manda direto para o historico.
@@ -363,10 +439,10 @@
           (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
         );
         if (avisoHoje) {
-          // Mostra so a linha deste documento e NAO abre o formulario.
+          // Destaca a linha deste documento e NAO abre o formulario.
           formEntrada.classList.add('hidden');
-          await carregarPrevistas(doc);
-          msg.textContent = 'Visita prevista para hoje encontrada na lista abaixo. Use "Registrar entrada" na linha.';
+          await carregarPrevistas(doc, true);
+          msg.textContent = 'Visita prevista para hoje encontrada na lista abaixo. Use "Registrar entrada" na linha correspondente.';
           msg.className = 'msg ok';
           document.getElementById('painel-previstas').scrollIntoView({ behavior: 'smooth' });
           return;
@@ -390,10 +466,13 @@
         mostrarFormEntrada();
         const p = r.pessoa;
         document.getElementById('nome_pessoa').value = p.nome_pessoa || '';
-        document.getElementById('tipo').value = p.tipo || 'Visitante';
+        const selectTipo = document.getElementById('tipo');
+        selectTipo.value = p.tipo || '';
+        if (!selectTipo.value) selectTipo.value = 'Visitante';
+        toggleEndereco();
         document.getElementById('documento').value = p.documento || doc;
         document.getElementById('veiculo_placa').value = p.veiculo_placa || '';
-        document.getElementById('destino_bloco').value = p.destino_bloco || '';
+        document.getElementById('destino_bloco').value = ''; // Sempre vazio para nova visita
         if (p.cep_visitante) document.getElementById('cep').value = p.cep_visitante;
         if (p.endereco_visitante) {
           document.getElementById('msg-cep').textContent = 'Endereco do cadastro anterior: ' + p.endereco_visitante;
@@ -413,6 +492,8 @@
 
     function limparFormEntrada() {
       formEntrada.reset();
+      document.getElementById('tipo').value = '';
+      toggleEndereco();
       document.getElementById('aviso_id').value = '';
       document.getElementById('busca-doc').value = '';
       document.getElementById('msg-busca').classList.add('hidden');
@@ -552,17 +633,22 @@
             </thead>
             <tbody>
               ${presentes.map((r) => {
-                const destino = r.destino_bloco || '-';
-                return `
+          const destino = r.destino_bloco || '-';
+          return `
                   <tr>
                     <td>${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
                     <td>${escapeHtml(r.tipo)}</td>
                     <td>${escapeHtml(destino || '-')}</td>
                     <td>${formatarData(r.entrada)}</td>
                     <td>${escapeHtml(r.porteiro_entrada || '-')}</td>
-                    <td><button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saida</button></td>
+                    <td>
+                      <div class="row-inline" style="justify-content: flex-end;">
+                        <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
+                        <button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saida</button>
+                      </div>
+                    </td>
                   </tr>`;
-              }).join('')}
+        }).join('')}
             </tbody>
           </table>`;
       } catch (err) {
@@ -573,6 +659,29 @@
     async function registrarSaida(id) {
       try {
         await api(`/api/portaria/saida/${id}`, { method: 'POST' });
+        trocarAba('entrada');
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function cancelarEntrada(id) {
+      document.getElementById('cancelar-registro-id').value = id;
+      document.getElementById('motivo-cancelamento').value = '';
+      document.getElementById('modal-cancelar').classList.remove('hidden');
+      document.getElementById('motivo-cancelamento').focus();
+    }
+
+    async function confirmarCancelarEntrada() {
+      const id = document.getElementById('cancelar-registro-id').value;
+      const motivo = document.getElementById('motivo-cancelamento').value.trim();
+      
+      try {
+        await api(`/api/portaria/entrada/${id}/cancelar`, {
+          method: 'POST',
+          body: JSON.stringify({ motivo })
+        });
+        document.getElementById('modal-cancelar').classList.add('hidden');
         carregarPresentes();
       } catch (err) {
         alert(err.message);
@@ -580,15 +689,23 @@
     }
 
     // ---------- Historico ----------
+    let registrosHistorico = [];
+
     async function carregarHistorico() {
       const alvo = document.getElementById('lista-historico');
       const de = document.getElementById('de').value;
       const ate = document.getElementById('ate').value;
+      const cpf = document.getElementById('busca-cpf-historico').value.replace(/\D/g, '');
+      const lote = document.getElementById('busca-lote-historico').value.trim();
+
       const params = new URLSearchParams();
       if (de) params.set('de', new Date(de + 'T00:00:00').toISOString());
       if (ate) params.set('ate', new Date(ate + 'T23:59:59').toISOString());
+      if (cpf) params.set('cpf', cpf);
+      if (lote) params.set('lote', lote);
       try {
         const { registros } = await api('/api/portaria/historico?' + params.toString());
+        registrosHistorico = registros;
         if (!registros.length) {
           alvo.innerHTML = '<p class="vazio">Nenhum registro no periodo.</p>';
           return;
@@ -596,24 +713,32 @@
         alvo.innerHTML = `
           <table>
             <thead>
-              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saida</th><th>Porteiro</th></tr>
+              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saida</th><th>Porteiro</th><th>Observacao</th></tr>
             </thead>
             <tbody>
               ${registros.map((r) => {
-                const destino = r.destino_bloco || '-';
-                const naoVeio = r.status === 'Nao compareceu';
-                let saidaCol;
-                if (naoVeio) saidaCol = '<span class="badge cancelada">Nao compareceu</span>';
-                else if (r.saida) saidaCol = formatarData(r.saida);
-                else saidaCol = '<span class="badge entrada">No local</span>';
-                let porteiroCol;
-                if (naoVeio) {
-                  porteiroCol = `<span class="text-muted">Nao veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
-                } else {
-                  porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
-                  if (r.saida) porteiroCol += `<br><span class="text-muted">Saida:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
-                }
-                return `
+          const destino = r.destino_bloco || '-';
+          const naoVeio = r.status === 'Nao compareceu';
+          let observacaoText = r.observacao || '';
+          
+          let saidaCol;
+          if (observacaoText.startsWith('[Cancelado]')) {
+            saidaCol = '<span class="badge cancelada">Cancelado</span>';
+          } else if (naoVeio) {
+            saidaCol = '<span class="badge cancelada">Nao compareceu</span>';
+          } else if (r.saida) {
+            saidaCol = formatarData(r.saida);
+          } else {
+            saidaCol = '<span class="badge entrada">No local</span>';
+          }
+          let porteiroCol;
+          if (naoVeio) {
+            porteiroCol = `<span class="text-muted">Nao veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
+          } else {
+            porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
+            if (r.saida) porteiroCol += `<br><span class="text-muted">Saida:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
+          }
+          return `
                   <tr>
                     <td>${escapeHtml(r.nome_pessoa)}</td>
                     <td>${escapeHtml(r.tipo)}</td>
@@ -621,14 +746,397 @@
                     <td>${naoVeio ? '<span class="text-muted">previsto ' + formatarData(r.entrada) + '</span>' : formatarData(r.entrada)}</td>
                     <td>${saidaCol}</td>
                     <td style="font-size:13px;">${porteiroCol}</td>
+                    <td style="font-size:13px; color:var(--vermelho);">${escapeHtml(observacaoText)}</td>
                   </tr>`;
-              }).join('')}
+        }).join('')}
             </tbody>
           </table>`;
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
     }
+
+    function exportarExcel() {
+      if (!registrosHistorico.length) {
+        alert("Nenhum registro para exportar.");
+        return;
+      }
+      // Adiciona BOM para o Excel ler acentos corretamente
+      let csvContent = "\uFEFFNome;Tipo;Destino;Entrada;Saida;Status;Porteiro_Acao;Observacao\n";
+      
+      registrosHistorico.forEach(r => {
+        const nome = r.nome_pessoa ? r.nome_pessoa.replace(/;/g, " ") : "";
+        const tipo = r.tipo || "";
+        const destino = r.destino_bloco || "";
+        const entrada = r.entrada ? formatarData(r.entrada) : "";
+        const saida = r.saida ? formatarData(r.saida) : "";
+        const naoVeio = r.status === 'Nao compareceu';
+        const obs = r.observacao ? r.observacao.replace(/;/g, ",").replace(/\n/g, " ") : "";
+        
+        let status = "";
+        if (obs.startsWith('[Cancelado]')) status = "Cancelado";
+        else if (naoVeio) status = "Nao compareceu";
+        else if (r.saida) status = "Finalizada";
+        else status = "No local";
+        
+        let porteiroAcao = "";
+        if (naoVeio) porteiroAcao = "Nao veio: " + (r.porteiro_nao_veio || "-");
+        else porteiroAcao = "Entrada: " + (r.porteiro_entrada || "-") + (r.saida ? " | Saida: " + (r.porteiro_saida || "-") : "");
+
+        csvContent += `${nome};${tipo};${destino};${entrada};${saida};${status};${porteiroAcao};${obs}\n`;
+      });
+      
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.setAttribute("href", url);
+      link.setAttribute("download", "historico_acessos.csv");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+  </script>
+
+  <!-- Modal Cancelar -->
+  <div id="modal-cancelar" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15);">
+      <h3 style="margin-top:0;">Motivo do Cancelamento</h3>
+      <label for="motivo-cancelamento">Informe o motivo:</label>
+      <input type="text" id="motivo-cancelamento" placeholder="Ex: Clicado por engano" />
+      <input type="hidden" id="cancelar-registro-id" />
+      <div class="row-inline" style="margin-top:16px; justify-content:flex-end;">
+        <button type="button" class="secundario" onclick="document.getElementById('modal-cancelar').classList.add('hidden')">Voltar</button>
+        <button type="button" class="perigo" onclick="confirmarCancelarEntrada()">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal iFood -->
+  <div id="modal-ifood" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:80vh; overflow-y:auto;">
+      <h3 style="margin-top:0;">Entregador iFood</h3>
+      <p class="text-muted" style="margin-top:0; margin-bottom:14px; font-size:14px;">Selecione o lote para ver os moradores e registrar a entrega.</p>
+      
+      <div>
+        <label for="ifood-lote">Lote de destino</label>
+        <input type="text" id="ifood-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off" onchange="buscarMoradoresIfood()" style="width:100%;" />
+        <datalist id="ifood-lotes-list">
+          <option value="Lote 01"></option>
+          <option value="Lote 02"></option>
+          <option value="Lote 03"></option>
+          <option value="Lote 04"></option>
+          <option value="Lote 05"></option>
+          <option value="Lote 06"></option>
+          <option value="Lote 07"></option>
+          <option value="Lote 08"></option>
+          <option value="Lote 09"></option>
+          <option value="Lote 10"></option>
+          <option value="Lote 11"></option>
+          <option value="Lote 12"></option>
+          <option value="Lote 13"></option>
+          <option value="Lote 14"></option>
+          <option value="Lote 15"></option>
+          <option value="Lote 16"></option>
+          <option value="Lote 17"></option>
+          <option value="Lote 18"></option>
+          <option value="Lote 19"></option>
+          <option value="Lote 20"></option>
+          <option value="Lote 21"></option>
+          <option value="Lote 22"></option>
+          <option value="Lote 23"></option>
+          <option value="Lote 24"></option>
+          <option value="Lote 25"></option>
+          <option value="Lote 26"></option>
+          <option value="Lote 27"></option>
+          <option value="Lote 28"></option>
+        </datalist>
+      </div>
+
+      <div id="ifood-moradores-container" class="hidden" style="margin-top: 14px;">
+        <label>Moradores do lote</label>
+        <div id="ifood-lista-moradores" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <div id="msg-ifood" class="msg hidden" style="margin-top: 10px;"></div>
+
+      <div class="row-inline" style="justify-content: flex-end; margin-top: 20px;">
+        <button class="secundario" onclick="fecharModalIfood()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Encomenda -->
+  <div id="modal-encomenda" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:80vh; overflow-y:auto;">
+      <h3 style="margin-top:0;">Recebimento de Encomenda</h3>
+      <p class="text-muted" style="margin-top:0; margin-bottom:14px; font-size:14px;">Informe a quantidade, selecione o lote e clique no morador correspondente.</p>
+      
+      <div>
+        <label for="encomenda-quantidade">Quantidade de pacotes/volumes</label>
+        <input type="number" id="encomenda-quantidade" min="1" value="1" style="width:100%;" />
+      </div>
+
+      <div style="margin-top: 14px;">
+        <label for="encomenda-lote">Lote de destino</label>
+        <input type="text" id="encomenda-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off" onchange="buscarMoradoresEncomenda()" style="width:100%;" />
+      </div>
+
+      <div id="encomenda-moradores-container" class="hidden" style="margin-top: 14px;">
+        <label>Selecione o Morador</label>
+        <div id="encomenda-lista-moradores" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+
+      <div id="msg-encomenda" class="msg hidden" style="margin-top: 10px;"></div>
+
+      <div class="row-inline" style="justify-content: flex-end; margin-top: 20px;">
+        <button class="secundario" onclick="fecharModalEncomenda()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+  <!-- Modal Retirada Encomenda -->
+  <div id="modal-retirada-encomenda" class="hidden" style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:80vh; overflow-y:auto;">
+      <h3 style="margin-top:0;">Quem está retirando?</h3>
+      <p class="text-muted" style="margin-top:0; margin-bottom:14px; font-size:14px;">Selecione abaixo o morador que veio buscar a encomenda.</p>
+      
+      <div id="retirada-lista-moradores" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <div id="msg-retirada-encomenda" class="msg hidden" style="margin-top: 10px;"></div>
+
+      <div class="row-inline" style="justify-content: flex-end; margin-top: 20px;">
+        <button class="secundario" onclick="fecharModalRetiradaEncomenda()">Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    function abrirModalEncomenda() {
+      document.getElementById('modal-encomenda').classList.remove('hidden');
+      document.getElementById('encomenda-lote').value = '';
+      document.getElementById('encomenda-quantidade').value = '1';
+      document.getElementById('encomenda-moradores-container').classList.add('hidden');
+      document.getElementById('msg-encomenda').classList.add('hidden');
+    }
+
+    function fecharModalEncomenda() {
+      document.getElementById('modal-encomenda').classList.add('hidden');
+    }
+
+    async function buscarMoradoresEncomenda() {
+      const lote = document.getElementById('encomenda-lote').value.trim();
+      const cont = document.getElementById('encomenda-moradores-container');
+      const lista = document.getElementById('encomenda-lista-moradores');
+      const msg = document.getElementById('msg-encomenda');
+
+      msg.classList.add('hidden');
+      if (!lote) {
+        cont.classList.add('hidden');
+        return;
+      }
+
+      lista.innerHTML = '<p class="text-muted">Carregando...</p>';
+      cont.classList.remove('hidden');
+
+      try {
+        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        if (!moradores || moradores.length === 0) {
+          lista.innerHTML = '<p class="vazio">Nenhum morador encontrado para este lote.</p>';
+          return;
+        }
+
+        lista.innerHTML = moradores.map(m => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px; border-radius:6px; border:1px solid var(--cinza-borda);">
+            <div>
+              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
+              <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
+            </div>
+            <button class="mini" style="background-color: #2b6cb0; color: white;" onclick="registrarEncomenda('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}')">Receber</button>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        lista.innerHTML = '';
+      }
+    }
+
+    async function registrarEncomenda(lote, nomeMorador) {
+      const msg = document.getElementById('msg-encomenda');
+      const qtd = document.getElementById('encomenda-quantidade').value || 1;
+      msg.classList.add('hidden');
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_pessoa: 'Encomenda',
+            tipo: 'Outro',
+            destino_bloco: lote,
+            destino_apto: qtd + ' pacote(s)',
+            observacao: '[ENCOMENDA] Para: ' + nomeMorador
+          }),
+        });
+        fecharModalEncomenda();
+        trocarAba('encomendas');
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+      }
+    }
+
+    // Carrega encomendas pendentes de retirada
+    async function carregarEncomendas() {
+      const alvo = document.getElementById('lista-encomendas');
+      alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const { registros } = await api('/api/portaria/encomendas/pendentes');
+        
+        if (!registros || !registros.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhuma encomenda pendente.</p>';
+          return;
+        }
+
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Lote / Morador</th><th>Qtd Pacotes</th><th>Recebido Em</th><th>Recebido Por</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${registros.map(r => {
+                const morador = (r.observacao || '').replace('[ENCOMENDA] Para: ', '');
+                return `
+                  <tr>
+                    <td><strong>${escapeHtml(r.destino_bloco || '')}</strong><br><span class="text-muted">${escapeHtml(morador)}</span></td>
+                    <td>${escapeHtml(r.destino_apto || '1 pacote(s)')}</td>
+                    <td>${formatarData(r.entrada)}</td>
+                    <td>${escapeHtml(r.porteiro_entrada || '')}</td>
+                    <td>
+                      <div class="row-inline" style="justify-content: flex-end;">
+                        <button class="mini" style="background-color:#d53f8c; color:white;" onclick="abrirModalRetiradaEncomenda(${r.id}, '${escapeHtml(r.destino_bloco || '').replace(/'/g, "\\'")}', '${escapeHtml(r.observacao || '').replace(/'/g, "\\'")}')">Registrar Retirada</button>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join('')}
+            </tbody>
+          </table>
+        `;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function abrirModalRetiradaEncomenda(id, lote, observacaoAtual) {
+      document.getElementById('modal-retirada-encomenda').classList.remove('hidden');
+      const lista = document.getElementById('retirada-lista-moradores');
+      lista.innerHTML = '<p class="text-muted">Carregando moradores do ' + escapeHtml(lote) + '...</p>';
+      
+      try {
+        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        if (!moradores || !moradores.length) {
+          lista.innerHTML = '<p class="vazio">Nenhum morador encontrado para este lote.</p>';
+          return;
+        }
+        lista.innerHTML = moradores.map(m => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px; border-radius:6px; border:1px solid var(--cinza-borda);">
+            <div>
+              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
+            </div>
+            <button class="mini" style="background-color: #d53f8c; color: white;" onclick="confirmarRetiradaEncomenda(${id}, '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(observacaoAtual).replace(/'/g, "\\'")}')">Selecionar</button>
+          </div>
+        `).join('');
+      } catch(err) {
+        lista.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function fecharModalRetiradaEncomenda() {
+      document.getElementById('modal-retirada-encomenda').classList.add('hidden');
+    }
+
+    async function confirmarRetiradaEncomenda(id, retiradoPor, observacaoAtual) {
+      try {
+        await api('/api/portaria/encomendas/' + id + '/retirada', { 
+          method: 'POST',
+          body: JSON.stringify({ retiradoPor, observacaoAtual })
+        });
+        fecharModalRetiradaEncomenda();
+        trocarAba('entrada');
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    function abrirModalIfood() {
+      document.getElementById('modal-ifood').classList.remove('hidden');
+      document.getElementById('ifood-lote').value = '';
+      document.getElementById('ifood-moradores-container').classList.add('hidden');
+      document.getElementById('msg-ifood').classList.add('hidden');
+    }
+
+    function fecharModalIfood() {
+      document.getElementById('modal-ifood').classList.add('hidden');
+    }
+
+    async function buscarMoradoresIfood() {
+      const lote = document.getElementById('ifood-lote').value.trim();
+      const cont = document.getElementById('ifood-moradores-container');
+      const lista = document.getElementById('ifood-lista-moradores');
+      const msg = document.getElementById('msg-ifood');
+
+      msg.classList.add('hidden');
+      if (!lote) {
+        cont.classList.add('hidden');
+        return;
+      }
+
+      lista.innerHTML = '<p class="text-muted">Carregando...</p>';
+      cont.classList.remove('hidden');
+
+      try {
+        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        if (!moradores || moradores.length === 0) {
+          lista.innerHTML = '<p class="vazio">Nenhum morador encontrado para este lote.</p>';
+          return;
+        }
+
+        lista.innerHTML = moradores.map(m => `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px; border-radius:6px; border:1px solid var(--cinza-borda);">
+            <div>
+              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
+              <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
+            </div>
+            <button class="mini" style="background-color: #ea1d2c; color: white;" onclick="registrarIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}')">Selecionar</button>
+          </div>
+        `).join('');
+
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        lista.innerHTML = '';
+      }
+    }
+
+    async function registrarIfood(lote, nomeMorador) {
+      const msg = document.getElementById('msg-ifood');
+      msg.classList.add('hidden');
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_pessoa: 'Entregador iFood',
+            tipo: 'Entregador',
+            destino_bloco: lote,
+            observacao: 'Solicitado por: ' + nomeMorador
+          }),
+        });
+        fecharModalIfood();
+        trocarAba('presentes');
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+      }
+    }
   </script>
 </body>
+
 </html>

@@ -6,16 +6,21 @@ const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
   secure: process.env.NODE_ENV === 'production',
-  maxAge: 1000 * 60 * 60 * 8, // 8 horas
   path: '/',
 };
 
-function setSessionCookie(res, session) {
+function setSessionCookie(res, session, rememberMe = false) {
   const payload = JSON.stringify({
     access_token: session.access_token,
     refresh_token: session.refresh_token,
   });
-  res.cookie(COOKIE_NAME, Buffer.from(payload).toString('base64'), cookieOptions);
+  
+  const options = { ...cookieOptions };
+  if (rememberMe) {
+    options.maxAge = 1000 * 60 * 60 * 24 * 30; // 30 dias
+  }
+  
+  res.cookie(COOKIE_NAME, Buffer.from(payload).toString('base64'), options);
 }
 
 function clearSessionCookie(res) {
