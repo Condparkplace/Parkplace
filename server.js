@@ -31,40 +31,115 @@ app.use(cookieParser());
 // AUTENTICACAO
 // ============================================================
 
-// Login (todos os perfis usam a mesma rota)
+// Login (todos os perfis usam a mesma rota - aceita e-mail OU nome do porteiro/usuario)
 app.post('/api/login', async (req, res) => {
-  const { email, password, rememberMe } = req.body || {};
-  if (!email || !password) {
-    return res.status(400).json({ error: 'Informe e-mail e senha.' });
+  const loginInput = (req.body?.login || req.body?.email || '').trim();
+  const { password, rememberMe } = req.body || {};
+  if (!loginInput || !password) {
+    return res.status(400).json({ error: 'Informe seu login (nome ou e-mail) e a senha.' });
   }
 
-  const { data, error } = await supabaseAnon.auth.signInWithPassword({
-    email,
-    password,
-  });
-  if (error) {
-    return res.status(401).json({ error: 'E-mail ou senha invalidos.' });
+  const normalizar = (s) => (s || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  const termoBusca = normalizar(loginInput);
+
+  let sessaoValida = null;
+  let perfilValido = null;
+
+  // 1. Se parece um e-mail (contem @), tenta autenticar diretamente pelo Supabase Auth
+  if (loginInput.includes('@')) {
+    const { data, error } = await supabaseAnon.auth.signInWithPassword({
+      email: loginInput.toLowerCase(),
+      password,
+    });
+    if (!error && data?.session) {
+      const { data: perfil } = await supabaseAdmin
+        .from('perfis')
+        .select('*')
+        .eq('id', data.user.id)
+        .single();
+
+      if (perfil) {
+        sessaoValida = data.session;
+        perfilValido = perfil;
+      }
+    }
   }
 
-  const { data: perfil, error: perfilErr } = await supabaseAdmin
-    .from('perfis')
-    .select('*')
-    .eq('id', data.user.id)
-    .single();
+  // 2. Se nao era e-mail ou a tentativa direta de e-mail falhou, busca pelo Nome em perfis
+  if (!sessaoValida) {
+    // Busca exata ou compativel em perfis
+    let { data: perfis } = await supabaseAdmin
+      .from('perfis')
+      .select('*')
+      .ilike('nome', loginInput);
 
-  if (perfilErr || !perfil) {
-    return res.status(403).json({ error: 'Perfil nao encontrado.' });
-  }
-  if (perfil.aprovado === false) {
-    return res.status(403).json({ error: 'Seu cadastro ainda esta aguardando aprovacao da administracao.' });
-  }
-  if (!perfil.ativo) {
-    return res.status(403).json({ error: 'Usuario desativado. Procure a administracao.' });
+    if (!perfis || perfis.length === 0) {
+      const { data: todosPerfis } = await supabaseAdmin
+        .from('perfis')
+        .select('*');
+
+      if (todosPerfis && todosPerfis.length > 0) {
+        // Coincidencia exata normalizada (sem acentos)
+        perfis = todosPerfis.filter(p => normalizar(p.nome) === termoBusca);
+
+        // Se ainda nao achou, busca quem comeca com o nome ou contem
+        if (perfis.length === 0) {
+          perfis = todosPerfis.filter(p => {
+            const pNorm = normalizar(p.nome);
+            return pNorm.startsWith(termoBusca) || termoBusca.startsWith(pNorm);
+          });
+        }
+      }
+    }
+
+    if (perfis && perfis.length > 0) {
+      // Prioriza correspondencia exata e perfil porteiro
+      perfis.sort((a, b) => {
+        const aExato = normalizar(a.nome) === termoBusca ? 1 : 0;
+        const bExato = normalizar(b.nome) === termoBusca ? 1 : 0;
+        if (aExato !== bExato) return bExato - aExato;
+        const aPort = a.tipo === 'porteiro' ? 1 : 0;
+        const bPort = b.tipo === 'porteiro' ? 1 : 0;
+        return bPort - aPort;
+      });
+
+      // Testa os candidatos encontrados buscando o email no Auth
+      for (const p of perfis) {
+        try {
+          const { data: authUser, error: authErr } = await supabaseAdmin.auth.admin.getUserById(p.id);
+          if (!authErr && authUser?.user?.email) {
+            const { data: signData, error: signErr } = await supabaseAnon.auth.signInWithPassword({
+              email: authUser.user.email,
+              password,
+            });
+            if (!signErr && signData?.session) {
+              sessaoValida = signData.session;
+              perfilValido = p;
+              break;
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao testar credencial do perfil:', err);
+        }
+      }
+    }
   }
 
-  setSessionCookie(res, data.session, rememberMe);
-  res.json({ perfil });
+  if (!sessaoValida || !perfilValido) {
+    return res.status(401).json({ error: 'Nome/E-mail ou senha inválidos.' });
+  }
+
+  if (perfilValido.aprovado === false) {
+    return res.status(403).json({ error: 'Seu cadastro ainda está aguardando aprovação da administração.' });
+  }
+  if (!perfilValido.ativo) {
+    return res.status(403).json({ error: 'Usuário desativado. Procure a administração.' });
+  }
+
+  setSessionCookie(res, sessaoValida, rememberMe);
+  res.json({ perfil: perfilValido });
 });
+
 
 // Logout
 app.post('/api/logout', (req, res) => {
@@ -79,13 +154,13 @@ const LOTES_VALIDOS = Array.from({ length: 28 }, (_, i) => 'Lote ' + String(i + 
 app.post('/api/public/cadastro', async (req, res) => {
   const { nome, bloco, telefone, email, password } = req.body || {};
   if (!nome?.trim() || !bloco || !telefone?.trim() || !email?.trim() || !password) {
-    return res.status(400).json({ error: 'Preencha todos os campos obrigatorios.' });
+    return res.status(400).json({ error: 'Preencha todos os campos obrigatórios.' });
   }
   if (!LOTES_VALIDOS.includes(bloco)) {
-    return res.status(400).json({ error: 'Lote invalido.' });
+    return res.status(400).json({ error: 'Lote inválido.' });
   }
   if (password.length < 6) {
-    return res.status(400).json({ error: 'A senha deve ter no minimo 6 caracteres.' });
+    return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
   }
 
   const meta = { nome: nome.trim(), tipo: 'morador', bloco, telefone: telefone.trim(), pendente: true };
@@ -334,7 +409,7 @@ app.post('/api/public/avisos', async (req, res) => {
   } = req.body || {};
 
   if (!morador_id || !nome_visitante) {
-    return res.status(400).json({ error: 'Morador e nome do visitante sao obrigatorios.' });
+    return res.status(400).json({ error: 'Morador e nome do visitante são obrigatórios.' });
   }
 
   const { data: morador, error: errMorador } = await supabaseAdmin
@@ -344,7 +419,7 @@ app.post('/api/public/avisos', async (req, res) => {
     .single();
 
   if (errMorador || !morador) {
-    return res.status(400).json({ error: 'Morador nao encontrado.' });
+    return res.status(400).json({ error: 'Morador não encontrado.' });
   }
 
   const { data, error } = await supabaseAdmin
@@ -773,7 +848,7 @@ app.post('/api/portaria/entrada/:id/cancelar', requireAuth, requireRole('porteir
 // Lista moradores de um lote especifico (usado para entregas rapidas como iFood)
 app.get('/api/portaria/moradores', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   let lote = req.query.lote;
-  if (!lote) return res.status(400).json({ error: 'Lote nao informado.' });
+  if (!lote) return res.status(400).json({ error: 'Lote não informado.' });
 
   // Se o porteiro digitou apenas um numero, formata para "Lote XX"
   if (/^\d+$/.test(lote.trim())) {
@@ -808,15 +883,49 @@ app.get('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, re
   res.json({ usuarios: data });
 });
 
-// Cria um novo usuario (porteiro ou morador)
+// Cria um novo usuario (porteiro, morador ou admin)
 app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
-  const { email, password, nome, tipo, bloco, telefone } = req.body || {};
+  let { email, password, nome, tipo, bloco, telefone } = req.body || {};
 
-  if (!email || !password || !nome || !tipo) {
-    return res.status(400).json({ error: 'Preencha e-mail, senha, nome e tipo.' });
+  nome = (nome || '').trim();
+  tipo = (tipo || '').trim();
+  email = (email || '').trim().toLowerCase();
+
+  if (!nome || !tipo || !password) {
+    return res.status(400).json({ error: 'Preencha nome, tipo e senha.' });
   }
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
-    return res.status(400).json({ error: 'Tipo invalido.' });
+    return res.status(400).json({ error: 'Tipo inválido.' });
+  }
+  if (password.length < 6) {
+    return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
+  }
+
+  // Para porteiro, e-mail e opcional (se nao informado, gera e-mail interno transparente)
+  if (tipo === 'porteiro') {
+    // Verifica se ja existe outro porteiro com o mesmo nome para evitar conflitos no login
+    const { data: existente } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome')
+      .eq('tipo', 'porteiro')
+      .ilike('nome', nome);
+
+    if (existente && existente.length > 0) {
+      return res.status(400).json({
+        error: `Ja existe um porteiro cadastrado com o nome "${nome}". Por favor, utilize um sobrenome ou complemento para identifica-lo (ex: ${nome} Silva).`
+      });
+    }
+
+    if (!email) {
+      const slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]/g, '');
+      const sufixo = Math.floor(1000 + Math.random() * 9000);
+      email = `${slug || 'porteiro'}_${sufixo}@porteiro.parkplace.local`;
+    }
+  } else {
+    // Para morador ou admin, e-mail e obrigatorio
+    if (!email) {
+      return res.status(400).json({ error: 'Preencha o e-mail de acesso.' });
+    }
   }
 
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
@@ -826,7 +935,10 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     user_metadata: { nome, tipo, bloco, telefone },
   });
 
-  if (error) return res.status(400).json({ error: error.message });
+  if (error) {
+    const jaExiste = /already|registered|exists/i.test(error.message);
+    return res.status(400).json({ error: jaExiste ? 'Este e-mail/usuario ja esta cadastrado.' : error.message });
+  }
 
   // Garante o perfil mesmo se o trigger nao rodar
   await supabaseAdmin.from('perfis').upsert({
@@ -835,6 +947,8 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     tipo,
     bloco: bloco || null,
     telefone: telefone || null,
+    ativo: true,
+    aprovado: true,
   });
 
   res.status(201).json({ id: data.user.id });
@@ -843,20 +957,44 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 // Atualiza usuario existente
 app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
-  const { nome, tipo, bloco, telefone } = req.body || {};
+  const { nome, tipo, bloco, telefone, password } = req.body || {};
 
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
-    return res.status(400).json({ error: 'Tipo invalido.' });
+    return res.status(400).json({ error: 'Tipo inválido.' });
+  }
+
+  const nomeLimpo = (nome || '').trim();
+
+  // Se for porteiro e alterou o nome, verifica duplicidade com outros porteiros
+  if (tipo === 'porteiro' && nomeLimpo) {
+    const { data: existente } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome')
+      .eq('tipo', 'porteiro')
+      .ilike('nome', nomeLimpo)
+      .neq('id', id);
+
+    if (existente && existente.length > 0) {
+      return res.status(400).json({
+        error: `Ja existe outro porteiro cadastrado com o nome "${nomeLimpo}". Escolha um complemento para diferencia-lo.`
+      });
+    }
   }
 
   // Atualiza metadados no Auth
-  await supabaseAdmin.auth.admin.updateUserById(id, {
-    user_metadata: { nome, tipo, bloco, telefone }
-  });
+  const authUpdates = {
+    user_metadata: { nome: nomeLimpo, tipo, bloco, telefone }
+  };
+  // Se informou nova senha, atualiza tambem
+  if (password && password.trim().length >= 6) {
+    authUpdates.password = password.trim();
+  }
+
+  await supabaseAdmin.auth.admin.updateUserById(id, authUpdates);
 
   const { data, error } = await supabaseAdmin
     .from('perfis')
-    .update({ nome, tipo, bloco: bloco || null, telefone: telefone || null })
+    .update({ nome: nomeLimpo, tipo, bloco: bloco || null, telefone: telefone || null })
     .eq('id', id)
     .select()
     .single();
@@ -896,7 +1034,7 @@ app.post('/api/admin/usuarios/:id/toggle', requireAuth, requireRole('admin'), as
 app.delete('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
   if (id === req.user.id) {
-    return res.status(400).json({ error: 'Voce nao pode remover o proprio usuario.' });
+    return res.status(400).json({ error: 'Você não pode remover o próprio usuário.' });
   }
   const { error } = await supabaseAdmin.auth.admin.deleteUser(id);
   if (error) return res.status(400).json({ error: error.message });

@@ -11,7 +11,7 @@
 <body>
   <div class="topbar">
     <div class="brand">
-      &#127968; Park Place <span class="sub">&middot; Area do Morador</span>
+      &#127968; Park Place <span class="sub">&middot; Área do Morador</span>
     </div>
     <div class="user-area">
       <span id="nome-usuario"></span>
@@ -69,10 +69,10 @@
         </div>
 
         <p class="text-muted" style="margin-top:12px;">
-          Tipo de usuario e e-mail nao podem ser alterados aqui. Fale com a administracao se precisar muda-los.
+          Tipo de usuário e e-mail não podem ser alterados aqui. Fale com a administração se precisar mudá-los.
         </p>
 
-        <button type="submit" class="block" id="btn-cad-salvar">Salvar alteracoes</button>
+        <button type="submit" class="block" id="btn-cad-salvar">Salvar alterações</button>
         <button type="button" class="block secundario" style="margin-top:10px;" onclick="fecharMeuCadastro()">&#8592;
           Voltar</button>
       </form>
@@ -128,7 +128,7 @@
         <label for="documento_visitante">Documento (RG/CPF)</label>
         <input type="text" id="documento_visitante" />
 
-        <label for="veiculo_placa">Veiculo / placa</label>
+        <label for="veiculo_placa">Veículo / placa</label>
         <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" />
 
         <label for="data_prevista">Data/hora prevista</label>
@@ -165,8 +165,8 @@
           </div>
         </div>
 
-        <label for="observacao">Observacao</label>
-        <textarea id="observacao" placeholder="Alguma informacao extra para a portaria"></textarea>
+        <label for="observacao">Observação</label>
+        <textarea id="observacao" placeholder="Alguma informação extra para a portaria"></textarea>
 
         <button type="submit" class="block" id="btn-salvar">Enviar aviso</button>
         <button type="button" class="block secundario" style="margin-top:10px;" onclick="voltarCadastros()">&#8592;
@@ -243,7 +243,7 @@
     // Rotulos amigaveis de cada tipo (o valor salvo e a chave).
     const ROTULO_TIPO = {
       Visitante: 'Visitante',
-      Prestador: 'Prestador de servico',
+      Prestador: 'Prestador de serviço',
       Entregador: 'Entregador',
       Outro: 'Outro',
     };
@@ -273,7 +273,7 @@
       if (!perfil || !perfil.id) return;
       const baseUrl = window.location.origin;
       const link = `${baseUrl}/cadastro-visita.html?morador=${perfil.id}&tipo=${tipo}`;
-      const texto = `Ola! Por favor, preencha seus dados neste link para liberar sua entrada na portaria do Park Place: ${link}`;
+      const texto = `Olá! Por favor, preencha seus dados neste link para liberar sua entrada na portaria do Park Place: ${link}`;
       window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
     }
 
@@ -330,7 +330,7 @@
         msgCadastro.className = 'msg erro';
       } finally {
         btnCad.disabled = false;
-        btnCad.textContent = 'Salvar alteracoes';
+        btnCad.textContent = 'Salvar alterações';
       }
     });
 
@@ -356,7 +356,7 @@
           }),
         });
         form.reset();
-        msg.textContent = 'Aviso enviado! A portaria ja pode ver.';
+        msg.textContent = 'Aviso enviado! A portaria já pode ver.';
         msg.className = 'msg ok';
 
         form.classList.add('hidden');
@@ -450,7 +450,7 @@
             observacao: 'Entrega de aplicativo (iFood)',
           }),
         });
-        msg.textContent = 'Aviso de iFood enviado! A portaria ja pode ver.';
+        msg.textContent = 'Aviso de iFood enviado! A portaria já pode ver.';
         msg.className = 'msg ok';
         msg.classList.remove('hidden');
         carregarAvisos();
@@ -509,7 +509,7 @@
     function renderizarAvisos() {
       const alvo = document.getElementById('lista-avisos');
       if (!todosAvisos.length) {
-        alvo.innerHTML = '<p class="vazio">Voce ainda nao avisou nenhuma visita.</p>';
+        alvo.innerHTML = '<p class="vazio">Você ainda não avisou nenhuma visita.</p>';
         return;
       }
       

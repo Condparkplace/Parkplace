@@ -22,9 +22,9 @@
   <div class="container">
     <div class="tabs">
       <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
-      <button data-tab="presentes" onclick="trocarAba('presentes')">No condominio</button>
+      <button data-tab="presentes" onclick="trocarAba('presentes')">No condomínio</button>
       <button data-tab="encomendas" onclick="trocarAba('encomendas')">Retirada Encomendas</button>
-      <button data-tab="historico" onclick="trocarAba('historico')">Historico</button>
+      <button data-tab="historico" onclick="trocarAba('historico')">Histórico</button>
     </div>
 
     <!-- Registrar entrada (unificada com busca) -->
@@ -32,7 +32,7 @@
       <div
         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
         <h2 style="margin:0;">Registrar entrada</h2>
-        <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantao: <strong
+        <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantão: <strong
             id="porteiro-plantao"></strong></span>
       </div>
 
@@ -46,7 +46,7 @@
 
       <!-- Busca rapida por documento -->
       <div id="area-busca-cpf" class="hidden" style="background:var(--verde-claro); border-radius:8px; padding:14px; margin:0 0 18px;">
-        <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automatico se ja tiver
+        <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automático se já tiver
           cadastro)</label>
         <div class="row-inline" style="align-items:center;">
           <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" style="flex:1; min-width:200px;" />
@@ -67,7 +67,7 @@
             <select id="tipo" required onchange="toggleEndereco()">
               <option value="" disabled selected>Selecionar</option>
               <option value="Visitante">Visitante</option>
-              <option value="Prestador">Prestador de servico</option>
+              <option value="Prestador">Prestador de serviço</option>
               <option value="Entregador">Entregador</option>
             </select>
           </div>
@@ -76,7 +76,7 @@
             <input type="text" id="documento" />
           </div>
           <div>
-            <label for="veiculo_placa">Veiculo / placa</label>
+            <label for="veiculo_placa">Veículo / placa</label>
             <input type="text" id="veiculo_placa" />
           </div>
           <div>
@@ -118,7 +118,7 @@
 
         <!-- Endereco do visitante (busca por CEP) -->
         <div id="area-endereco" class="hidden">
-          <h3 style="margin:18px 0 4px;">Endereco do visitante</h3>
+          <h3 style="margin:18px 0 4px;">Endereço do visitante</h3>
           <div class="grid grid-2">
             <div>
               <label for="cep">CEP</label>
@@ -129,7 +129,7 @@
               <span id="msg-cep" class="text-muted"></span>
             </div>
             <div>
-              <label for="end_numero">Numero</label>
+              <label for="end_numero">Número</label>
               <input type="text" id="end_numero" placeholder="Ex: 123" />
             </div>
             <div>
@@ -151,7 +151,7 @@
           </div>
         </div>
 
-        <label for="observacao">Observacao</label>
+        <label for="observacao">Observação</label>
         <textarea id="observacao"></textarea>
         <input type="hidden" id="aviso_id" />
         <button type="submit" class="block" id="btn-entrada">Confirmar entrada</button>
@@ -172,7 +172,7 @@
 
     <!-- Presentes -->
     <section id="tab-presentes" class="card hidden">
-      <h2>Pessoas atualmente no condominio</h2>
+      <h2>Pessoas atualmente no condomínio</h2>
       <div id="lista-presentes">
         <p class="vazio">Carregando...</p>
       </div>
@@ -188,7 +188,7 @@
 
     <!-- Historico -->
     <section id="tab-historico" class="card hidden">
-      <h2>Historico de acessos</h2>
+      <h2>Histórico de acessos</h2>
       <div class="row-inline" style="margin-bottom:14px; flex-wrap: wrap;">
         <div>
           <label for="de">De</label>
@@ -332,7 +332,7 @@
                     <td>
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="mini" style="${btnStyle}" onclick='registrarDeAviso(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Registrar entrada</button>
-                        <button class="secundario mini" onclick="marcarNaoVeio(${a.id})">Nao veio</button>
+                        <button class="secundario mini" onclick="marcarNaoVeio(${a.id})">Não veio</button>
                       </div>
                     </td>
                   </tr>`;
@@ -407,7 +407,7 @@
 
     // Marca a visita como "nao compareceu" e manda direto para o historico.
     async function marcarNaoVeio(id) {
-      if (!confirm('Marcar esta visita como "nao veio"? Ela ira direto para o historico.')) return;
+      if (!confirm('Marcar esta visita como "não veio"? Ela irá direto para o histórico.')) return;
       try {
         await api(`/api/portaria/avisos/${id}/nao-veio`, { method: 'POST' });
         carregarPrevistas();
@@ -475,7 +475,7 @@
         document.getElementById('destino_bloco').value = ''; // Sempre vazio para nova visita
         if (p.cep_visitante) document.getElementById('cep').value = p.cep_visitante;
         if (p.endereco_visitante) {
-          document.getElementById('msg-cep').textContent = 'Endereco do cadastro anterior: ' + p.endereco_visitante;
+          document.getElementById('msg-cep').textContent = 'Endereço do cadastro anterior: ' + p.endereco_visitante;
           document.getElementById('msg-cep').style.color = 'var(--verde-escuro)';
         }
         const fonte = r.origem === 'aviso' ? 'aviso de visita do morador' : 'visita anterior';
@@ -533,7 +533,7 @@
       msg.textContent = '';
       msg.style.color = '';
       if (cep.length !== 8) {
-        msg.textContent = 'Digite um CEP com 8 digitos.';
+        msg.textContent = 'Digite um CEP com 8 dígitos.';
         msg.style.color = 'var(--vermelho)';
         return;
       }
@@ -543,7 +543,7 @@
         const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
         const dados = await resp.json();
         if (dados.erro) {
-          msg.textContent = 'CEP nao encontrado.';
+          msg.textContent = 'CEP não encontrado.';
           msg.style.color = 'var(--vermelho)';
           return;
         }
@@ -551,11 +551,11 @@
         document.getElementById('end_bairro').value = dados.bairro || '';
         document.getElementById('end_cidade').value = dados.localidade || '';
         document.getElementById('end_uf').value = dados.uf || '';
-        msg.textContent = 'Endereco preenchido. Informe o numero.';
+        msg.textContent = 'Endereço preenchido. Informe o número.';
         msg.style.color = 'var(--verde-escuro)';
         document.getElementById('end_numero').focus();
       } catch (err) {
-        msg.textContent = 'Nao foi possivel consultar o CEP (verifique a internet).';
+        msg.textContent = 'Não foi possível consultar o CEP (verifique a internet).';
         msg.style.color = 'var(--vermelho)';
       } finally {
         btn.disabled = false;
@@ -623,7 +623,7 @@
       try {
         const { presentes } = await api('/api/portaria/presentes');
         if (!presentes.length) {
-          alvo.innerHTML = '<p class="vazio">Ninguem registrado dentro do condominio agora.</p>';
+          alvo.innerHTML = '<p class="vazio">Ninguém registrado dentro do condomínio agora.</p>';
           return;
         }
         alvo.innerHTML = `
@@ -644,7 +644,7 @@
                     <td>
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
-                        <button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saida</button>
+                        <button class="perigo mini" onclick="registrarSaida(${r.id})">Registrar saída</button>
                       </div>
                     </td>
                   </tr>`;
@@ -707,13 +707,13 @@
         const { registros } = await api('/api/portaria/historico?' + params.toString());
         registrosHistorico = registros;
         if (!registros.length) {
-          alvo.innerHTML = '<p class="vazio">Nenhum registro no periodo.</p>';
+          alvo.innerHTML = '<p class="vazio">Nenhum registro no período.</p>';
           return;
         }
         alvo.innerHTML = `
           <table>
             <thead>
-              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saida</th><th>Porteiro</th><th>Observacao</th></tr>
+              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saída</th><th>Porteiro</th><th>Observação</th></tr>
             </thead>
             <tbody>
               ${registros.map((r) => {
@@ -725,7 +725,7 @@
           if (observacaoText.startsWith('[Cancelado]')) {
             saidaCol = '<span class="badge cancelada">Cancelado</span>';
           } else if (naoVeio) {
-            saidaCol = '<span class="badge cancelada">Nao compareceu</span>';
+            saidaCol = '<span class="badge cancelada">Não compareceu</span>';
           } else if (r.saida) {
             saidaCol = formatarData(r.saida);
           } else {
@@ -733,10 +733,10 @@
           }
           let porteiroCol;
           if (naoVeio) {
-            porteiroCol = `<span class="text-muted">Nao veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
+            porteiroCol = `<span class="text-muted">Não veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
           } else {
             porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
-            if (r.saida) porteiroCol += `<br><span class="text-muted">Saida:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
+            if (r.saida) porteiroCol += `<br><span class="text-muted">Saída:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
           }
           return `
                   <tr>
@@ -762,7 +762,7 @@
         return;
       }
       // Adiciona BOM para o Excel ler acentos corretamente
-      let csvContent = "\uFEFFNome;Tipo;Destino;Entrada;Saida;Status;Porteiro_Acao;Observacao\n";
+      let csvContent = "\uFEFFNome;Tipo;Destino;Entrada;Saída;Status;Porteiro_Ação;Observação\n";
       
       registrosHistorico.forEach(r => {
         const nome = r.nome_pessoa ? r.nome_pessoa.replace(/;/g, " ") : "";
@@ -775,13 +775,13 @@
         
         let status = "";
         if (obs.startsWith('[Cancelado]')) status = "Cancelado";
-        else if (naoVeio) status = "Nao compareceu";
+        else if (naoVeio) status = "Não compareceu";
         else if (r.saida) status = "Finalizada";
         else status = "No local";
         
         let porteiroAcao = "";
-        if (naoVeio) porteiroAcao = "Nao veio: " + (r.porteiro_nao_veio || "-");
-        else porteiroAcao = "Entrada: " + (r.porteiro_entrada || "-") + (r.saida ? " | Saida: " + (r.porteiro_saida || "-") : "");
+        if (naoVeio) porteiroAcao = "Não veio: " + (r.porteiro_nao_veio || "-");
+        else porteiroAcao = "Entrada: " + (r.porteiro_entrada || "-") + (r.saida ? " | Saída: " + (r.porteiro_saida || "-") : "");
 
         csvContent += `${nome};${tipo};${destino};${entrada};${saida};${status};${porteiroAcao};${obs}\n`;
       });

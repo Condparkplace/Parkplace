@@ -3,13 +3,13 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Administracao - Park Place</title>
+  <title>Administração - Park Place</title>
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
   <div class="topbar">
     <div class="brand">
-      &#9881;&#65039; Park Place <span class="sub">&middot; Administracao</span>
+      &#9881;&#65039; Park Place <span class="sub">&middot; Administração</span>
     </div>
     <div class="user-area">
       <span id="nome-usuario"></span>
@@ -22,7 +22,7 @@
     <div class="grid grid-4" style="margin-bottom:18px;">
       <div class="stat"><div class="num" id="st-moradores">-</div><div class="label">Moradores</div></div>
       <div class="stat"><div class="num" id="st-porteiros">-</div><div class="label">Porteiros</div></div>
-      <div class="stat"><div class="num" id="st-presentes">-</div><div class="label">No condominio agora</div></div>
+      <div class="stat"><div class="num" id="st-presentes">-</div><div class="label">No condomínio agora</div></div>
       <div class="stat"><div class="num" id="st-avisos">-</div><div class="label">Visitas previstas</div></div>
     </div>
 
@@ -30,13 +30,13 @@
       <!-- Cadastro de usuario -->
       <div>
       <div class="card">
-        <h2>Cadastrar usuario</h2>
+        <h2>Cadastrar usuário</h2>
         <form id="form-usuario">
           <label for="nome">Nome completo *</label>
           <input type="text" id="nome" required />
 
           <label for="tipo">Perfil *</label>
-          <select id="tipo" onchange="toggleCamposMorador()">
+          <select id="tipo" onchange="atualizarCamposPorTipo()">
             <option value="morador">Morador</option>
             <option value="porteiro">Porteiro</option>
             <option value="admin">Administrador</option>
@@ -85,15 +85,23 @@
           <input type="text" id="telefone" />
 
           <div id="campos-login">
-            <label for="email">E-mail (login) *</label>
-            <input type="email" id="email" required />
+            <div id="wrap-email">
+              <label for="email" id="label-email">E-mail (login) *</label>
+              <input type="email" id="email" required />
+            </div>
 
-            <label for="password">Senha inicial *</label>
-            <input type="text" id="password" placeholder="Minimo 6 caracteres" required />
+            <div id="dica-porteiro" class="hidden" style="background:#e8f5e9; border:1px solid #c8e6c9; border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; color:#2e7d32; line-height:1.4;">
+              &#128110; <strong>Acesso do Porteiro:</strong> O porteiro far&aacute; login usando apenas o <strong>Nome</strong> e a <strong>Senha</strong> informados aqui. O e-mail n&atilde;o &eacute; necess&aacute;rio.
+            </div>
+
+            <div id="wrap-password">
+              <label for="password" id="label-password">Senha inicial *</label>
+              <input type="text" id="password" placeholder="Mínimo 6 caracteres" required />
+            </div>
           </div>
 
           <button type="submit" class="block" id="btn-usuario">Cadastrar</button>
-          <button type="button" class="block secundario hidden" id="btn-cancelar-edicao" style="margin-top:10px;" onclick="cancelarEdicao()">Cancelar edicao</button>
+          <button type="button" class="block secundario hidden" id="btn-cancelar-edicao" style="margin-top:10px;" onclick="cancelarEdicao()">Cancelar edição</button>
         </form>
         <div id="msg-usuario" class="msg hidden"></div>
       </div>
@@ -102,21 +110,21 @@
         <div class="card" style="margin-top:18px; border-left:4px solid var(--verde);">
           <h2>&#128279; Link "Cadastrar morador"</h2>
           <p class="text-muted" style="margin:0 0 10px; font-size:13px;">
-            Envie este link para o morador fazer o proprio cadastro.
-            O acesso so e liberado depois que voce clicar em <strong>Aprovar</strong>.
+            Envie este link para o morador fazer o próprio cadastro.
+            O acesso só é liberado depois que você clicar em <strong>Aprovar</strong>.
           </p>
           <input type="text" id="link-cadastro" readonly onclick="this.select()" />
           <div class="row-inline" style="margin-top:10px;">
             <button type="button" class="mini" id="btn-copiar-link" onclick="copiarLink()">Copiar link</button>
             <button type="button" class="mini" style="background:#25d366;" onclick="enviarWhatsApp()">Enviar por WhatsApp</button>
-            <button type="button" class="secundario mini" onclick="window.open(linkCadastro(), '_blank')">Abrir pagina</button>
+            <button type="button" class="secundario mini" onclick="window.open(linkCadastro(), '_blank')">Abrir página</button>
           </div>
         </div>
       </div>
 
       <!-- Lista de usuarios -->
       <div class="card">
-        <h2>Usuarios cadastrados</h2>
+        <h2>Usuários cadastrados</h2>
         <div id="lista-usuarios"><p class="vazio">Carregando...</p></div>
       </div>
     </div>
@@ -133,11 +141,39 @@
       document.getElementById('nome-usuario').textContent = perfil.nome;
       carregarResumo();
       carregarUsuarios();
+      atualizarCamposPorTipo();
     })();
 
-    function toggleCamposMorador() {
+    function atualizarCamposPorTipo() {
       const tipo = document.getElementById('tipo').value;
+      // Mostra campos de lote apenas para moradores
       document.getElementById('campos-morador').classList.toggle('hidden', tipo !== 'morador');
+
+      const wrapEmail = document.getElementById('wrap-email');
+      const dicaPorteiro = document.getElementById('dica-porteiro');
+      const inputEmail = document.getElementById('email');
+
+      if (editandoId) {
+        // Ao editar, o e-mail nunca e alterado por este formulario
+        if (wrapEmail) wrapEmail.classList.add('hidden');
+        if (dicaPorteiro) dicaPorteiro.classList.add('hidden');
+        if (inputEmail) inputEmail.required = false;
+      } else {
+        if (tipo === 'porteiro') {
+          // Para porteiro, esconde o e-mail e exibe a orientacao clara
+          if (wrapEmail) wrapEmail.classList.add('hidden');
+          if (dicaPorteiro) dicaPorteiro.classList.remove('hidden');
+          if (inputEmail) {
+            inputEmail.required = false;
+            inputEmail.value = '';
+          }
+        } else {
+          // Para morador ou admin, e-mail e obrigatorio
+          if (wrapEmail) wrapEmail.classList.remove('hidden');
+          if (dicaPorteiro) dicaPorteiro.classList.add('hidden');
+          if (inputEmail) inputEmail.required = true;
+        }
+      }
     }
 
     function linkCadastro() {
@@ -159,7 +195,7 @@
     }
 
     function enviarWhatsApp() {
-      const texto = 'Ola! Para acessar o sistema da portaria do Park Place Residencial, faca seu cadastro neste link: ' + linkCadastro();
+      const texto = 'Olá! Para acessar o sistema da portaria do Park Place Residencial, faça seu cadastro neste link: ' + linkCadastro();
       window.open('https://wa.me/?text=' + encodeURIComponent(texto), '_blank');
     }
 
@@ -197,16 +233,17 @@
       document.getElementById('tipo').value = u.tipo || 'morador';
       document.getElementById('bloco').value = u.bloco || '';
       document.getElementById('telefone').value = u.telefone || '';
-      toggleCamposMorador();
+      atualizarCamposPorTipo();
 
-      // E-mail/senha nao sao editaveis por aqui.
-      const login = document.getElementById('campos-login');
-      if (login) login.classList.add('hidden');
-      document.getElementById('email').required = false;
-      document.getElementById('password').required = false;
+      // Ao editar, permite redefinir a senha se desejado
+      document.getElementById('label-password').textContent = 'Nova senha (deixe em branco para manter a atual)';
+      const inputPass = document.getElementById('password');
+      inputPass.value = '';
+      inputPass.required = false;
+      inputPass.placeholder = 'Deixe em branco para manter a senha atual';
 
-      document.querySelector('#form-usuario').previousElementSibling.textContent = 'Editar usuario';
-      btnUsuario.textContent = 'Salvar alteracoes';
+      document.querySelector('#form-usuario').previousElementSibling.textContent = 'Editar usuário';
+      btnUsuario.textContent = 'Salvar alterações';
       document.getElementById('btn-cancelar-edicao').classList.remove('hidden');
       msgUsuario.classList.add('hidden');
       document.getElementById('nome').focus();
@@ -216,15 +253,16 @@
     function cancelarEdicao() {
       editandoId = null;
       formUsuario.reset();
-      toggleCamposMorador();
-      const login = document.getElementById('campos-login');
-      if (login) login.classList.remove('hidden');
-      document.getElementById('email').required = true;
-      document.getElementById('password').required = true;
-      document.querySelector('#form-usuario').previousElementSibling.textContent = 'Cadastrar usuario';
+      const inputPass = document.getElementById('password');
+      inputPass.value = '';
+      inputPass.required = true;
+      inputPass.placeholder = 'Mínimo 6 caracteres';
+      document.getElementById('label-password').textContent = 'Senha inicial *';
+      document.querySelector('#form-usuario').previousElementSibling.textContent = 'Cadastrar usuário';
       btnUsuario.textContent = 'Cadastrar';
       document.getElementById('btn-cancelar-edicao').classList.add('hidden');
       msgUsuario.classList.add('hidden');
+      atualizarCamposPorTipo();
     }
 
     formUsuario.addEventListener('submit', async (e) => {
@@ -241,12 +279,17 @@
         };
 
         if (editandoId) {
+          const payload = { ...dados };
+          const novaSenha = document.getElementById('password').value;
+          if (novaSenha && novaSenha.trim()) {
+            payload.password = novaSenha.trim();
+          }
           await api(`/api/admin/usuarios/${editandoId}`, {
             method: 'PUT',
-            body: JSON.stringify(dados),
+            body: JSON.stringify(payload),
           });
           cancelarEdicao();
-          msgUsuario.textContent = 'Usuario atualizado com sucesso.';
+          msgUsuario.textContent = 'Usuário atualizado com sucesso.';
         } else {
           await api('/api/admin/usuarios', {
             method: 'POST',
@@ -257,8 +300,8 @@
             }),
           });
           formUsuario.reset();
-          toggleCamposMorador();
-          msgUsuario.textContent = 'Usuario cadastrado com sucesso.';
+          atualizarCamposPorTipo();
+          msgUsuario.textContent = 'Usuário cadastrado com sucesso.';
         }
         msgUsuario.className = 'msg ok';
         carregarUsuarios();
@@ -268,7 +311,7 @@
         msgUsuario.className = 'msg erro';
       } finally {
         btnUsuario.disabled = false;
-        btnUsuario.textContent = editandoId ? 'Salvar alteracoes' : 'Cadastrar';
+        btnUsuario.textContent = editandoId ? 'Salvar alterações' : 'Cadastrar';
       }
     });
 
@@ -277,7 +320,7 @@
       try {
         const { usuarios } = await api('/api/admin/usuarios');
         if (!usuarios.length) {
-          alvo.innerHTML = '<p class="vazio">Nenhum usuario cadastrado.</p>';
+          alvo.innerHTML = '<p class="vazio">Nenhum usuário cadastrado.</p>';
           return;
         }
         
@@ -294,9 +337,14 @@
           const btnStatus = isPend
             ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
             : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
+          
+          const infoSub = u.tipo === 'porteiro'
+            ? '<div class="text-muted" style="font-size:12px; color:var(--verde);">&#128273; Login: Nome e Senha</div>'
+            : (isPend && u.telefone ? `<div class="text-muted" style="font-size:12px;">${escapeHtml(u.telefone)}</div>` : '');
+
           return `
             <tr${isPend ? ' style="background:#fffbea;"' : ''}>
-              <td>${escapeHtml(u.nome)}${isPend && u.telefone ? `<div class="text-muted" style="font-size:12px;">${escapeHtml(u.telefone)}</div>` : ''}</td>
+              <td>${escapeHtml(u.nome)}${infoSub}</td>
               <td><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
               <td>${escapeHtml(local)}</td>
               <td>${status}</td>
@@ -359,7 +407,7 @@
     }
 
     async function removerUsuario(id) {
-      if (!confirm('Remover definitivamente este usuario?')) return;
+      if (!confirm('Remover definitivamente este usuário?')) return;
       try {
         await api(`/api/admin/usuarios/${id}`, { method: 'DELETE' });
         carregarUsuarios();
