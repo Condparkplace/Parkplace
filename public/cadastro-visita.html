@@ -246,7 +246,16 @@
         return;
       }
 
-      if (cpfLimpo.length === 11 && !validarCpf(cpfLimpo)) {
+      // A etapa 1 pede o CPF: exige os 11 dígitos completos.
+      if (cpfLimpo.length !== 11) {
+        msgCpf.textContent = 'Digite o CPF completo (11 dígitos).';
+        msgCpf.className = 'msg erro';
+        msgCpf.classList.remove('hidden');
+        inpCpfConsulta.focus();
+        return;
+      }
+
+      if (!validarCpf(cpfLimpo)) {
         msgCpf.textContent = 'CPF inválido! Confira os números digitados.';
         msgCpf.className = 'msg erro';
         msgCpf.classList.remove('hidden');
@@ -454,6 +463,18 @@
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
         document.getElementById('documento_visitante').focus();
+        return;
+      }
+
+      // Se o documento é só números, tratamos como CPF: exige 11 dígitos válidos.
+      // (Documentos com letras — RG com "X", etc. — são aceitos como estão.)
+      const docSoNumeros = /^\d+$/.test(docExt.replace(/[.\-\s]/g, ''));
+      if (docSoNumeros && docExtLimpo.length !== 11) {
+        msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (RG).';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('documento_visitante').focus();
+        document.getElementById('documento_visitante').style.borderColor = 'var(--vermelho, #dc2626)';
         return;
       }
 

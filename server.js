@@ -609,7 +609,11 @@ app.get('/api/public/visitantes/verificar', async (req, res) => {
     if (!doc) return res.status(400).json({ error: 'Informe o CPF para verificar.' });
 
     const docLimpo = doc.replace(/\D/g, '');
-    if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
+    // A consulta é por CPF: exige os 11 dígitos completos e válidos.
+    if (docLimpo.length !== 11) {
+      return res.status(400).json({ error: 'Digite o CPF completo (11 dígitos).' });
+    }
+    if (!cpfValido(docLimpo)) {
       return res.status(400).json({ error: 'CPF inválido.' });
     }
 
