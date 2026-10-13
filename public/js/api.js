@@ -40,9 +40,9 @@ function navAdmin(perfil, atual) {
   const topbar = document.querySelector('.topbar');
   if (!topbar || topbar.querySelector('.admin-nav')) return;
   const links = [
-    { id: 'admin', href: '/admin.html', txt: '&#9881;&#65039; Administracao' },
+    { id: 'admin', href: '/admin.html', txt: '&#9881;&#65039; Administração' },
     { id: 'porteiro', href: '/porteiro.html', txt: '&#128682; Portaria' },
-    { id: 'morador', href: '/morador.html', txt: '&#127968; Area do morador' },
+    { id: 'morador', href: '/morador.html', txt: '&#127968; Área do morador' },
     { id: 'cadastro', href: '/cadastro.html', txt: '&#128221; Cadastro de morador', novaAba: true },
     { id: 'site', href: '/', txt: '&#127760; Site' },
   ];
@@ -70,7 +70,7 @@ async function navAdminAuto(atual) {
     const bar = document.createElement('div');
     bar.className = 'topbar';
     bar.innerHTML = `
-      <div class="brand">&#9881;&#65039; Park Place <span class="sub">&middot; Administracao</span></div>
+      <div class="brand">&#9881;&#65039; Park Place <span class="sub">&middot; Administração</span></div>
       <div class="user-area">
         <span>${escapeHtml(perfil.nome)}</span>
         <button class="secundario mini" onclick="logout()">Sair</button>

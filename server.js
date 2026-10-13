@@ -937,7 +937,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 
   if (error) {
     const jaExiste = /already|registered|exists/i.test(error.message);
-    return res.status(400).json({ error: jaExiste ? 'Este e-mail/usuario ja esta cadastrado.' : error.message });
+    return res.status(400).json({ error: jaExiste ? 'Este e-mail/usuário já está cadastrado.' : error.message });
   }
 
   // Garante o perfil mesmo se o trigger nao rodar
@@ -1063,7 +1063,12 @@ app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res)
 // ============================================================
 app.use(express.static(path.join(__dirname, 'public')));
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`\n  Park Place Portaria rodando em http://localhost:${PORT}\n`);
-});
+module.exports = app;
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`\n  Park Place Portaria rodando em http://localhost:${PORT}\n`);
+  });
+}
+

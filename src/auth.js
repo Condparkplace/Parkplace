@@ -45,14 +45,14 @@ function readTokenFromCookie(req) {
 async function requireAuth(req, res, next) {
   const token = readTokenFromCookie(req);
   if (!token) {
-    return res.status(401).json({ error: 'Nao autenticado.' });
+    return res.status(401).json({ error: 'Não autenticado.' });
   }
 
   const client = supabaseForToken(token);
   const { data: userData, error } = await client.auth.getUser();
   if (error || !userData?.user) {
     clearSessionCookie(res);
-    return res.status(401).json({ error: 'Sessao invalida ou expirada.' });
+    return res.status(401).json({ error: 'Sessão inválida ou expirada.' });
   }
 
   // Perfil via service role para evitar recursao em RLS no proprio middleware.
@@ -63,11 +63,11 @@ async function requireAuth(req, res, next) {
     .single();
 
   if (perfilErr || !perfil) {
-    return res.status(403).json({ error: 'Perfil nao encontrado.' });
+    return res.status(403).json({ error: 'Perfil não encontrado.' });
   }
   if (!perfil.ativo) {
     clearSessionCookie(res);
-    return res.status(403).json({ error: 'Usuario desativado.' });
+    return res.status(403).json({ error: 'Usuário desativado.' });
   }
 
   req.user = userData.user;
