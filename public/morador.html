@@ -92,22 +92,13 @@
         <button id="btn-frequentes" class="block secundario" style="padding: 14px; font-size: 1.05em; margin: 0; width: 100%; box-sizing: border-box;"
           onclick="abrirFrequentes()">&#128101; Visitas frequentes</button>
 
-        <div style="display: flex; gap: 8px; width: 100%; box-sizing: border-box;">
-          <button id="btn-mostrar-form" class="block" style="flex: 2; min-width: 0; padding: 14px 8px; font-size: 1.05em; margin: 0; box-sizing: border-box;"
-            onclick="mostrarForm()">+ Cadastrar visita</button>
-          <button id="btn-compartilhar-visita" class="block"
-            style="flex: 1; min-width: 0; padding: 14px 6px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; box-sizing: border-box; white-space: nowrap;"
-            onclick="compartilharVisita('Visitante')">&#128242; Enviar</button>
-        </div>
+        <button id="btn-compartilhar-visita" class="block"
+          style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
+          onclick="compartilharVisita('Visitante')">&#128242; Enviar Solicitação de cadastro de visita</button>
 
-        <div style="display: flex; gap: 8px; width: 100%; box-sizing: border-box;">
-          <button id="btn-prestador" class="block"
-            style="flex: 2; min-width: 0; padding: 14px 8px; font-size: 1.05em; margin: 0; background-color: #2b6cb0; border-color: #2b6cb0; color: white; box-sizing: border-box;"
-            onclick="mostrarFormPrestador()">+ Cadastrar visita de Prestador</button>
-          <button id="btn-compartilhar-prestador" class="block"
-            style="flex: 1; min-width: 0; padding: 14px 6px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; box-sizing: border-box; white-space: nowrap;"
-            onclick="compartilharVisita('Prestador')">&#128242; Enviar</button>
-        </div>
+        <button id="btn-compartilhar-prestador" class="block"
+          style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
+          onclick="compartilharVisita('Prestador')">&#128242; Enviar solicitação de cadastro de prestador</button>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; word-break: break-word;">
