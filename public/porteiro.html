@@ -39,8 +39,9 @@
       <!-- Botoes de acao principais -->
       <div class="row-inline" style="margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
         <button type="button"
+          id="btn-visita-prestadores"
           style="background-color: var(--verde); color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
-          onclick="document.getElementById('area-busca-cpf').classList.toggle('hidden')">Visita / Prestadores</button>
+          onclick="alternarBuscaCpf()">Visita / Prestadores</button>
         <button type="button"
           style="background-color: #ea1d2c; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
           onclick="abrirModalIfood()">iFood</button>
@@ -53,7 +54,7 @@
       </div>
 
       <!-- Busca rapida por documento -->
-      <div id="area-busca-cpf" class="hidden"
+      <div id="area-busca-cpf"
         style="background:var(--verde-claro); border-radius:8px; padding:14px; margin:0 0 18px;">
         <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automático se já tiver
           cadastro)</label>
@@ -273,9 +274,18 @@
       if (perfil.tipo === 'admin') {
         document.getElementById('btn-exportar').classList.remove('hidden');
       }
+      document.getElementById('area-busca-cpf').classList.remove('hidden');
       document.getElementById('busca-doc').focus();
       carregarPrevistas();
     })();
+
+    function alternarBuscaCpf() {
+      const area = document.getElementById('area-busca-cpf');
+      area.classList.toggle('hidden');
+      if (!area.classList.contains('hidden')) {
+        document.getElementById('busca-doc').focus();
+      }
+    }
 
     function trocarAba(aba) {
       document.querySelectorAll('.tabs button').forEach((b) =>
@@ -284,7 +294,11 @@
       ['entrada', 'presentes', 'encomendas', 'historico'].forEach((t) =>
         document.getElementById('tab-' + t).classList.toggle('hidden', t !== aba)
       );
-      if (aba === 'entrada') { document.getElementById('busca-doc').focus(); carregarPrevistas(); }
+      if (aba === 'entrada') {
+        document.getElementById('area-busca-cpf').classList.remove('hidden');
+        document.getElementById('busca-doc').focus();
+        carregarPrevistas();
+      }
       if (aba === 'presentes') carregarPresentes();
       if (aba === 'encomendas') carregarEncomendas();
       if (aba === 'historico') carregarHistorico();
