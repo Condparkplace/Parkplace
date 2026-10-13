@@ -464,6 +464,120 @@ app.post('/api/public/avisos', async (req, res) => {
   res.status(201).json({ aviso: data });
 });
 
+// Verifica se o visitante/prestador ja possui cadastro previo pelo CPF (rota publica)
+app.get('/api/public/visitantes/verificar', async (req, res) => {
+  try {
+    const doc = (req.query.cpf || req.query.documento || '').trim();
+    if (!doc) return res.status(400).json({ error: 'Informe o CPF para verificar.' });
+
+    const docLimpo = doc.replace(/\D/g, '');
+    if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
+      return res.status(400).json({ error: 'CPF inválido.' });
+    }
+
+    // 1. Procura na base oficial de moradores/perfis
+    const { data: perfis } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, bloco, apartamento, telefone, cpf, tipo')
+      .not('cpf', 'is', null);
+
+    const morador = (perfis || []).find(
+      (p) => (p.cpf || '').replace(/\D/g, '') === docLimpo && docLimpo
+    );
+
+    if (morador) {
+      return res.json({
+        cadastrado: true,
+        eh_morador: true,
+        visitante: {
+          nome: morador.nome,
+          documento: morador.cpf || doc,
+          tipo: 'Morador',
+          veiculo_placa: '',
+          endereco_visitante: null,
+          cep_visitante: null,
+        },
+      });
+    }
+
+    // 2. Procura em registros de portaria anteriores
+    const { data: registros } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('nome_pessoa, documento, veiculo_placa, tipo, endereco_visitante, cep_visitante, entrada')
+      .not('documento', 'is', null)
+      .order('entrada', { ascending: false })
+      .limit(500);
+
+    const reg = (registros || []).find(
+      (r) => (r.documento || '').replace(/\D/g, '') === docLimpo && docLimpo
+    );
+
+    // 3. Procura em avisos de visita anteriores
+    const { data: avisos } = await supabaseAdmin
+      .from('avisos_visitas')
+      .select('nome_visitante, documento_visitante, veiculo_placa, tipo, endereco_visitante, cep_visitante, criado_em')
+      .not('documento_visitante', 'is', null)
+      .order('criado_em', { ascending: false })
+      .limit(500);
+
+    const aviso = (avisos || []).find(
+      (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
+    );
+
+    // 4. Procura em observações cadastradas de visitantes
+    const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, null);
+
+    if (reg) {
+      return res.json({
+        cadastrado: true,
+        eh_morador: false,
+        visitante: {
+          nome: reg.nome_pessoa,
+          documento: reg.documento || doc,
+          tipo: reg.tipo || 'Visitante',
+          veiculo_placa: reg.veiculo_placa || '',
+          endereco_visitante: reg.endereco_visitante || null,
+          cep_visitante: reg.cep_visitante || null,
+        },
+      });
+    }
+
+    if (aviso) {
+      return res.json({
+        cadastrado: true,
+        eh_morador: false,
+        visitante: {
+          nome: aviso.nome_visitante,
+          documento: aviso.documento_visitante || doc,
+          tipo: aviso.tipo || 'Visitante',
+          veiculo_placa: aviso.veiculo_placa || '',
+          endereco_visitante: aviso.endereco_visitante || null,
+          cep_visitante: aviso.cep_visitante || null,
+        },
+      });
+    }
+
+    if (obsVisitante && obsVisitante.nome) {
+      return res.json({
+        cadastrado: true,
+        eh_morador: false,
+        visitante: {
+          nome: obsVisitante.nome,
+          documento: obsVisitante.documento || doc,
+          tipo: 'Visitante',
+          veiculo_placa: '',
+          endereco_visitante: null,
+          cep_visitante: null,
+        },
+      });
+    }
+
+    return res.json({ cadastrado: false });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Informacoes basicas do morador para exibicao publica (cadastro de visita)
 app.get('/api/public/moradores/:id', async (req, res) => {
   const { id } = req.params;

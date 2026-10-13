@@ -12,73 +12,134 @@
     <div class="login-card">
       <div class="logo">
         <span class="login-badge">&#127968;</span>
-        <h1>Cadastro de Visita</h1>
+        <h1 id="titulo-pagina">Cadastro de Visita</h1>
         <p>Park Place Residencial</p>
       </div>
 
       <div id="area-form">
         <p class="text-muted" style="text-align:center; margin-bottom: 20px; font-size: 14px;">
-          Visita para <strong id="morador-nome">...</strong> do <strong id="morador-lote">...</strong>.<br><br>
-          Preencha os dados abaixo para agilizar sua entrada na portaria.
+          Visita para <strong id="morador-nome">...</strong> do <strong id="morador-lote">...</strong>.
         </p>
-        <form id="form-cadastro">
-          <label for="nome_visitante">Seu nome completo *</label>
-          <input type="text" id="nome_visitante" required />
 
-          <label for="documento_visitante">Documento (RG ou CPF) *</label>
-          <input type="text" id="documento_visitante" required />
-          <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
+        <!-- ETAPA 1: Consulta Prévia por CPF -->
+        <div id="etapa-cpf">
+          <p class="text-muted" style="text-align:center; margin-bottom: 18px; font-size: 13px;">
+            Informe seu CPF para verificarmos se você já possui cadastro e agilizar sua entrada.
+          </p>
 
-          <label for="veiculo_placa">Veículo / placa (Opcional)</label>
-          <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" />
+          <form id="form-consulta-cpf" onsubmit="event.preventDefault(); verificarCpfVisitante();">
+            <label for="cpf_consulta">Seu CPF *</label>
+            <input type="text" id="cpf_consulta" placeholder="000.000.000-00" maxlength="14" autocomplete="off" autofocus required />
+            <span id="aviso-cpf-consulta" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
-          <label for="data_prevista">Data/hora prevista (Opcional)</label>
-          <input type="datetime-local" id="data_prevista" />
+            <button type="submit" class="block" id="btn-verificar-cpf" style="margin-top:16px;">Continuar</button>
+          </form>
+          <div id="msg-consulta-cpf" class="msg hidden"></div>
+        </div>
 
-          <div id="area-endereco" class="hidden">
-            <h3 style="margin:18px 0 4px; font-size:16px;">Endereço da Empresa/Prestador</h3>
-            <div class="grid grid-2">
+        <!-- ETAPA 2A: Já possui cadastro -> Preenche data/hora prevista e confirma -->
+        <div id="etapa-ja-cadastrado" class="hidden">
+          <div style="background:#ecfdf5; border:1px solid #a7f3d0; border-radius:8px; padding:14px; margin-bottom:18px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:22px;">✅</span>
               <div>
-                <label for="cep">CEP</label>
-                <input type="text" id="cep" placeholder="00000-000" maxlength="9" />
-                <span id="msg-cep" class="text-muted" style="display:block; margin-top:4px; font-size:13px;"></span>
+                <strong style="color:#065f46; font-size:15px; display:block;">Cadastro encontrado!</strong>
+                <span id="cadastrado-nome" style="color:#047857; font-size:14px; font-weight:600;"></span>
               </div>
-              <div>
-                <label for="end_numero">Número</label>
-                <input type="text" id="end_numero" placeholder="Ex: 123" />
-              </div>
-              <div>
-                <label for="end_logradouro">Logradouro</label>
-                <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
-              </div>
-              <div>
-                <label for="end_bairro">Bairro</label>
-                <input type="text" id="end_bairro" />
-              </div>
-              <div>
-                <label for="end_cidade">Cidade / UF</label>
-                <div class="row-inline">
-                  <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
-                  <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+            </div>
+            <p style="margin:8px 0 0; font-size:13px; color:#065f46;">
+              Documento: <strong id="cadastrado-doc"></strong>
+            </p>
+          </div>
+
+          <form id="form-confirmacao-rapida" onsubmit="event.preventDefault(); enviarAvisoExistente();">
+            <label for="veiculo_placa_rapido">Veículo / placa (Opcional)</label>
+            <input type="text" id="veiculo_placa_rapido" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" />
+
+            <label for="data_prevista_rapida">Data/hora prevista (Opcional)</label>
+            <input type="datetime-local" id="data_prevista_rapida" />
+
+            <button type="submit" class="block" id="btn-confirmar-rapido" style="margin-top:18px; background:var(--verde); color:#fff;">
+              Confirmar solicitação de entrada
+            </button>
+            <button type="button" class="block secundario mini" style="margin-top:10px;" onclick="voltarParaCpf()">
+              &#8592; Digitar outro CPF
+            </button>
+          </form>
+          <div id="msg-rapido" class="msg hidden"></div>
+        </div>
+
+        <!-- ETAPA 2B: Novo cadastro completo -->
+        <div id="etapa-novo-cadastro" class="hidden">
+          <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px; margin-bottom:16px;">
+            <p style="margin:0; font-size:13px; color:#1e40af;">
+              Primeiro acesso! Complete seus dados abaixo para registrar sua visita.
+            </p>
+          </div>
+
+          <form id="form-cadastro">
+            <label for="nome_visitante">Seu nome completo *</label>
+            <input type="text" id="nome_visitante" required />
+
+            <label for="documento_visitante">Documento (RG ou CPF) *</label>
+            <input type="text" id="documento_visitante" required />
+            <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
+
+            <label for="veiculo_placa">Veículo / placa (Opcional)</label>
+            <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" />
+
+            <label for="data_prevista">Data/hora prevista (Opcional)</label>
+            <input type="datetime-local" id="data_prevista" />
+
+            <div id="area-endereco" class="hidden">
+              <h3 style="margin:18px 0 4px; font-size:16px;">Endereço da Empresa/Prestador</h3>
+              <div class="grid grid-2">
+                <div>
+                  <label for="cep">CEP</label>
+                  <input type="text" id="cep" placeholder="00000-000" maxlength="9" />
+                  <span id="msg-cep" class="text-muted" style="display:block; margin-top:4px; font-size:13px;"></span>
+                </div>
+                <div>
+                  <label for="end_numero">Número</label>
+                  <input type="text" id="end_numero" placeholder="Ex: 123" />
+                </div>
+                <div>
+                  <label for="end_logradouro">Logradouro</label>
+                  <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
+                </div>
+                <div>
+                  <label for="end_bairro">Bairro</label>
+                  <input type="text" id="end_bairro" />
+                </div>
+                <div>
+                  <label for="end_cidade">Cidade / UF</label>
+                  <div class="row-inline">
+                    <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
+                    <input type="text" id="end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          <button type="submit" class="block" id="btn-cadastrar">Enviar cadastro</button>
-        </form>
-        <div id="msg" class="msg hidden"></div>
+            <button type="submit" class="block" id="btn-cadastrar" style="margin-top:18px;">Enviar cadastro</button>
+            <button type="button" class="block secundario mini" style="margin-top:10px;" onclick="voltarParaCpf()">
+              &#8592; Digitar outro CPF
+            </button>
+          </form>
+          <div id="msg" class="msg hidden"></div>
+        </div>
+
       </div>
 
       <div id="area-sucesso" class="hidden" style="text-align:center;">
-        <div class="msg ok" style="font-size:15px;">
-          &#9989; Cadastro enviado com sucesso!
+        <div class="msg ok" style="font-size:15px; padding:14px;">
+          &#9989; Solicitação de entrada enviada com sucesso!
         </div>
-        <p class="text-muted" style="margin-top:14px;">
-          Seus dados já foram enviados para a portaria. Ao chegar no condomínio, basta se identificar com seu nome e documento.
+        <p class="text-muted" style="margin-top:14px; font-size:14px;">
+          Seus dados já foram enviados para a portaria do Park Place. Ao chegar ao condomínio, basta se identificar na portaria com seu documento para liberação.
         </p>
       </div>
-      
+
       <div id="area-erro-link" class="hidden" style="text-align:center;">
         <div class="msg erro" style="font-size:15px;">
           Link inválido.
@@ -96,17 +157,17 @@
     const morador_id = urlParams.get('morador');
     const tipo = urlParams.get('tipo') || 'Visitante';
 
+    let visitanteCadastradoCache = null;
+
     if (!morador_id) {
       document.getElementById('area-form').classList.add('hidden');
       document.getElementById('area-erro-link').classList.remove('hidden');
     } else {
-      // Altera o título se for prestador
       if (tipo === 'Prestador') {
-        document.querySelector('h1').textContent = 'Cadastro de Prestador';
+        document.getElementById('titulo-pagina').textContent = 'Cadastro de Prestador';
         document.title = 'Cadastro de Prestador - Park Place Residencial';
       }
 
-      // Carregar os dados do morador
       api(`/api/public/moradores/${morador_id}`).then(res => {
         if (res && res.morador) {
           document.getElementById('morador-nome').textContent = res.morador.nome;
@@ -121,30 +182,145 @@
       }
     }
 
+    // Validador e máscara nos campos de CPF
+    const inpCpfConsulta = document.getElementById('cpf_consulta');
+    const avisoCpfConsulta = document.getElementById('aviso-cpf-consulta');
+    if (inpCpfConsulta) vincularValidadorCpf(inpCpfConsulta, avisoCpfConsulta);
+
+    const inpDocExt = document.getElementById('documento_visitante');
+    const avisoDocExt = document.getElementById('aviso-cpf-externo');
+    if (inpDocExt) vincularValidadorCpf(inpDocExt, avisoDocExt);
+
+    async function verificarCpfVisitante() {
+      const msgCpf = document.getElementById('msg-consulta-cpf');
+      const btnVerificar = document.getElementById('btn-verificar-cpf');
+      const cpfVal = inpCpfConsulta.value.trim();
+      const cpfLimpo = cpfVal.replace(/\D/g, '');
+
+      msgCpf.classList.add('hidden');
+      msgCpf.textContent = '';
+
+      if (!cpfVal) {
+        msgCpf.textContent = 'Por favor, digite seu CPF.';
+        msgCpf.className = 'msg erro';
+        msgCpf.classList.remove('hidden');
+        inpCpfConsulta.focus();
+        return;
+      }
+
+      if (cpfLimpo.length === 11 && !validarCpf(cpfLimpo)) {
+        msgCpf.textContent = 'CPF inválido! Confira os números digitados.';
+        msgCpf.className = 'msg erro';
+        msgCpf.classList.remove('hidden');
+        inpCpfConsulta.focus();
+        return;
+      }
+
+      btnVerificar.disabled = true;
+      btnVerificar.textContent = 'Verificando...';
+
+      try {
+        const res = await api(`/api/public/visitantes/verificar?cpf=${encodeURIComponent(cpfVal)}`);
+
+        if (res && res.cadastrado && res.visitante) {
+          visitanteCadastradoCache = res.visitante;
+
+          document.getElementById('cadastrado-nome').textContent = res.visitante.nome;
+          document.getElementById('cadastrado-doc').textContent = formatarCpf(res.visitante.documento) || res.visitante.documento || cpfVal;
+          document.getElementById('veiculo_placa_rapido').value = res.visitante.veiculo_placa || '';
+
+          document.getElementById('etapa-cpf').classList.add('hidden');
+          document.getElementById('etapa-novo-cadastro').classList.add('hidden');
+          document.getElementById('etapa-ja-cadastrado').classList.remove('hidden');
+          document.getElementById('data_prevista_rapida').focus();
+        } else {
+          document.getElementById('documento_visitante').value = formatarCpf(cpfVal) || cpfVal;
+
+          document.getElementById('etapa-cpf').classList.add('hidden');
+          document.getElementById('etapa-ja-cadastrado').classList.add('hidden');
+          document.getElementById('etapa-novo-cadastro').classList.remove('hidden');
+          document.getElementById('nome_visitante').focus();
+        }
+      } catch (err) {
+        msgCpf.textContent = err.message || 'Erro ao verificar CPF.';
+        msgCpf.className = 'msg erro';
+        msgCpf.classList.remove('hidden');
+      } finally {
+        btnVerificar.disabled = false;
+        btnVerificar.textContent = 'Continuar';
+      }
+    }
+
+    function voltarParaCpf() {
+      document.getElementById('etapa-ja-cadastrado').classList.add('hidden');
+      document.getElementById('etapa-novo-cadastro').classList.add('hidden');
+      document.getElementById('etapa-cpf').classList.remove('hidden');
+      inpCpfConsulta.focus();
+    }
+
+    // Confirmação para visitante já cadastrado
+    async function enviarAvisoExistente() {
+      if (!visitanteCadastradoCache) return;
+      const btnRapido = document.getElementById('btn-confirmar-rapido');
+      const msgRapido = document.getElementById('msg-rapido');
+      msgRapido.classList.add('hidden');
+
+      btnRapido.disabled = true;
+      btnRapido.textContent = 'Enviando...';
+
+      try {
+        const dt = document.getElementById('data_prevista_rapida').value;
+        const placa = document.getElementById('veiculo_placa_rapido').value.trim();
+
+        await api('/api/public/avisos', {
+          method: 'POST',
+          body: JSON.stringify({
+            morador_id: morador_id,
+            nome_visitante: visitanteCadastradoCache.nome,
+            tipo: tipo,
+            documento_visitante: visitanteCadastradoCache.documento || inpCpfConsulta.value.trim(),
+            veiculo_placa: placa || visitanteCadastradoCache.veiculo_placa || null,
+            data_prevista: dt ? new Date(dt).toISOString() : null,
+            endereco_visitante: visitanteCadastradoCache.endereco_visitante || null,
+            cep_visitante: visitanteCadastradoCache.cep_visitante || null,
+          }),
+        });
+
+        document.getElementById('area-form').classList.add('hidden');
+        document.getElementById('area-sucesso').classList.remove('hidden');
+      } catch (err) {
+        msgRapido.textContent = err.message || 'Erro ao confirmar solicitação.';
+        msgRapido.className = 'msg erro';
+        msgRapido.classList.remove('hidden');
+      } finally {
+        btnRapido.disabled = false;
+        btnRapido.textContent = 'Confirmar solicitação de entrada';
+      }
+    }
+
+    // Formulário completo para novo cadastro
     const form = document.getElementById('form-cadastro');
     const msg = document.getElementById('msg');
     const btn = document.getElementById('btn-cadastrar');
 
-    // ---------- Busca por CEP (ViaCEP) ----------
+    // Busca por CEP (ViaCEP)
     const campoCep = document.getElementById('cep');
-
-    campoCep.addEventListener('input', () => {
-      let v = campoCep.value.replace(/\D/g, '').slice(0, 8);
-      if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
-      campoCep.value = v;
-
-      // Buscar automaticamente assim que tiver 8 digitos
-      if (v.replace(/\D/g, '').length === 8) {
-        buscarPorCep();
-      }
-    });
+    if (campoCep) {
+      campoCep.addEventListener('input', () => {
+        let v = campoCep.value.replace(/\D/g, '').slice(0, 8);
+        if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+        campoCep.value = v;
+        if (v.replace(/\D/g, '').length === 8) {
+          buscarPorCep();
+        }
+      });
+    }
 
     async function buscarPorCep() {
       const msgCep = document.getElementById('msg-cep');
       const cep = campoCep.value.replace(/\D/g, '');
       msgCep.textContent = 'Buscando...';
       msgCep.style.color = '';
-      
       if (cep.length !== 8) return;
 
       try {
@@ -184,10 +360,6 @@
         .filter(Boolean).join(', ');
       return (partes + (cep ? ' - CEP ' + cep : '')).trim();
     }
-
-    const inpDocExt = document.getElementById('documento_visitante');
-    const avisoDocExt = document.getElementById('aviso-cpf-externo');
-    if (inpDocExt) vincularValidadorCpf(inpDocExt, avisoDocExt);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
