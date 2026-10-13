@@ -113,6 +113,11 @@
         <!-- Notificações ativas (já confirmadas) da administração -->
         <div id="area-notificacoes-ativas"
           style="display:flex; flex-direction:column; gap:8px; width:100%; box-sizing:border-box;"></div>
+
+        <!-- Botão para ver o histórico completo de notificações -->
+        <button type="button" class="block secundario" style="margin-top:8px;" onclick="abrirHistoricoNotificacoes()">
+          &#128276; Ver histórico de notificações
+        </button>
       </div>
 
       <form id="form-aviso" class="hidden">
@@ -177,9 +182,41 @@
 
     <!-- Lista de avisos -->
     <div class="card" id="card-avisos">
-      <h2>Minhas visitas</h2>
-      <div id="lista-avisos">
-        <p class="vazio">Carregando...</p>
+      <!-- Abas -->
+      <div class="tabs" id="tabs-visitas">
+        <button class="ativo" data-aba="minhas" onclick="trocarAbaVisitas('minhas')">Minhas visitas</button>
+        <button data-aba="lote" id="tab-lote" class="hidden" onclick="trocarAbaVisitas('lote')">Visitas gerais do lote</button>
+      </div>
+
+      <!-- Aba: Minhas visitas -->
+      <div id="aba-minhas">
+        <input type="text" id="busca-avisos" placeholder="Buscar por nome, tipo ou status..."
+          style="margin-bottom:16px;" oninput="renderizarAvisos()" />
+        <div id="lista-avisos">
+          <p class="vazio">Carregando...</p>
+        </div>
+      </div>
+
+      <!-- Aba: Visitas gerais do lote -->
+      <div id="aba-lote" class="hidden">
+        <!-- Lista de moradores do lote -->
+        <div id="area-lote-moradores">
+          <p class="text-muted" style="font-size:13px; margin:0 0 14px;">
+            Moradores do seu lote. Clique em "Visualizar" para ver as visitas de cada um.
+          </p>
+          <div id="lista-lote-moradores"><p class="vazio">Carregando...</p></div>
+        </div>
+
+        <!-- Visualização das visitas de um morador do lote -->
+        <div id="area-lote-visitas" class="hidden">
+          <div class="row-inline" style="justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h3 style="margin:0;">Visitas de <span id="lote-morador-nome" style="color:var(--verde-escuro);"></span></h3>
+            <button type="button" class="secundario mini" onclick="voltarListaLote()">&#8592; Voltar</button>
+          </div>
+          <input type="text" id="busca-lote-visitas" placeholder="Buscar por nome, tipo ou status..."
+            style="margin-bottom:16px;" oninput="renderizarVisitasLote()" />
+          <div id="lista-lote-visitas"><p class="vazio">Carregando...</p></div>
+        </div>
       </div>
     </div>
   </div>
@@ -255,10 +292,90 @@
       navAdmin(perfil, 'morador');
       document.getElementById('nome-usuario').textContent =
         perfil.nome + (perfil.bloco ? ` (${perfil.bloco})` : '');
+      // Libera a aba de supervisão do lote se o admin tiver permitido.
+      if (perfil.ver_lote || perfil.tipo === 'admin') {
+        document.getElementById('tab-lote').classList.remove('hidden');
+      }
       carregarAvisos();
       carregarMinhasEncomendas();
       carregarNotificacoes();
     })();
+
+    // ---------- Abas de visitas (Minhas / Lote) ----------
+    function trocarAbaVisitas(aba) {
+      document.querySelectorAll('#tabs-visitas button').forEach((b) =>
+        b.classList.toggle('ativo', b.dataset.aba === aba)
+      );
+      document.getElementById('aba-minhas').classList.toggle('hidden', aba !== 'minhas');
+      document.getElementById('aba-lote').classList.toggle('hidden', aba !== 'lote');
+      if (aba === 'lote') {
+        voltarListaLote();
+        carregarMoradoresLote();
+      }
+    }
+
+    // ---------- Visitas gerais do lote (supervisão) ----------
+    let moradoresLote = [];
+    let visitasLote = [];
+
+    async function carregarMoradoresLote() {
+      const alvo = document.getElementById('lista-lote-moradores');
+      alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const { moradores } = await api('/api/morador/lote/moradores');
+        moradoresLote = moradores || [];
+        if (!moradoresLote.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhum outro morador cadastrado no seu lote.</p>';
+          return;
+        }
+        alvo.innerHTML = moradoresLote.map((m) => `
+          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--fundo-cor, #f7faf8); border:1px solid var(--cinza-borda); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+            <div style="min-width:0;">
+              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
+              <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
+            </div>
+            <button class="mini" style="background:#2b6cb0; color:#fff; flex-shrink:0;"
+              onclick="visualizarMoradorLote('${escapeHtml(m.id)}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}')">&#128065; Visualizar</button>
+          </div>
+        `).join('');
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    async function visualizarMoradorLote(moradorId, nome) {
+      document.getElementById('area-lote-moradores').classList.add('hidden');
+      document.getElementById('area-lote-visitas').classList.remove('hidden');
+      document.getElementById('lote-morador-nome').textContent = nome;
+      document.getElementById('busca-lote-visitas').value = '';
+      const alvo = document.getElementById('lista-lote-visitas');
+      alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const { avisos } = await api(`/api/morador/lote/visitas/${moradorId}`);
+        visitasLote = avisos || [];
+        renderizarVisitasLote();
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function voltarListaLote() {
+      document.getElementById('area-lote-visitas').classList.add('hidden');
+      document.getElementById('area-lote-moradores').classList.remove('hidden');
+    }
+
+    function renderizarVisitasLote() {
+      const alvo = document.getElementById('lista-lote-visitas');
+      const termo = (document.getElementById('busca-lote-visitas').value || '').toLowerCase();
+      const lista = filtrarVisitasPorTermo(visitasLote, termo);
+      if (!lista.length) {
+        alvo.innerHTML = termo
+          ? '<p class="vazio">Nenhuma visita encontrada para a busca.</p>'
+          : '<p class="vazio">Este morador ainda não tem visitas.</p>';
+        return;
+      }
+      alvo.innerHTML = montarTabelaVisitas(lista, false);
+    }
 
     // ---------- Notificações da administração ----------
     async function carregarNotificacoes() {
@@ -286,6 +403,47 @@
           <div class="text-muted" style="font-size:12px; margin-top:8px;">Aviso da administração${n.criado_em ? ' · ' + formatarData(n.criado_em) : ''}</div>
         </div>
       `).join('');
+    }
+
+    // ---------- Histórico completo de notificações ----------
+    async function abrirHistoricoNotificacoes() {
+      const modal = document.getElementById('modal-hist-notif');
+      const lista = document.getElementById('hist-notif-lista');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      lista.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const { notificacoes } = await api('/api/morador/notificacoes/historico');
+        if (!notificacoes || !notificacoes.length) {
+          lista.innerHTML = '<p class="vazio">Nenhuma notificação recebida ainda.</p>';
+          return;
+        }
+        const agora = Date.now();
+        lista.innerHTML = notificacoes.map(n => {
+          const expirada = n.expira_em && new Date(n.expira_em).getTime() < agora;
+          const statusTxt = n.visualizado_em
+            ? `✓ Visualizada em ${formatarData(n.visualizado_em)}`
+            : '⏳ Não visualizada';
+          return `
+            <div style="background-color:${expirada ? '#f8fafc' : '#eff6ff'}; border:1px solid ${expirada ? 'var(--cinza-borda)' : '#bfdbfe'}; border-radius:8px; padding:14px 16px; word-break:break-word;">
+              <h3 style="margin:0 0 6px; color:${expirada ? 'var(--texto-suave)' : '#1e40af'}; font-size:15px; display:flex; align-items:center; gap:8px;">
+                &#128276; ${escapeHtml(n.titulo)} ${expirada ? '<span class="badge finalizada" style="font-size:10px;">Expirada</span>' : '<span class="badge entrada" style="font-size:10px;">Ativa</span>'}
+              </h3>
+              <p style="margin:0; white-space:pre-wrap; color:var(--texto); font-size:14px;">${escapeHtml(n.texto)}</p>
+              <div class="text-muted" style="font-size:12px; margin-top:8px;">
+                Enviada ${formatarData(n.criado_em)} · ${n.dias} dia(s) · ${statusTxt}
+              </div>
+            </div>`;
+        }).join('');
+      } catch (err) {
+        lista.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    function fecharHistoricoNotificacoes() {
+      const modal = document.getElementById('modal-hist-notif');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
     }
 
     // Mostra as notificações pendentes em sequência, travando a tela até confirmar cada uma.
@@ -639,41 +797,65 @@
       renderizarAvisos();
     }
 
-    function renderizarAvisos() {
-      const alvo = document.getElementById('lista-avisos');
-      if (!todosAvisos.length) {
-        alvo.innerHTML = '<p class="vazio">Você ainda não avisou nenhuma visita.</p>';
-        return;
-      }
+    // Filtra uma lista de visitas por um termo (nome, tipo, status ou placa).
+    function filtrarVisitasPorTermo(lista, termo) {
+      const q = (termo || '').trim().toLowerCase();
+      if (!q) return lista;
+      return lista.filter((a) => {
+        const campos = [a.nome_visitante, a.tipo, a.status, a.veiculo_placa]
+          .map((v) => (v || '').toString().toLowerCase());
+        return campos.some((c) => c.includes(q));
+      });
+    }
 
-      const avisosVisiveis = todosAvisos.slice(0, limiteAvisos);
-
-      alvo.innerHTML = `
+    // Monta a tabela HTML de visitas. permitirCancelar controla o botão Cancelar
+    // (só na visão do próprio morador; na supervisão do lote é somente leitura).
+    function montarTabelaVisitas(lista, permitirCancelar) {
+      return `
         <table>
           <thead>
-            <tr><th>Visitante</th><th>Tipo</th><th>Previsto</th><th>Status</th><th></th></tr>
+            <tr><th>Visitante</th><th>Tipo</th><th>Previsto</th><th>Status</th>${permitirCancelar ? '<th></th>' : ''}</tr>
           </thead>
           <tbody>
-            ${avisosVisiveis.map((a) => `
+            ${lista.map((a) => `
               <tr>
                 <td data-label="Visitante">${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
                 <td data-label="Tipo">${escapeHtml(a.tipo)}</td>
                 <td data-label="Previsto">${formatarData(a.data_prevista)}</td>
                 <td data-label="Status">${badgeStatus(a.status)}</td>
-                <td data-label="">${['Pendente', 'Autorizada'].includes(a.status)
+                ${permitirCancelar ? `<td data-label="">${['Pendente', 'Autorizada'].includes(a.status)
           ? `<button class="perigo mini" onclick="cancelar(${a.id})">Cancelar</button>`
-          : ''
-        }</td>
+          : ''}</td>` : ''}
               </tr>
             `).join('')}
           </tbody>
-        </table>
-        ${limiteAvisos < todosAvisos.length ? `
+        </table>`;
+    }
+
+    function renderizarAvisos() {
+      const alvo = document.getElementById('lista-avisos');
+      const termo = (document.getElementById('busca-avisos')?.value || '');
+      const filtrados = filtrarVisitasPorTermo(todosAvisos, termo);
+
+      if (!todosAvisos.length) {
+        alvo.innerHTML = '<p class="vazio">Você ainda não avisou nenhuma visita.</p>';
+        return;
+      }
+      if (!filtrados.length) {
+        alvo.innerHTML = '<p class="vazio">Nenhuma visita encontrada para a busca.</p>';
+        return;
+      }
+
+      // A busca mostra todos os resultados; sem busca aplica o limite com "Ver mais".
+      const temBusca = termo.trim().length > 0;
+      const visiveis = temBusca ? filtrados : filtrados.slice(0, limiteAvisos);
+
+      alvo.innerHTML = montarTabelaVisitas(visiveis, true) + (
+        (!temBusca && limiteAvisos < filtrados.length) ? `
           <div style="text-align: center; margin-top: 15px;">
             <button class="secundario" onclick="carregarMaisAvisos()">Ver mais 10...</button>
-          </div>
-        ` : ''}
-      `;
+          </div>` : ''
+      );
     }
 
     async function cancelar(id) {
@@ -923,6 +1105,20 @@
       <p class="text-muted" style="margin:12px 0 0; font-size:12px;">
         Você precisa confirmar o recebimento para continuar.
       </p>
+    </div>
+  </div>
+
+  <!-- Modal: histórico completo de notificações -->
+  <div id="modal-hist-notif" class="hidden"
+    style="position:fixed; inset:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:12px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 40px rgba(0,0,0,0.25); padding:22px 24px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h2 style="margin:0; font-size:18px;">&#128276; Histórico de notificações</h2>
+        <button type="button" class="secundario mini" onclick="fecharHistoricoNotificacoes()" style="border:none; font-size:20px; line-height:1; padding:4px 10px;">&times;</button>
+      </div>
+      <div id="hist-notif-lista" style="display:flex; flex-direction:column; gap:10px;">
+        <p class="vazio">Carregando...</p>
+      </div>
     </div>
   </div>
 </body>

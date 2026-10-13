@@ -126,6 +126,7 @@ function badgeStatus(status) {
     'Finalizada': 'finalizada',
     'Cancelada': 'cancelada',
     'Nao compareceu': 'cancelada',
+    'Visualizada': 'entrada',
   };
   const cls = mapa[status] || 'finalizada';
   return `<span class="badge ${cls}">${escapeHtml(status)}</span>`;

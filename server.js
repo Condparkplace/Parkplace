@@ -373,38 +373,121 @@ async function buscarRegistrosDoMorador(perfil, moradorId) {
   );
 }
 
-// Lista os avisos do proprio morador (incluindo historico da portaria direcionado a ele)
+// Monta a lista de "visitas" de um morador: os avisos cadastrados por ele +
+// os registros da portaria direcionados a ele. Usado tanto na visão própria
+// quanto na visão de supervisão do lote. Usa supabaseAdmin (service role).
+async function montarHistoricoVisitas(perfilMorador, moradorId) {
+  const { data: avisosData } = await supabaseAdmin
+    .from('avisos_visitas')
+    .select('*')
+    .eq('morador_id', moradorId)
+    .order('criado_em', { ascending: false });
+
+  let historico = [...(avisosData || [])];
+
+  const regData = await buscarRegistrosDoMorador(perfilMorador, moradorId);
+  if (regData.length) {
+    const diretos = regData.map((p) => ({
+      id: `p_${p.id}`,
+      nome_visitante: p.nome_pessoa === 'Encomenda' ? p.observacao : p.nome_pessoa,
+      documento_visitante: p.documento,
+      veiculo_placa: p.veiculo_placa,
+      tipo: p.nome_pessoa === 'Encomenda' ? 'Encomenda' : p.tipo,
+      data_prevista: p.entrada,
+      status: p.saida ? 'Finalizada' : 'Entrada Realizada',
+      criado_em: p.entrada,
+    }));
+    historico = historico.concat(diretos);
+  }
+
+  // Notificações da administração também entram no histórico (registro permanente).
+  // A tabela só existe se o schema foi migrado; por isso o try/catch silencioso.
+  try {
+    const { data: notifs } = await supabaseAdmin
+      .from('notificacoes_morador')
+      .select('*')
+      .eq('morador_id', moradorId)
+      .order('criado_em', { ascending: false });
+    (notifs || []).forEach((n) => {
+      historico.push({
+        id: `n_${n.id}`,
+        nome_visitante: n.titulo,
+        veiculo_placa: (n.texto || '').slice(0, 80), // vira o subtítulo na coluna do nome
+        documento_visitante: null,
+        tipo: 'Notificação',
+        data_prevista: n.criado_em,
+        status: n.visualizado_em ? 'Visualizada' : 'Pendente',
+        criado_em: n.criado_em,
+      });
+    });
+  } catch (e) {
+    // Tabela de notificações ainda não migrada: ignora.
+  }
+
+  historico.sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
+  return historico;
+}
+
+// Lista o histórico do próprio morador: avisos de visita + registros da portaria
+// direcionados a ele + notificações da administração.
 app.get('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   try {
-    const { data: avisosData, error: errAvisos } = await req.supabase
-      .from('avisos_visitas')
-      .select('*')
-      .order('criado_em', { ascending: false });
-    if (errAvisos) throw errAvisos;
+    const historico = await montarHistoricoVisitas(req.perfil, req.user.id);
+    res.json({ avisos: historico });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
 
-    let historico = [...(avisosData || [])];
+// Lista os OUTROS moradores do mesmo lote (visão de supervisão).
+// Só é liberada se o morador logado tiver a permissão ver_lote.
+app.get('/api/morador/lote/moradores', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const souAdmin = req.perfil?.tipo === 'admin';
+    if (!souAdmin && !req.perfil?.ver_lote) {
+      return res.status(403).json({ error: 'Você não tem permissão para ver as visitas do lote.' });
+    }
+    const bloco = req.perfil?.bloco;
+    if (!bloco) return res.json({ moradores: [] });
 
-    // Registros da portaria direcionados a ESTE morador especificamente.
-    // Preferência pelo vínculo direto (destino_morador = eu). Para registros
-    // antigos — anteriores a esse vínculo — mantemos um fallback por lote+nome,
-    // restrito aos que ainda não têm destino_morador, para não vazar entre vizinhos.
-    const regData = await buscarRegistrosDoMorador(req.perfil, req.user.id);
-    if (regData.length) {
-      const diretos = regData.map(p => ({
-        id: `p_${p.id}`,
-        nome_visitante: p.nome_pessoa === 'Encomenda' ? p.observacao : p.nome_pessoa,
-        documento_visitante: p.documento,
-        veiculo_placa: p.veiculo_placa,
-        tipo: p.nome_pessoa === 'Encomenda' ? 'Encomenda' : p.tipo,
-        data_prevista: p.entrada,
-        status: p.saida ? 'Finalizada' : 'Entrada Realizada',
-        criado_em: p.entrada
-      }));
-      historico = historico.concat(diretos);
+    const { data, error } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, bloco, telefone')
+      .eq('bloco', bloco)
+      .eq('tipo', 'morador')
+      .neq('id', req.user.id) // exclui o próprio
+      .order('nome', { ascending: true });
+    if (error) throw error;
+    res.json({ moradores: data || [] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Visitas de um morador específico do lote (visão de supervisão).
+// Valida: solicitante tem ver_lote E o alvo é do MESMO lote.
+app.get('/api/morador/lote/visitas/:moradorId', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const souAdmin = req.perfil?.tipo === 'admin';
+    if (!souAdmin && !req.perfil?.ver_lote) {
+      return res.status(403).json({ error: 'Você não tem permissão para ver as visitas do lote.' });
     }
 
-    historico.sort((a, b) => new Date(b.criado_em) - new Date(a.criado_em));
-    res.json({ avisos: historico });
+    const { moradorId } = req.params;
+    const { data: alvo, error: errAlvo } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, bloco, tipo')
+      .eq('id', moradorId)
+      .single();
+    if (errAlvo || !alvo) return res.status(404).json({ error: 'Morador não encontrado.' });
+
+    // Segurança: admin pode ver qualquer um; morador só do próprio lote.
+    if (!souAdmin && (alvo.bloco || '') !== (req.perfil?.bloco || '')) {
+      return res.status(403).json({ error: 'Este morador não pertence ao seu lote.' });
+    }
+
+    const visitas = await montarHistoricoVisitas(alvo, moradorId);
+    res.json({ morador: { id: alvo.id, nome: alvo.nome, bloco: alvo.bloco }, avisos: visitas });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -2035,7 +2118,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 // Atualiza usuario existente
 app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
-  const { nome, tipo, bloco, telefone, cpf, password } = req.body || {};
+  const { nome, tipo, bloco, telefone, cpf, password, ver_lote } = req.body || {};
 
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
     return res.status(400).json({ error: 'Tipo inválido.' });
@@ -2084,13 +2167,29 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
   if (cpfLimpo !== undefined) {
     updatesPerfil.cpf = cpfLimpo;
   }
+  if (ver_lote !== undefined) {
+    updatesPerfil.ver_lote = !!ver_lote;
+  }
 
-  const { data, error } = await supabaseAdmin
+  let { data, error } = await supabaseAdmin
     .from('perfis')
     .update(updatesPerfil)
     .eq('id', id)
     .select()
     .single();
+
+  // Fallback caso a coluna ver_lote ainda nao exista no banco.
+  if (error && error.message && error.message.includes('ver_lote')) {
+    delete updatesPerfil.ver_lote;
+    const semVerLote = await supabaseAdmin
+      .from('perfis')
+      .update(updatesPerfil)
+      .eq('id', id)
+      .select()
+      .single();
+    data = semVerLote.data;
+    error = semVerLote.error;
+  }
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ perfil: data });
@@ -2116,6 +2215,20 @@ app.post('/api/admin/usuarios/:id/toggle', requireAuth, requireRole('admin'), as
   const { data, error } = await supabaseAdmin
     .from('perfis')
     .update({ ativo: !!ativo })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ perfil: data });
+});
+
+// Liga/desliga a permissão do morador ver as visitas de todo o lote.
+app.post('/api/admin/usuarios/:id/ver-lote', requireAuth, requireRole('admin'), async (req, res) => {
+  const { id } = req.params;
+  const { ver_lote } = req.body || {};
+  const { data, error } = await supabaseAdmin
+    .from('perfis')
+    .update({ ver_lote: !!ver_lote })
     .eq('id', id)
     .select()
     .single();
@@ -2501,6 +2614,17 @@ app.delete('/api/admin/notificacoes/:id', requireAuth, requireRole('admin'), asy
   res.json({ ok: true });
 });
 
+// Morador lista TODAS as próprias notificações (histórico completo, inclusive expiradas).
+app.get('/api/morador/notificacoes/historico', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .select('*')
+    .eq('morador_id', req.user.id)
+    .order('criado_em', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ notificacoes: data || [] });
+});
+
 // Morador lista as próprias notificações ainda válidas (não expiradas).
 // Retorna separadas em: pendentes (não confirmadas, travam a tela) e ativas (já confirmadas, viram card).
 app.get('/api/morador/notificacoes', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
@@ -2534,6 +2658,49 @@ app.post('/api/morador/notificacoes/:id/confirmar', requireAuth, requireRole('mo
 
   if (notif.visualizado_em) {
     return res.json({ notificacao: notif }); // já confirmada: idempotente
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .update({ visualizado_em: new Date().toISOString() })
+    .eq('id', id)
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ notificacao: data });
+});
+
+// Porteiro lista as próprias notificações válidas (mesma tabela; o destinatário é o id do usuário logado).
+app.get('/api/portaria/notificacoes', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const agora = new Date().toISOString();
+  const { data, error } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .select('*')
+    .eq('morador_id', req.user.id)
+    .gt('expira_em', agora)
+    .order('criado_em', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+
+  const todas = data || [];
+  const pendentes = todas.filter((n) => !n.visualizado_em);
+  const ativas = todas.filter((n) => n.visualizado_em);
+  res.json({ pendentes, ativas });
+});
+
+// Porteiro confirma o recebimento de uma notificação.
+app.post('/api/portaria/notificacoes/:id/confirmar', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { id } = req.params;
+
+  const { data: notif, error: errGet } = await supabaseAdmin
+    .from('notificacoes_morador')
+    .select('*')
+    .eq('id', id)
+    .eq('morador_id', req.user.id)
+    .single();
+  if (errGet || !notif) return res.status(404).json({ error: 'Notificação não encontrada.' });
+
+  if (notif.visualizado_em) {
+    return res.json({ notificacao: notif });
   }
 
   const { data, error } = await supabaseAdmin

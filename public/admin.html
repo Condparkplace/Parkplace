@@ -40,7 +40,7 @@
       </div>
     </div>
 
-    <div class="grid grid-2">
+    <div class="grid">
       <!-- Cadastro de usuario -->
       <div>
         <div class="card">
@@ -142,6 +142,14 @@
                   <span id="msg-cpf-admin" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
                 </div>
               </div>
+
+              <label id="wrap-ver-lote" class="row-inline" style="align-items:center; cursor:pointer; font-weight:normal; user-select:none; margin-top:4px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:10px 12px;">
+                <input type="checkbox" id="ver_lote" style="width:auto; margin:0 8px 0 0;" />
+                <span style="font-size:13px; color:#1e40af;">
+                  &#128101; <strong>Pode ver as visitas de todos os moradores do lote</strong>
+                  <br><span class="text-muted" style="font-size:12px;">Libera a aba "Visitas gerais do lote" para este morador (visão de supervisão).</span>
+                </span>
+              </label>
             </div>
 
             <label for="telefone">Telefone</label>
@@ -405,6 +413,10 @@
       // Mostra campos de lote para morador e admin (muitos administradores são moradores)
       document.getElementById('campos-morador').classList.toggle('hidden', tipo === 'porteiro');
 
+      // Permissão de "ver visitas do lote" só faz sentido para morador.
+      const wrapVerLote = document.getElementById('wrap-ver-lote');
+      if (wrapVerLote) wrapVerLote.classList.toggle('hidden', tipo !== 'morador');
+
       const wrapBuscaPrestador = document.getElementById('wrap-busca-prestador');
       const wrapBuscaMorador = document.getElementById('wrap-busca-morador');
       const labelNome = document.getElementById('label-nome');
@@ -506,6 +518,7 @@
       document.getElementById('bloco').value = u.bloco || '';
       document.getElementById('telefone').value = u.telefone || '';
       document.getElementById('cpf').value = formatarCpf(u.cpf || '');
+      document.getElementById('ver_lote').checked = !!u.ver_lote;
       atualizarCamposPorTipo();
 
       // Ao editar, permite redefinir a senha se desejado
@@ -599,6 +612,8 @@
           if (novaSenha && novaSenha.trim()) {
             payload.password = novaSenha.trim();
           }
+          // Permissão de ver o lote só se aplica a morador.
+          payload.ver_lote = (dados.tipo === 'morador') && document.getElementById('ver_lote').checked;
           await api(`/api/admin/usuarios/${editandoId}`, {
             method: 'PUT',
             body: JSON.stringify(payload),
@@ -723,9 +738,16 @@
           ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
           : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
 
-        // Botão de notificação disponível apenas para moradores já aprovados.
-        const btnNotificar = (u.tipo === 'morador' && !isPend)
+        // Botão de notificação disponível para moradores e porteiros (não pendentes).
+        const btnNotificar = ((u.tipo === 'morador' || u.tipo === 'porteiro') && !isPend)
           ? `<button class="mini" style="background-color:#2b6cb0; color:#fff;" onclick="abrirNotificacao('${u.id}', '${escapeHtml(u.nome).replace(/'/g, "\\'")}')">&#128276; Notificar</button>`
+          : '';
+
+        // Botão para ligar/desligar a permissão de ver as visitas de todo o lote (só morador aprovado).
+        const btnVerLote = (u.tipo === 'morador' && !isPend)
+          ? (u.ver_lote
+              ? `<button class="mini" style="background-color:#16a34a; color:#fff;" title="Clique para remover a permissão de ver o lote" onclick="toggleVerLote('${u.id}', false)">&#128065; Vê o lote</button>`
+              : `<button class="secundario mini" title="Clique para permitir ver as visitas de todo o lote" onclick="toggleVerLote('${u.id}', true)">&#128065; Ver lote</button>`)
           : '';
 
         const cpfFormatado = u.cpf ? formatarDocumento(u.cpf) : '';
@@ -749,7 +771,9 @@
               <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>
               ${btnStatus}
               ${btnNotificar}
-              <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button>
+              ${btnVerLote}
+              ${'' /* Botão "Remover" ocultado a pedido. Para reativar, inserir aqui:
+                 <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button> */}
             </td>
           </tr>`;
       };
@@ -794,6 +818,19 @@
         await api(`/api/admin/usuarios/${id}/toggle`, {
           method: 'POST',
           body: JSON.stringify({ ativo }),
+        });
+        carregarUsuarios();
+      } catch (err) {
+        alert(err.message);
+      }
+    }
+
+    // Liga/desliga a permissão de ver as visitas do lote direto na linha.
+    async function toggleVerLote(id, ver_lote) {
+      try {
+        await api(`/api/admin/usuarios/${id}/ver-lote`, {
+          method: 'POST',
+          body: JSON.stringify({ ver_lote }),
         });
         carregarUsuarios();
       } catch (err) {

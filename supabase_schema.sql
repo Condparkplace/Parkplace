@@ -47,6 +47,10 @@ alter table public.perfis add column if not exists aprovado boolean not null def
 alter table public.perfis add column if not exists cpf text;
 create unique index if not exists idx_perfis_cpf on public.perfis(cpf) where cpf is not null;
 
+-- Migracao: permissao do morador para ver as visitas de TODOS os moradores do
+-- mesmo lote (liberada pelo admin). Padrao: false (so ve as proprias).
+alter table public.perfis add column if not exists ver_lote boolean not null default false;
+
 -- ------------------------------------------------------------
 -- 3) Avisos de visita (morador avisa a portaria)
 -- ------------------------------------------------------------

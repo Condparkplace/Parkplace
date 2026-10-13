@@ -40,6 +40,9 @@
         </div>
       </div>
 
+      <!-- Notificações ativas da administração para o porteiro -->
+      <div id="area-notif-porteiro"></div>
+
       <!-- Botoes de acao principais -->
       <div class="row-inline" style="margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
         <button type="button"
@@ -278,7 +281,80 @@
       document.getElementById('area-busca-cpf').classList.remove('hidden');
       document.getElementById('busca-doc').focus();
       carregarPrevistas();
+      carregarNotificacoesPorteiro();
     })();
+
+    // ---------- Notificações do porteiro ----------
+    // Pendentes travam a tela até confirmar; ativas aparecem como faixa de aviso.
+    async function carregarNotificacoesPorteiro() {
+      try {
+        const { pendentes, ativas } = await api('/api/portaria/notificacoes');
+        renderNotificacoesPorteiroAtivas(ativas || []);
+        if (pendentes && pendentes.length) {
+          mostrarNotificacaoPorteiro(pendentes);
+        }
+      } catch (err) {
+        console.error('Erro ao carregar notificações do porteiro:', err);
+      }
+    }
+
+    function renderNotificacoesPorteiroAtivas(ativas) {
+      const area = document.getElementById('area-notif-porteiro');
+      if (!area) return;
+      if (!ativas.length) { area.innerHTML = ''; return; }
+      area.innerHTML = ativas.map(n => `
+        <div style="margin-bottom:12px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:14px 16px; word-break:break-word;">
+          <h3 style="margin:0 0 6px; color:#1e40af; display:flex; align-items:center; gap:8px; font-size:15px;">
+            &#128276; ${escapeHtml(n.titulo)}
+          </h3>
+          <p style="margin:0; white-space:pre-wrap; color:#1e3a5f; font-size:14px;">${escapeHtml(n.texto)}</p>
+          <div class="text-muted" style="font-size:12px; margin-top:6px;">Aviso da administração${n.criado_em ? ' · ' + formatarData(n.criado_em) : ''}</div>
+        </div>
+      `).join('');
+    }
+
+    function mostrarNotificacaoPorteiro(pendentes) {
+      let indice = 0;
+      const overlay = document.getElementById('overlay-notif-porteiro');
+      const tituloEl = document.getElementById('notif-port-titulo');
+      const textoEl = document.getElementById('notif-port-texto');
+      const btn = document.getElementById('btn-recebi-notif-porteiro');
+
+      function exibir() {
+        const n = pendentes[indice];
+        tituloEl.textContent = n.titulo;
+        textoEl.textContent = n.texto;
+        overlay.classList.remove('hidden');
+        overlay.style.display = 'flex';
+      }
+
+      btn.onclick = async () => {
+        const n = pendentes[indice];
+        btn.disabled = true;
+        btn.textContent = 'Confirmando...';
+        try {
+          await api(`/api/portaria/notificacoes/${n.id}/confirmar`, { method: 'POST' });
+          indice++;
+          if (indice < pendentes.length) {
+            btn.disabled = false;
+            btn.textContent = 'Recebi a notificação';
+            exibir();
+          } else {
+            overlay.classList.add('hidden');
+            overlay.style.display = 'none';
+            btn.disabled = false;
+            btn.textContent = 'Recebi a notificação';
+            carregarNotificacoesPorteiro();
+          }
+        } catch (err) {
+          btn.disabled = false;
+          btn.textContent = 'Recebi a notificação';
+          alert('Erro ao confirmar: ' + err.message);
+        }
+      };
+
+      exibir();
+    }
 
     function alternarBuscaCpf() {
       const area = document.getElementById('area-busca-cpf');
@@ -1754,6 +1830,22 @@
       <button type="button" class="block" id="btn-confirmar-turno" onclick="confirmarTrocaTurno()" style="margin-top:18px;">
         Assumir plantão
       </button>
+    </div>
+  </div>
+
+  <!-- Overlay de notificação do porteiro (trava a tela até confirmar) -->
+  <div id="overlay-notif-porteiro" class="hidden"
+    style="position:fixed; inset:0; background:rgba(15,23,42,0.75); backdrop-filter:blur(3px); z-index:10001; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 26px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center;">
+      <div style="font-size:44px; line-height:1;">&#128276;</div>
+      <h2 id="notif-port-titulo" style="margin:12px 0 10px; font-size:20px; color:var(--verde-escuro); word-break:break-word;"></h2>
+      <p id="notif-port-texto" style="margin:0 0 20px; font-size:15px; color:var(--texto); white-space:pre-wrap; word-break:break-word; text-align:left;"></p>
+      <button type="button" class="block" id="btn-recebi-notif-porteiro" style="margin:0; background:var(--verde);">
+        &#9989; Recebi a notificação
+      </button>
+      <p class="text-muted" style="margin:12px 0 0; font-size:12px;">
+        Você precisa confirmar o recebimento para continuar.
+      </p>
     </div>
   </div>
 </body>
