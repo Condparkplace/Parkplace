@@ -154,4 +154,63 @@ function formatarCpf(v) {
     .replace(/\.(\d{3})(\d)/, '.$1-$2');
 }
 
+// Validador oficial de CPF (dígitos verificadores matemáticos + bloqueio de sequências)
+function validarCpf(v) {
+  if (!v) return false;
+  const d = String(v).replace(/\D/g, '');
+  if (d.length !== 11 || /^(\d)\1{10}$/.test(d)) return false;
+
+  let soma = 0;
+  for (let i = 0; i < 9; i++) {
+    soma += parseInt(d.charAt(i), 10) * (10 - i);
+  }
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(d.charAt(9), 10)) return false;
+
+  soma = 0;
+  for (let i = 0; i < 10; i++) {
+    soma += parseInt(d.charAt(i), 10) * (11 - i);
+  }
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  return resto === parseInt(d.charAt(10), 10);
+}
+
+// Vincula máscara e feedback visual em tempo real para qualquer campo de CPF
+function vincularValidadorCpf(input, msgContainer) {
+  if (!input) return;
+  input.addEventListener('input', () => {
+    const raw = input.value.replace(/\D/g, '');
+    if (raw.length <= 11) {
+      input.value = formatarCpf(raw);
+    }
+    if (raw.length === 11) {
+      const valido = validarCpf(raw);
+      if (valido) {
+        input.style.borderColor = 'var(--verde, #16a34a)';
+        if (msgContainer) {
+          msgContainer.textContent = '✓ CPF válido';
+          msgContainer.style.color = 'var(--verde, #16a34a)';
+          msgContainer.classList.remove('hidden');
+        }
+      } else {
+        input.style.borderColor = 'var(--vermelho, #dc2626)';
+        if (msgContainer) {
+          msgContainer.textContent = '⚠ CPF inválido. Verifique os números digitados.';
+          msgContainer.style.color = 'var(--vermelho, #dc2626)';
+          msgContainer.classList.remove('hidden');
+        }
+      }
+    } else {
+      input.style.borderColor = '';
+      if (msgContainer) {
+        msgContainer.textContent = '';
+        msgContainer.classList.add('hidden');
+      }
+    }
+  });
+}
+
+
 

@@ -660,6 +660,10 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
 
   const docLimpo = doc.replace(/\D/g, '');
 
+  if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
+    return res.status(400).json({ error: 'CPF inválido. Verifique os números digitados.' });
+  }
+
   // 1. Procura primeiro na base oficial de MORADORES / ADMINS
   const { data: perfis, error: errPerfis } = await supabaseAdmin
     .from('perfis')
@@ -779,6 +783,11 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
 
   if (!nome_pessoa) {
     return res.status(400).json({ error: 'Informe o nome da pessoa.' });
+  }
+
+  const docLimpo = (documento || '').replace(/\D/g, '');
+  if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
+    return res.status(400).json({ error: 'O CPF informado no documento é inválido.' });
   }
 
   const tipoFinal = tipo || 'Visitante';

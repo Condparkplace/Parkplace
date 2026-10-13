@@ -127,6 +127,7 @@
 
         <label for="documento_visitante">Documento (RG/CPF)</label>
         <input type="text" id="documento_visitante" />
+        <span id="aviso-cpf-visitante" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
         <label for="veiculo_placa">Veículo / placa</label>
         <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" />
@@ -334,10 +335,25 @@
       }
     });
 
+    const inpDocVis = document.getElementById('documento_visitante');
+    const avisoDocVis = document.getElementById('aviso-cpf-visitante');
+    if (inpDocVis) vincularValidadorCpf(inpDocVis, avisoDocVis);
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       msg.classList.add('hidden');
+
+      const docVis = document.getElementById('documento_visitante').value.trim();
+      const docVisLimpo = docVis.replace(/\D/g, '');
+      if (docVisLimpo.length === 11 && !validarCpf(docVisLimpo)) {
+        msg.textContent = 'O CPF informado para o visitante é inválido! Confira os 11 dígitos.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('documento_visitante').focus();
+        document.getElementById('documento_visitante').style.borderColor = 'var(--vermelho, #dc2626)';
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Enviando...';
       try {

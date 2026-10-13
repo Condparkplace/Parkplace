@@ -62,6 +62,7 @@
           <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
           <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
         </div>
+        <span id="aviso-cpf-busca" class="hidden" style="display:block; margin-top:6px; font-size:13px; font-weight:600;"></span>
         <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
       </div>
 
@@ -97,6 +98,7 @@
           <div>
             <label for="documento">Documento</label>
             <input type="text" id="documento" />
+            <span id="aviso-cpf-documento" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
           </div>
           <div>
             <label for="veiculo_placa">Veículo / placa *</label>
@@ -462,6 +464,18 @@
       try {
         const docLimpo = doc.replace(/\D/g, '');
 
+        // Validação de CPF caso tenha digitado 11 dígitos
+        if (docLimpo.length === 11 && !validarCpf(docLimpo)) {
+          msg.textContent = 'CPF inválido! Verifique os 11 números digitados.';
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+          document.getElementById('busca-doc').focus();
+          document.getElementById('busca-doc').style.borderColor = 'var(--vermelho, #dc2626)';
+          btn.disabled = false;
+          btn.textContent = 'Buscar';
+          return;
+        }
+
         // OPCAO 1: existe aviso previsto para HOJE com este documento?
         // Atualiza o cache de previstas e procura nele.
         await carregarPrevistas();
@@ -547,26 +561,25 @@
       document.getElementById('msg-cep').textContent = '';
       const alertaMorador = document.getElementById('alerta-morador-cpf');
       if (alertaMorador) alertaMorador.classList.add('hidden');
+      const avisoBusca = document.getElementById('aviso-cpf-busca');
+      if (avisoBusca) { avisoBusca.textContent = ''; avisoBusca.classList.add('hidden'); }
+      const avisoDoc = document.getElementById('aviso-cpf-documento');
+      if (avisoDoc) { avisoDoc.textContent = ''; avisoDoc.classList.add('hidden'); }
+      document.getElementById('busca-doc').style.borderColor = '';
+      document.getElementById('documento').style.borderColor = '';
       formEntrada.classList.add('hidden');
       carregarPrevistas(); // volta a lista completa de hoje
       document.getElementById('busca-doc').focus();
     }
 
-    // Mascara amigavel para campos de CPF na portaria
+    // Mascara e validação em tempo real para campos de CPF na portaria
     const inpBuscaDoc = document.getElementById('busca-doc');
-    if (inpBuscaDoc) {
-      inpBuscaDoc.addEventListener('input', () => {
-        const raw = inpBuscaDoc.value.replace(/\D/g, '');
-        if (raw.length <= 11) inpBuscaDoc.value = formatarCpf(raw);
-      });
-    }
+    const avisoCpfBusca = document.getElementById('aviso-cpf-busca');
+    if (inpBuscaDoc) vincularValidadorCpf(inpBuscaDoc, avisoCpfBusca);
+
     const inpDocPortaria = document.getElementById('documento');
-    if (inpDocPortaria) {
-      inpDocPortaria.addEventListener('input', () => {
-        const raw = inpDocPortaria.value.replace(/\D/g, '');
-        if (raw.length <= 11) inpDocPortaria.value = formatarCpf(raw);
-      });
-    }
+    const avisoCpfDoc = document.getElementById('aviso-cpf-documento');
+    if (inpDocPortaria) vincularValidadorCpf(inpDocPortaria, avisoCpfDoc);
 
     // Busca ao pressionar Enter no campo de documento
     document.getElementById('busca-doc').addEventListener('keydown', (e) => {
@@ -651,6 +664,18 @@
     formEntrada.addEventListener('submit', async (e) => {
       e.preventDefault();
       msgEntrada.classList.add('hidden');
+
+      const docForm = document.getElementById('documento').value.trim();
+      const docFormLimpo = docForm.replace(/\D/g, '');
+      if (docFormLimpo.length === 11 && !validarCpf(docFormLimpo)) {
+        msgEntrada.textContent = 'O CPF informado no campo Documento é inválido! Confira os 11 dígitos.';
+        msgEntrada.className = 'msg erro';
+        msgEntrada.classList.remove('hidden');
+        document.getElementById('documento').focus();
+        document.getElementById('documento').style.borderColor = 'var(--vermelho, #dc2626)';
+        return;
+      }
+
       try {
         await api('/api/portaria/entrada', {
           method: 'POST',

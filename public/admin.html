@@ -139,6 +139,7 @@
                 <div>
                   <label for="cpf">CPF (opcional)</label>
                   <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" />
+                  <span id="msg-cpf-admin" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
                 </div>
               </div>
             </div>
@@ -378,10 +379,9 @@
     }
 
     const adminCpfInput = document.getElementById('cpf');
+    const msgCpfAdmin = document.getElementById('msg-cpf-admin');
     if (adminCpfInput) {
-      adminCpfInput.addEventListener('input', () => {
-        adminCpfInput.value = formatarCpf(adminCpfInput.value);
-      });
+      vincularValidadorCpf(adminCpfInput, msgCpfAdmin);
     }
 
     function selecionarMorador(m) {
@@ -604,6 +604,18 @@
       btnUsuario.disabled = true;
       btnUsuario.textContent = editandoId ? 'Salvando...' : 'Cadastrando...';
       try {
+        const cpfDigitos = document.getElementById('cpf').value.replace(/\D/g, '');
+        if (cpfDigitos && !validarCpf(cpfDigitos)) {
+          msgUsuario.textContent = 'CPF inválido! Confira os 11 números digitados.';
+          msgUsuario.className = 'msg erro';
+          msgUsuario.classList.remove('hidden');
+          btnUsuario.disabled = false;
+          btnUsuario.textContent = editandoId ? 'Salvar' : 'Cadastrar';
+          document.getElementById('cpf').focus();
+          document.getElementById('cpf').style.borderColor = 'var(--vermelho, #dc2626)';
+          return;
+        }
+
         const dados = {
           nome: document.getElementById('nome').value.trim(),
           tipo: document.getElementById('tipo').value,

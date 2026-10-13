@@ -27,6 +27,7 @@
 
           <label for="documento_visitante">Documento (RG ou CPF) *</label>
           <input type="text" id="documento_visitante" required />
+          <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
           <label for="veiculo_placa">Veículo / placa (Opcional)</label>
           <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" />
@@ -184,9 +185,25 @@
       return (partes + (cep ? ' - CEP ' + cep : '')).trim();
     }
 
+    const inpDocExt = document.getElementById('documento_visitante');
+    const avisoDocExt = document.getElementById('aviso-cpf-externo');
+    if (inpDocExt) vincularValidadorCpf(inpDocExt, avisoDocExt);
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       msg.classList.add('hidden');
+
+      const docExt = document.getElementById('documento_visitante').value.trim();
+      const docExtLimpo = docExt.replace(/\D/g, '');
+      if (docExtLimpo.length === 11 && !validarCpf(docExtLimpo)) {
+        msg.textContent = 'O CPF informado é inválido! Confira os 11 dígitos.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('documento_visitante').focus();
+        document.getElementById('documento_visitante').style.borderColor = 'var(--vermelho, #dc2626)';
+        return;
+      }
+
       btn.disabled = true;
       btn.textContent = 'Enviando...';
 
