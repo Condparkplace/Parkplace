@@ -40,6 +40,10 @@ create table if not exists public.perfis (
 -- Migracao: cadastro de morador via link precisa de aprovacao do admin.
 alter table public.perfis add column if not exists aprovado boolean not null default true;
 
+-- Migracao: CPF do morador (somente numeros, unico).
+alter table public.perfis add column if not exists cpf text;
+create unique index if not exists idx_perfis_cpf on public.perfis(cpf) where cpf is not null;
+
 -- ------------------------------------------------------------
 -- 3) Avisos de visita (morador avisa a portaria)
 -- ------------------------------------------------------------

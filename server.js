@@ -151,10 +151,29 @@ app.post('/api/logout', (req, res) => {
 // O morador fica PENDENTE (inativo) ate o admin aprovar.
 const LOTES_VALIDOS = Array.from({ length: 28 }, (_, i) => 'Lote ' + String(i + 1).padStart(2, '0'));
 
+function cpfValido(cpf) {
+  const d = (cpf || '').replace(/\D/g, '');
+  if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+  for (let t = 9; t < 11; t++) {
+    let s = 0;
+    for (let i = 0; i < t; i++) s += Number(d[i]) * (t + 1 - i);
+    if (((s * 10) % 11) % 10 !== Number(d[t])) return false;
+  }
+  return true;
+}
+
 app.post('/api/public/cadastro', async (req, res) => {
   const { nome, bloco, telefone, email, password } = req.body || {};
-  if (!nome?.trim() || !bloco || !telefone?.trim() || !email?.trim() || !password) {
+  const cpf = (req.body?.cpf || '').replace(/\D/g, '');
+  if (!nome?.trim() || !bloco || !telefone?.trim() || !email?.trim() || !password || !cpf) {
     return res.status(400).json({ error: 'Preencha todos os campos obrigatórios.' });
+  }
+  if (!cpfValido(cpf)) {
+    return res.status(400).json({ error: 'CPF inválido.' });
+  }
+  const { data: cpfExiste } = await supabaseAdmin.from('perfis').select('id').eq('cpf', cpf).limit(1);
+  if (cpfExiste && cpfExiste.length > 0) {
+    return res.status(400).json({ error: 'Este CPF já está cadastrado.' });
   }
   if (!LOTES_VALIDOS.includes(bloco)) {
     return res.status(400).json({ error: 'Lote inválido.' });
@@ -181,6 +200,7 @@ app.post('/api/public/cadastro', async (req, res) => {
     tipo: 'morador',
     bloco,
     telefone: meta.telefone,
+    cpf,
     ativo: false,
     aprovado: false,
   });
@@ -994,7 +1014,7 @@ app.get('/api/admin/moradores-busca', requireAuth, requireRole('admin'), async (
 
     const { data: perfis, error } = await supabaseAdmin
       .from('perfis')
-      .select('id, nome, tipo, bloco, telefone, aprovado, ativo')
+      .select('id, nome, tipo, bloco, telefone, cpf, aprovado, ativo')
       .order('bloco', { ascending: true });
 
     if (error) throw error;
@@ -1016,10 +1036,12 @@ app.get('/api/admin/moradores-busca', requireAuth, requireRole('admin'), async (
         const blocoNorm = (item.bloco || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const emailNorm = (item.email || '').toLowerCase();
         const telNum = (item.telefone || '').replace(/\D/g, '');
+        const cpfNum = (item.cpf || '').replace(/\D/g, '');
         return nomeNorm.includes(qNorm) ||
                blocoNorm.includes(qNorm) ||
                emailNorm.includes(qNorm) ||
-               (qNum && telNum.includes(qNum));
+               (qNum && telNum.includes(qNum)) ||
+               (qNum && cpfNum.includes(qNum));
       });
     }
 
@@ -1040,11 +1062,16 @@ app.get('/api/admin/moradores-busca', requireAuth, requireRole('admin'), async (
 
 // Cria um novo usuario (porteiro, morador ou admin) ou promove morador existente a admin
 app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
-  let { email, password, nome, tipo, bloco, telefone, morador_id } = req.body || {};
+  let { email, password, nome, tipo, bloco, telefone, cpf, morador_id } = req.body || {};
 
   nome = (nome || '').trim();
   tipo = (tipo || '').trim();
   email = (email || '').trim().toLowerCase();
+  const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
+
+  if (cpfLimpo && !cpfValido(cpfLimpo)) {
+    return res.status(400).json({ error: 'CPF inválido.' });
+  }
 
   if (!nome || !tipo) {
     return res.status(400).json({ error: 'Preencha o nome e o perfil.' });
@@ -1057,7 +1084,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
   if (morador_id && tipo === 'admin') {
     const { data: moradorPerfil } = await supabaseAdmin
       .from('perfis')
-      .select('id, nome, bloco, telefone')
+      .select('id, nome, bloco, telefone, cpf')
       .eq('id', morador_id)
       .single();
 
@@ -1067,6 +1094,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
         tipo: 'admin',
         bloco: bloco || moradorPerfil.bloco,
         telefone: telefone || moradorPerfil.telefone,
+        cpf: cpfLimpo || moradorPerfil.cpf || null,
         ativo: true,
         aprovado: true,
       }).eq('id', morador_id);
@@ -1077,6 +1105,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
           tipo: 'admin',
           bloco: bloco || moradorPerfil.bloco,
           telefone: telefone || moradorPerfil.telefone,
+          cpf: cpfLimpo || moradorPerfil.cpf || null,
         }
       };
       if (password && password.trim().length >= 6) {
@@ -1127,7 +1156,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     email,
     password,
     email_confirm: true,
-    user_metadata: { nome, tipo, bloco, telefone },
+    user_metadata: { nome, tipo, bloco, telefone, cpf: cpfLimpo },
   });
 
   if (error) {
@@ -1142,12 +1171,13 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
           tipo: 'admin',
           bloco: bloco || null,
           telefone: telefone || null,
+          cpf: cpfLimpo || undefined,
           ativo: true,
           aprovado: true,
         }).eq('id', existenteAuth.id);
 
         const authUpdates = {
-          user_metadata: { nome, tipo: 'admin', bloco, telefone }
+          user_metadata: { nome, tipo: 'admin', bloco, telefone, cpf: cpfLimpo }
         };
         if (password && password.trim().length >= 6) {
           authUpdates.password = password.trim();
@@ -1167,6 +1197,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     tipo,
     bloco: bloco || null,
     telefone: telefone || null,
+    cpf: cpfLimpo,
     ativo: true,
     aprovado: true,
   });
@@ -1177,13 +1208,18 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 // Atualiza usuario existente
 app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
-  const { nome, tipo, bloco, telefone, password } = req.body || {};
+  const { nome, tipo, bloco, telefone, cpf, password } = req.body || {};
 
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
     return res.status(400).json({ error: 'Tipo inválido.' });
   }
 
   const nomeLimpo = (nome || '').trim();
+  const cpfLimpo = cpf !== undefined ? ((cpf || '').replace(/\D/g, '') || null) : undefined;
+
+  if (cpfLimpo && !cpfValido(cpfLimpo)) {
+    return res.status(400).json({ error: 'CPF inválido.' });
+  }
 
   // Se for porteiro e alterou o nome, verifica duplicidade com outros porteiros
   if (tipo === 'porteiro' && nomeLimpo) {
@@ -1203,7 +1239,7 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
 
   // Atualiza metadados no Auth
   const authUpdates = {
-    user_metadata: { nome: nomeLimpo, tipo, bloco, telefone }
+    user_metadata: { nome: nomeLimpo, tipo, bloco, telefone, ...(cpfLimpo !== undefined ? { cpf: cpfLimpo } : {}) }
   };
   // Se informou nova senha, atualiza tambem
   if (password && password.trim().length >= 6) {
@@ -1212,9 +1248,19 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
 
   await supabaseAdmin.auth.admin.updateUserById(id, authUpdates);
 
+  const updatesPerfil = {
+    nome: nomeLimpo,
+    tipo,
+    bloco: bloco || null,
+    telefone: telefone || null,
+  };
+  if (cpfLimpo !== undefined) {
+    updatesPerfil.cpf = cpfLimpo;
+  }
+
   const { data, error } = await supabaseAdmin
     .from('perfis')
-    .update({ nome: nomeLimpo, tipo, bloco: bloco || null, telefone: telefone || null })
+    .update(updatesPerfil)
     .eq('id', id)
     .select()
     .single();

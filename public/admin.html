@@ -109,6 +109,10 @@
                   <option value="Lote 28">Lote 28</option>
                 </select>
               </div>
+              <div>
+                <label for="cpf">CPF (opcional)</label>
+                <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" />
+              </div>
             </div>
           </div>
 
@@ -308,12 +312,29 @@
       }
     }
 
+    function formatarCpf(v) {
+      if (!v) return '';
+      const d = String(v).replace(/\D/g, '').slice(0, 11);
+      return d
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+    }
+
+    const adminCpfInput = document.getElementById('cpf');
+    if (adminCpfInput) {
+      adminCpfInput.addEventListener('input', () => {
+        adminCpfInput.value = formatarCpf(adminCpfInput.value);
+      });
+    }
+
     function selecionarMorador(m) {
       moradorSelecionadoId = m.id || null;
       document.getElementById('nome').value = m.nome || '';
       if (m.telefone) document.getElementById('telefone').value = m.telefone;
       if (m.email) document.getElementById('email').value = m.email;
       if (m.bloco) document.getElementById('bloco').value = m.bloco;
+      if (m.cpf) document.getElementById('cpf').value = formatarCpf(m.cpf);
       
       document.getElementById('busca-morador').value = `${m.nome} (${m.bloco || 'Sem lote'})`;
       document.getElementById('sugestoes-moradores').classList.add('hidden');
@@ -459,6 +480,7 @@
       document.getElementById('tipo').value = u.tipo || 'morador';
       document.getElementById('bloco').value = u.bloco || '';
       document.getElementById('telefone').value = u.telefone || '';
+      document.getElementById('cpf').value = formatarCpf(u.cpf || '');
       atualizarCamposPorTipo();
 
       // Ao editar, permite redefinir a senha se desejado
@@ -494,6 +516,8 @@
       const sugM = document.getElementById('sugestoes-moradores');
       if (sugM) sugM.classList.add('hidden');
 
+      document.getElementById('cpf').value = '';
+
       const inputPass = document.getElementById('password');
       inputPass.value = '';
       inputPass.required = true;
@@ -517,6 +541,7 @@
           tipo: document.getElementById('tipo').value,
           bloco: document.getElementById('bloco').value,
           telefone: document.getElementById('telefone').value.trim(),
+          cpf: document.getElementById('cpf').value.replace(/\D/g, ''),
         };
 
         if (editandoId) {
@@ -593,7 +618,13 @@
             ? `<button class="mini" onclick="aprovarUsuario('${u.id}')">&#10004; Aprovar</button>`
             : `<button class="secundario mini" onclick="toggleAtivo('${u.id}', ${!u.ativo})">${u.ativo ? 'Desativar' : 'Ativar'}</button>`;
           
-          const emailOuTel = u.email ? `${escapeHtml(u.email)}${u.telefone ? ' | ' + escapeHtml(u.telefone) : ''}` : (u.telefone ? escapeHtml(u.telefone) : '');
+          const cpfFormatado = u.cpf ? formatarCpf(u.cpf) : '';
+          const subPartes = [];
+          if (cpfFormatado) subPartes.push(`CPF: ${escapeHtml(cpfFormatado)}`);
+          if (u.email) subPartes.push(escapeHtml(u.email));
+          if (u.telefone) subPartes.push(escapeHtml(u.telefone));
+          const emailOuTel = subPartes.join(' | ');
+
           const infoSub = u.tipo === 'porteiro'
             ? '<div class="text-muted" style="font-size:12px; color:var(--verde);">&#128273; Login: Nome e Senha</div>'
             : (emailOuTel ? `<div class="text-muted" style="font-size:12px;">${emailOuTel}</div>` : '');

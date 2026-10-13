@@ -35,6 +35,9 @@
           <label for="nome">Nome completo *</label>
           <input type="text" id="nome" autocomplete="name" required />
 
+          <label for="cpf">CPF *</label>
+          <input type="text" id="cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" required />
+
           <label for="telefone">Telefone / WhatsApp *</label>
           <input type="tel" id="telefone" placeholder="(11) 90000-0000" autocomplete="tel" required />
 
@@ -78,6 +81,26 @@
       selLote.insertAdjacentHTML('beforeend', `<option value="${v}">${v}</option>`);
     }
 
+    const cpfInput = document.getElementById('cpf');
+    cpfInput.addEventListener('input', () => {
+      const d = cpfInput.value.replace(/\D/g, '').slice(0, 11);
+      cpfInput.value = d
+        .replace(/^(\d{3})(\d)/, '$1.$2')
+        .replace(/^(\d{3})\.(\d{3})(\d)/, '$1.$2.$3')
+        .replace(/\.(\d{3})(\d)/, '.$1-$2');
+    });
+
+    function cpfValido(cpf) {
+      const d = cpf.replace(/\D/g, '');
+      if (d.length !== 11 || /^(\d)\1+$/.test(d)) return false;
+      for (let t = 9; t < 11; t++) {
+        let s = 0;
+        for (let i = 0; i < t; i++) s += d[i] * (t + 1 - i);
+        if (((s * 10) % 11) % 10 !== Number(d[t])) return false;
+      }
+      return true;
+    }
+
     const form = document.getElementById('form-cadastro');
     const msg = document.getElementById('msg');
     const btn = document.getElementById('btn-cadastrar');
@@ -102,6 +125,12 @@
       e.preventDefault();
       msg.classList.add('hidden');
 
+      if (!cpfValido(cpfInput.value)) {
+        msg.textContent = 'CPF inválido. Confira os números digitados.';
+        msg.className = 'msg erro';
+        return;
+      }
+
       const senha = document.getElementById('password').value;
       if (senha !== document.getElementById('password2').value) {
         msg.textContent = 'As senhas não conferem.';
@@ -116,6 +145,7 @@
           method: 'POST',
           body: JSON.stringify({
             nome: document.getElementById('nome').value.trim(),
+            cpf: cpfInput.value.replace(/\D/g, ''),
             bloco: selLote.value,
             telefone: document.getElementById('telefone').value.trim(),
             email: document.getElementById('email').value.trim(),
