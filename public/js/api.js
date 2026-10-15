@@ -200,10 +200,9 @@ function validarCpf(v) {
 function vincularValidadorCpf(input, msgContainer) {
   if (!input) return;
   input.addEventListener('input', () => {
-    const raw = input.value.replace(/\D/g, '');
-    if (raw.length <= 11) {
-      input.value = formatarCpf(raw);
-    }
+    // Limita sempre a 11 dígitos (tamanho do CPF) e aplica a máscara.
+    const raw = input.value.replace(/\D/g, '').slice(0, 11);
+    input.value = formatarCpf(raw);
     if (raw.length === 11) {
       const valido = validarCpf(raw);
       if (valido) {

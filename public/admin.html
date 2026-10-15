@@ -660,6 +660,47 @@
 
 
     let todosUsuarios = [];
+    // Estado de ordenação da lista de usuários (campo e direção).
+    let ordenacaoUsuarios = { campo: null, dir: 'asc' };
+
+    // Alterna a ordenação ao clicar no cabeçalho (Nome ou Local) e re-renderiza.
+    function ordenarUsuarios(campo) {
+      if (ordenacaoUsuarios.campo === campo) {
+        ordenacaoUsuarios.dir = ordenacaoUsuarios.dir === 'asc' ? 'desc' : 'asc';
+      } else {
+        ordenacaoUsuarios = { campo, dir: 'asc' };
+      }
+      filtrarUsuarios(); // re-renderiza aplicando a ordenação
+    }
+
+    // Ordena uma lista de usuários conforme o estado atual.
+    function aplicarOrdenacao(lista) {
+      const { campo, dir } = ordenacaoUsuarios;
+      if (!campo) return lista;
+      const fator = dir === 'asc' ? 1 : -1;
+      const valor = (u) => {
+        if (campo === 'nome') return (u.nome || '').toLowerCase();
+        if (campo === 'local') {
+          // Ordena lote por número quando possível (Lote 06 < Lote 20), senão alfabético.
+          const n = parseInt((u.bloco || '').replace(/\D/g, ''), 10);
+          return Number.isFinite(n) ? n : (u.bloco || '').toLowerCase();
+        }
+        return '';
+      };
+      return [...lista].sort((a, b) => {
+        const va = valor(a), vb = valor(b);
+        if (va < vb) return -1 * fator;
+        if (va > vb) return 1 * fator;
+        return 0;
+      });
+    }
+
+    // Monta o cabeçalho clicável de uma coluna ordenável.
+    function thOrdenavel(rotulo, campo) {
+      let seta = '';
+      if (ordenacaoUsuarios.campo === campo) seta = ordenacaoUsuarios.dir === 'asc' ? ' ▲' : ' ▼';
+      return `<th style="cursor:pointer; user-select:none;" onclick="ordenarUsuarios('${campo}')" title="Clique para ordenar">${rotulo}${seta}</th>`;
+    }
 
     async function carregarUsuarios() {
       const alvo = document.getElementById('lista-usuarios');
@@ -725,8 +766,8 @@
       }
 
       const pendente = (u) => u.tipo === 'morador' && u.aprovado === false;
-      const pendentes = usuarios.filter(pendente);
-      const aprovados = usuarios.filter(u => !pendente(u));
+      const pendentes = aplicarOrdenacao(usuarios.filter(pendente));
+      const aprovados = aplicarOrdenacao(usuarios.filter(u => !pendente(u)));
 
       const renderLinha = (u) => {
         const local = u.bloco || '-';
@@ -786,7 +827,7 @@
             <h3 style="color:var(--amarelo); margin-bottom:12px; font-size:16px;">&#9203; Aguardando Aprovação (${pendentes.length})</h3>
             <table>
               <thead>
-                <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
+                <tr>${thOrdenavel('Nome', 'nome')}<th>Perfil</th>${thOrdenavel('Local', 'local')}<th>Status</th><th></th></tr>
               </thead>
               <tbody>
                 ${pendentes.map(renderLinha).join('')}
@@ -801,7 +842,7 @@
             <h3 style="color:var(--verde); margin-bottom:12px; font-size:16px;">&#10004; Já Aprovados (${aprovados.length})</h3>
             <table>
               <thead>
-                <tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Status</th><th></th></tr>
+                <tr>${thOrdenavel('Nome', 'nome')}<th>Perfil</th>${thOrdenavel('Local', 'local')}<th>Status</th><th></th></tr>
               </thead>
               <tbody>
                 ${aprovados.map(renderLinha).join('')}

@@ -1123,10 +1123,11 @@
           }),
         });
 
+        // Fecha apenas o modal e permanece na tela de Visitas Frequentes.
         document.getElementById('modal-data').style.display = 'none';
-        fecharFrequentes();
-        carregarAvisos();
         alert('Visita agendada com sucesso!');
+        // Recarrega a lista de frequentes sem sair da tela.
+        abrirFrequentes();
       } catch (err) {
         alert(err.message);
       } finally {

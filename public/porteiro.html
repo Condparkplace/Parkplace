@@ -63,7 +63,7 @@
         <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automático se já tiver
           cadastro)</label>
         <div class="row-inline" style="align-items:center;">
-          <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" style="flex:1; min-width:200px;" />
+          <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14" style="flex:1; min-width:200px;" />
           <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
           <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
         </div>
@@ -119,7 +119,7 @@
           </div>
           <div>
             <label for="documento">Documento</label>
-            <input type="text" id="documento" />
+            <input type="text" id="documento" inputmode="numeric" maxlength="14" />
             <span id="aviso-cpf-documento" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
           </div>
           <div>
@@ -220,7 +220,10 @@
       <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
         <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
         <div style="margin-bottom:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <input type="text" id="busca-morador-previstas" placeholder="Buscar por nome do morador..."
+          <input type="search" id="busca-morador-previstas" placeholder="Buscar por visitante, morador ou documento..."
+            name="campo-sem-autofill-pp" autocomplete="off" autocorrect="off" autocapitalize="off"
+            spellcheck="false" data-form-type="other" data-lpignore="true" readonly
+            onfocus="this.removeAttribute('readonly')"
             oninput="carregarPrevistas(null, true)" style="max-width:300px; width:100%; margin:0;" />
           <button type="button" id="btn-atualizar-previstas" onclick="atualizarGradeVisitantes()"
             style="padding:9px 18px; font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:6px; background-color:#2b6cb0; color:white; border:none; border-radius:6px; cursor:pointer; height:38px;">
@@ -236,6 +239,7 @@
     <!-- Presentes -->
     <section id="tab-presentes" class="card hidden">
       <h2>Pessoas atualmente no condomínio</h2>
+      <div id="msg-saida" class="msg hidden"></div>
       <div id="lista-presentes">
         <p class="vazio">Carregando...</p>
       </div>
@@ -244,6 +248,7 @@
     <!-- Retirada Encomendas -->
     <section id="tab-encomendas" class="card hidden">
       <h2>Encomendas Pendentes de Retirada</h2>
+      <div id="msg-encomenda" class="msg hidden"></div>
       <div id="lista-encomendas">
         <p class="vazio">Carregando...</p>
       </div>
@@ -296,6 +301,10 @@
       }
       document.getElementById('area-busca-cpf').classList.remove('hidden');
       document.getElementById('busca-doc').focus();
+      // Garante que o campo de busca de morador comece vazio (evita autofill do navegador
+      // esvaziar a lista de previstas por engano).
+      const campoBuscaMorador = document.getElementById('busca-morador-previstas');
+      if (campoBuscaMorador) campoBuscaMorador.value = '';
       carregarPrevistas();
       carregarNotificacoesPorteiro();
     })();
@@ -392,8 +401,14 @@
         document.getElementById('busca-doc').focus();
         carregarPrevistas();
       }
-      if (aba === 'presentes') carregarPresentes();
-      if (aba === 'encomendas') carregarEncomendas();
+      if (aba === 'presentes') {
+        document.getElementById('msg-saida')?.classList.add('hidden');
+        carregarPresentes();
+      }
+      if (aba === 'encomendas') {
+        document.getElementById('msg-encomenda')?.classList.add('hidden');
+        carregarEncomendas();
+      }
       if (aba === 'historico') carregarHistorico();
     }
 
@@ -414,6 +429,7 @@
 
     // ---------- Visitas previstas ----------
     let avisosHoje = []; // cache dos avisos previstos para hoje
+    let listaPrevistasRender = []; // lista exata que está renderizada na tabela (usada pelos botões via índice)
 
     // Mantem apenas avisos cuja data prevista seja hoje (ou nula, para mostrar os antigos sem data).
     function ehHoje(iso) {
@@ -435,6 +451,9 @@
       try {
         const inputBuscaDoc = document.getElementById('busca-doc');
         if (inputBuscaDoc) inputBuscaDoc.value = '';
+        // Limpa a busca da lista de previstas para mostrar todas novamente.
+        const inputBuscaPrevistas = document.getElementById('busca-morador-previstas');
+        if (inputBuscaPrevistas) inputBuscaPrevistas.value = '';
         const msgBusca = document.getElementById('msg-busca');
         if (msgBusca) {
           msgBusca.textContent = '';
@@ -457,7 +476,10 @@
       try {
         if (!pularFetch) {
           const { avisos } = await api('/api/portaria/avisos');
-          avisosHoje = (avisos || []).filter((a) => ehHoje(a.data_prevista));
+          // Mostra TODOS os avisos pendentes/autorizados que o backend retorna.
+          // (O backend já filtra por status; não filtramos por data no cliente
+          // para não esconder visitas válidas por diferença de fuso/horário.)
+          avisosHoje = avisos || [];
         }
 
         let lista = avisosHoje;
@@ -467,9 +489,21 @@
           alvoCpf = docEmDestaque.replace(/\D/g, '');
         }
 
-        const buscaMorador = document.getElementById('busca-morador-previstas')?.value.toLowerCase() || '';
-        if (buscaMorador) {
-          lista = lista.filter(a => (a.morador?.nome || '').toLowerCase().includes(buscaMorador));
+        let termoBusca = document.getElementById('busca-morador-previstas')?.value.toLowerCase().trim() || '';
+        // O navegador às vezes faz autofill deste campo com e-mail/usuário salvo.
+        // Ignoramos valores que parecem e-mail (contêm "@") para não esvaziar a lista por engano.
+        if (termoBusca.includes('@')) termoBusca = '';
+        if (termoBusca) {
+          const termoDoc = termoBusca.replace(/\D/g, '');
+          lista = lista.filter(a => {
+            const nomeVisitante = (a.nome_visitante || '').toLowerCase();
+            const nomeMorador = (a.morador?.nome || '').toLowerCase();
+            const docVisitante = (a.documento_visitante || '').replace(/\D/g, '');
+            if (nomeVisitante.includes(termoBusca)) return true;
+            if (nomeMorador.includes(termoBusca)) return true;
+            if (termoDoc && docVisitante && docVisitante.includes(termoDoc)) return true;
+            return false;
+          });
         }
 
         if (alvoCpf || (docEmDestaque && docEmDestaque.trim())) {
@@ -482,16 +516,19 @@
         }
 
         if (!lista.length) {
-          alvo.innerHTML = '<p class="vazio">' + (docEmDestaque ? 'Nenhuma visita encontrada para o documento buscado.' : 'Nenhuma visita prevista para hoje.') + '</p>';
+          listaPrevistasRender = [];
+          alvo.innerHTML = '<p class="vazio">' + (docEmDestaque ? 'Nenhuma visita encontrada para o documento buscado.' : 'Nenhuma visita avisada no momento.') + '</p>';
           return;
         }
+        // Guarda a lista exata que será renderizada; os botões referenciam cada item pelo índice.
+        listaPrevistasRender = lista;
         alvo.innerHTML = `
           <table>
             <thead>
               <tr><th>Visitante</th><th>Tipo</th><th>Morador / destino</th><th>Previsto</th><th>Status</th><th></th></tr>
             </thead>
             <tbody>
-              ${lista.map((a) => {
+              ${lista.map((a, idx) => {
           const m = a.morador || {};
           const destino = m.bloco || '';
 
@@ -516,8 +553,8 @@
                     <td data-label="Status">${badgeStatus(a.status)}</td>
                     <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
-                        <button class="mini" style="${btnStyle}" onclick='registrarDeAviso(${JSON.stringify(a).replace(/'/g, "&#39;")})'>Registrar entrada</button>
-                        <button class="secundario mini" onclick="marcarNaoVeio(${a.id})">Não veio</button>
+                        <button class="mini" style="${btnStyle}" onclick="registrarDeAvisoPorIndice(${idx})">Registrar entrada</button>
+                        <button class="secundario mini" onclick="marcarNaoVeioPorIndice(${idx})">Não veio</button>
                       </div>
                     </td>
                   </tr>`;
@@ -553,11 +590,31 @@
             observacao: aviso.observacao || ''
           }),
         });
+        // Permanece na aba "Registrar entrada"; só atualiza a lista de previstas.
         carregarPrevistas();
-        trocarAba('presentes');
+        if (msgEntrada) {
+          msgEntrada.textContent = `Entrada de ${aviso.nome_visitante} registrada com sucesso.`;
+          msgEntrada.className = 'msg ok';
+          msgEntrada.classList.remove('hidden');
+        }
       } catch (err) {
         alert('Erro: ' + err.message);
       }
+    }
+
+    // Resolve o aviso pelo índice da lista renderizada e chama o handler real.
+    // Evita injetar o objeto inteiro (com aspas/quebras de linha) dentro do onclick inline,
+    // o que quebrava a sintaxe do atributo quando a observação tinha caracteres especiais.
+    function registrarDeAvisoPorIndice(idx) {
+      const aviso = listaPrevistasRender[idx];
+      if (!aviso) return;
+      registrarDeAviso(aviso);
+    }
+
+    function marcarNaoVeioPorIndice(idx) {
+      const aviso = listaPrevistasRender[idx];
+      if (!aviso) return;
+      marcarNaoVeio(aviso.id);
     }
 
     async function registrarDeAviso(aviso) {
@@ -588,8 +645,13 @@
         const alertaObs = document.getElementById('alerta-obs-visitante');
         if (alertaObs) alertaObs.classList.add('hidden');
 
+        // Permanece na aba "Registrar entrada"; só atualiza a lista de previstas.
         carregarPrevistas();
-        trocarAba('presentes');
+        if (msgEntrada) {
+          msgEntrada.textContent = `Entrada de ${aviso.nome_visitante} registrada com sucesso.`;
+          msgEntrada.className = 'msg ok';
+          msgEntrada.classList.remove('hidden');
+        }
       } catch (err) {
         alert('Erro ao registrar entrada: ' + err.message);
       }
@@ -599,10 +661,12 @@
     async function marcarNaoVeio(id) {
       if (!confirm('Marcar esta visita como "não veio"? Ela irá direto para o histórico.')) return;
       try {
-        await api(`/api/portaria/avisos/${id}/nao-veio`, { method: 'POST' });
-        carregarPrevistas();
+        await api(`/api/portaria/avisos/${encodeURIComponent(id)}/nao-veio`, { method: 'POST' });
+        // Recarrega buscando os dados atualizados do servidor (sem pularFetch),
+        // para refletir que o aviso saiu da lista de pendentes.
+        await carregarPrevistas();
       } catch (err) {
-        alert(err.message);
+        alert('Não foi possível marcar como "não veio": ' + err.message);
       }
     }
 
@@ -627,6 +691,20 @@
 
       try {
         const docLimpo = doc.replace(/\D/g, '');
+        // É CPF quando o que foi digitado é só número (sem letras).
+        const soNumeros = /^[\d.\-\s]+$/.test(doc);
+
+        // Se é CPF (só números) mas está incompleto, exige os 11 dígitos.
+        if (soNumeros && docLimpo.length > 0 && docLimpo.length < 11) {
+          msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (RG).';
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+          document.getElementById('busca-doc').focus();
+          document.getElementById('busca-doc').style.borderColor = 'var(--vermelho, #dc2626)';
+          btn.disabled = false;
+          btn.textContent = 'Buscar';
+          return;
+        }
 
         // Validação de CPF caso tenha digitado 11 dígitos
         if (docLimpo.length === 11 && !validarCpf(docLimpo)) {
@@ -1284,7 +1362,7 @@
                     <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
-                        <button class="perigo mini" onclick="registrarSaidaDireta(${r.id})">Registrar saída</button>
+                        <button class="perigo mini" onclick="registrarSaidaDireta(${r.id}, '${escapeHtml((r.nome_pessoa || '').replace(/'/g, "\\'"))}')">Registrar saída</button>
                         <button class="secundario mini" style="background-color:#fef3c7; color:#92400e;" onclick='abrirModalConfirmarSaida(${JSON.stringify(r).replace(/'/g, "&#39;")})' title="Registrar saída anotando uma ocorrência">Registrar Problema</button>
                       </div>
                     </td>
@@ -1299,12 +1377,24 @@
 
     let registroSaidaAtual = null;
 
+    // Mostra o aviso verde de saída na aba "No condomínio".
+    function mostrarMsgSaida(nome) {
+      const msgSaida = document.getElementById('msg-saida');
+      if (!msgSaida) return;
+      msgSaida.textContent = nome
+        ? `Saída de ${nome} realizada com sucesso.`
+        : 'Saída realizada com sucesso.';
+      msgSaida.className = 'msg ok';
+      msgSaida.classList.remove('hidden');
+    }
+
     // Registra a saída direto, sem abrir o pop-up (caso comum, sem ocorrência).
-    async function registrarSaidaDireta(id) {
+    async function registrarSaidaDireta(id, nome) {
       try {
         await api(`/api/portaria/saida/${id}`, { method: 'POST' });
-        carregarPresentes();
-        trocarAba('entrada');
+        // Permanece na aba "No condomínio"; só atualiza a lista e avisa o sucesso.
+        await carregarPresentes();
+        mostrarMsgSaida(nome);
       } catch (err) {
         alert('Erro ao registrar saída: ' + err.message);
       }
@@ -1355,9 +1445,11 @@
           }),
         });
 
+        const nomeSaida = registroSaidaAtual?.nome_pessoa || '';
         fecharModalConfirmarSaida();
-        carregarPresentes();
-        trocarAba('entrada');
+        // Permanece na aba "No condomínio"; só atualiza a lista e avisa o sucesso.
+        await carregarPresentes();
+        mostrarMsgSaida(nomeSaida);
       } catch (err) {
         msg.textContent = 'Erro ao registrar saída: ' + err.message;
         msg.className = 'msg erro';
@@ -1875,7 +1967,16 @@
           body: JSON.stringify({ retiradoPor, observacaoAtual })
         });
         fecharModalRetiradaEncomenda();
-        trocarAba('entrada');
+        // Permanece na aba "Retirada Encomendas"; só atualiza a lista e avisa o sucesso.
+        await carregarEncomendas();
+        const msgEncomenda = document.getElementById('msg-encomenda');
+        if (msgEncomenda) {
+          msgEncomenda.textContent = retiradoPor
+            ? `Encomenda retirada por ${retiradoPor} com sucesso.`
+            : 'Encomenda retirada com sucesso.';
+          msgEncomenda.className = 'msg ok';
+          msgEncomenda.classList.remove('hidden');
+        }
       } catch (err) {
         alert(err.message);
       }

@@ -1195,14 +1195,22 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
 // Marca um aviso como "Nao compareceu" (vai direto para o historico, sem entrada)
 app.post('/api/portaria/avisos/:id/nao-veio', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const { id } = req.params;
-  const { data, error } = await req.supabase
+  // Usa supabaseAdmin (service role) para a ação persistir independentemente de RLS,
+  // igual às demais ações da portaria. Avisos recorrentes (id "rec-...") não são
+  // persistíveis aqui — são regras semanais, não avisos reais.
+  if (String(id).startsWith('rec-')) {
+    return res.status(400).json({ error: 'Visita recorrente não pode ser marcada como "não veio". Ela reaparece automaticamente no próximo dia programado.' });
+  }
+  const { data, error } = await supabaseAdmin
     .from('avisos_visitas')
     .update({ status: 'Nao compareceu', nao_veio_por: req.user.id })
     .eq('id', id)
-    .select()
-    .single();
+    .select();
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ aviso: data });
+  if (!data || !data.length) {
+    return res.status(404).json({ error: 'Aviso não encontrado.' });
+  }
+  res.json({ aviso: data[0] });
 });
 
 // Busca os nomes dos porteiros (por id) para exibir quem fez cada acao.
