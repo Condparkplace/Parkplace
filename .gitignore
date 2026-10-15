@@ -5,3 +5,6 @@ node_modules/
 *.log
 .DS_Store
 
+
+# Caches locais com dados pessoais (nunca versionar - contem CPF/observacoes)
+scratch/*.json

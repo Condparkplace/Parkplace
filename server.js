@@ -7,18 +7,22 @@ const fs = require('fs');
 const crypto = require('crypto');
 const webpush = require('web-push');
 
-// Inicializa VAPID Keys para Push Notifications.
-// As chaves vêm das variáveis de ambiente (VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY).
-// Os valores abaixo são apenas fallback para desenvolvimento local.
-const vapidPublicKey = process.env.VAPID_PUBLIC_KEY
-  || 'BIOSYWts_mjXNf9VlPkqU_jnGCsXVaf64QLsyw-hI7AbyCbh0D0XufMoWEXWO0RJmJd3RPsQVRp9wgOLEIhe-O0';
-const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY
-  || 'a12m4cF5E3njmkKf8P2SKRcid34mRAualhbIm05NLsI';
+// Push Notifications (Web Push / VAPID).
+// As chaves vêm EXCLUSIVAMENTE das variáveis de ambiente/secrets.
+// Sem elas, o push fica desativado (não há fallback de chave no código).
+const vapidPublicKey = process.env.VAPID_PUBLIC_KEY || '';
+const vapidPrivateKey = process.env.VAPID_PRIVATE_KEY || '';
 const vapidSubject = process.env.VAPID_SUBJECT || 'mailto:contato@parkplace.com';
-try {
-  webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
-} catch (err) {
-  console.warn('[AVISO] Falha ao configurar VAPID (push desativado):', err.message);
+let pushAtivo = false;
+if (vapidPublicKey && vapidPrivateKey) {
+  try {
+    webpush.setVapidDetails(vapidSubject, vapidPublicKey, vapidPrivateKey);
+    pushAtivo = true;
+  } catch (err) {
+    console.warn('[AVISO] Falha ao configurar VAPID (push desativado):', err.message);
+  }
+} else {
+  console.warn('[AVISO] VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY ausentes. Push desativado.');
 }
 
 const { supabaseAnon, supabaseAdmin } = require('./src/supabase');
@@ -34,13 +38,65 @@ app.use(express.json());
 app.use(cookieParser());
 
 // ============================================================
+// RATE LIMITING (defesa contra brute force / enumeração)
+// Em memória, por IP+rota. No Cloudflare Workers os isolates não compartilham
+// memória, então esta é uma 2ª camada; a 1ª deve ser o WAF Rate Limiting da
+// Cloudflare. Mesmo assim, mitiga rajadas dentro de um mesmo isolate.
+// ============================================================
+const _rlStore = new Map(); // chave: ip|bucket -> { count, resetEm }
+
+function rateLimit({ bucket, max, janelaMs }) {
+  return (req, res, next) => {
+    const ip = req.headers['cf-connecting-ip']
+      || (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+      || req.ip
+      || 'desconhecido';
+    const chave = `${ip}|${bucket}`;
+    const agora = Date.now();
+    let reg = _rlStore.get(chave);
+    if (!reg || agora > reg.resetEm) {
+      reg = { count: 0, resetEm: agora + janelaMs };
+    }
+    reg.count++;
+    _rlStore.set(chave, reg);
+
+    // Limpeza oportunista para não crescer indefinidamente.
+    if (_rlStore.size > 5000) {
+      for (const [k, v] of _rlStore) if (agora > v.resetEm) _rlStore.delete(k);
+    }
+
+    if (reg.count > max) {
+      const retrySeg = Math.ceil((reg.resetEm - agora) / 1000);
+      res.set('Retry-After', String(retrySeg));
+      return res.status(429).json({ error: 'Muitas tentativas. Aguarde alguns minutos e tente novamente.' });
+    }
+    next();
+  };
+}
+
+// Limites por rota
+const limiteLogin = rateLimit({ bucket: 'login', max: 10, janelaMs: 15 * 60 * 1000 });     // 10 / 15 min
+const limitePublico = rateLimit({ bucket: 'publico', max: 30, janelaMs: 10 * 60 * 1000 });  // 30 / 10 min
+
+// Escapa os curingas do LIKE/ILIKE (%, _, \) para que a entrada do usuário não
+// seja interpretada como padrão de busca (LIKE injection).
+function likeSafe(valor) {
+  return String(valor || '').replace(/[\\%_]/g, (c) => '\\' + c);
+}
+
+// ============================================================
 // LINKS DE CADASTRO DE VISITA COM VALIDADE (2 horas)
 // O link enviado ao visitante/prestador carrega: morador, tipo, exp (expiração)
 // e sig (assinatura HMAC). Sem a assinatura correta ou após a expiração o
 // backend recusa o envio do aviso, evitando burlar o prazo editando a URL.
 // ============================================================
 const LINK_VISITA_VALIDADE_MS = 2 * 60 * 60 * 1000; // 2 horas
-const LINK_SECRET = process.env.SESSION_SECRET || 'park-place-link-secret-troque-no-env';
+// Segredo para assinar os links de visita. DEVE vir do ambiente.
+// Sem ele, as assinaturas seriam forjáveis — por isso avisamos em log.
+const LINK_SECRET = process.env.SESSION_SECRET || '';
+if (!LINK_SECRET) {
+  console.error('[CONFIG] SESSION_SECRET ausente: links de visita assinados ficam inseguros. Configure o secret.');
+}
 
 function assinarLinkVisita(moradorId, tipo, exp) {
   return crypto
@@ -73,7 +129,7 @@ function validarLinkVisita(moradorId, tipo, exp, sig) {
 // ============================================================
 
 // Login (todos os perfis usam a mesma rota - aceita e-mail OU nome do porteiro/usuario)
-app.post('/api/login', async (req, res) => {
+app.post('/api/login', limiteLogin, async (req, res) => {
   const loginInput = (req.body?.login || req.body?.email || '').trim();
   const { password, rememberMe } = req.body || {};
   if (!loginInput || !password) {
@@ -215,7 +271,7 @@ function formatarDocumento(doc) {
   return String(doc).trim();
 }
 
-app.post('/api/public/cadastro', async (req, res) => {
+app.post('/api/public/cadastro', limitePublico, async (req, res) => {
   const { nome, bloco, telefone, email, password } = req.body || {};
   const cpf = (req.body?.cpf || '').replace(/\D/g, '');
   if (!nome?.trim() || !bloco || !telefone?.trim() || !email?.trim() || !password || !cpf) {
@@ -314,6 +370,7 @@ app.post('/api/push/subscribe', requireAuth, async (req, res) => {
 
 // Funcao auxiliar para notificar moradores de um lote
 async function notificarLote(bloco, titulo, mensagem) {
+  if (!pushAtivo) return; // push não configurado: nada a enviar
   if (!bloco) return;
   const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
   const { data: moradores } = await supabaseAdmin
@@ -459,6 +516,67 @@ app.get('/api/morador/lote/moradores', requireAuth, requireRole('morador', 'admi
       .order('nome', { ascending: true });
     if (error) throw error;
     res.json({ moradores: data || [] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Morador com permissão ver_lote cadastra outro morador NO MESMO LOTE.
+// O novo morador entra ativo/aprovado. O lote é forçado para o do solicitante
+// (nunca aceito do cliente), e o perfil só pode ser morador.
+app.post('/api/morador/lote/cadastrar', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const souAdmin = req.perfil?.tipo === 'admin';
+    if (!souAdmin && !req.perfil?.ver_lote) {
+      return res.status(403).json({ error: 'Você não tem permissão para cadastrar moradores do lote.' });
+    }
+
+    const bloco = req.perfil?.bloco;
+    if (!bloco) {
+      return res.status(400).json({ error: 'Seu cadastro não tem um lote definido. Fale com a administração.' });
+    }
+
+    let { nome, email, password, telefone, cpf } = req.body || {};
+    nome = (nome || '').trim();
+    email = (email || '').trim().toLowerCase();
+    telefone = (telefone || '').trim();
+    const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
+
+    if (!nome) return res.status(400).json({ error: 'Informe o nome completo.' });
+    if (!email) return res.status(400).json({ error: 'Informe o e-mail de acesso.' });
+    if (!password || password.length < 6) {
+      return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
+    }
+    if (cpfLimpo && !cpfValido(cpfLimpo)) {
+      return res.status(400).json({ error: 'CPF inválido.' });
+    }
+
+    const { data, error } = await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nome, tipo: 'morador', bloco, telefone, cpf: cpfLimpo },
+    });
+
+    if (error) {
+      const jaExiste = /already|registered|exists/i.test(error.message);
+      return res.status(400).json({ error: jaExiste ? 'Este e-mail já está cadastrado.' : error.message });
+    }
+
+    // Garante o perfil (ativo e aprovado; lote travado no do solicitante).
+    await supabaseAdmin.from('perfis').upsert({
+      id: data.user.id,
+      nome,
+      tipo: 'morador',
+      bloco,
+      telefone: telefone || null,
+      cpf: cpfLimpo,
+      ativo: true,
+      aprovado: true,
+      ver_lote: false, // o novo morador não herda a permissão de supervisão
+    });
+
+    res.status(201).json({ id: data.user.id });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -651,7 +769,7 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), as
 });
 
 // Criar aviso via link publico (visitante se cadastra)
-app.post('/api/public/avisos', async (req, res) => {
+app.post('/api/public/avisos', limitePublico, async (req, res) => {
   const {
     morador_id,
     nome_visitante,
@@ -720,8 +838,26 @@ app.post('/api/public/avisos', async (req, res) => {
 });
 
 // Verifica se o visitante/prestador ja possui cadastro previo pelo CPF (rota publica)
-app.get('/api/public/visitantes/verificar', async (req, res) => {
+// Protegida por: rate limit + link assinado válido (evita enumeração de CPFs).
+app.get('/api/public/visitantes/verificar', limitePublico, async (req, res) => {
   try {
+    // Exige o mesmo link assinado (morador/tipo/exp/sig) usado na tela de cadastro.
+    // Sem link válido e dentro do prazo, a consulta é recusada — fecha o oráculo
+    // de enumeração que antes respondia a qualquer CPF sem contexto.
+    const linkMorador = (req.query.morador || '').trim();
+    const linkTipo = (req.query.tipo || 'Visitante').trim();
+    const linkExp = req.query.exp;
+    const linkSig = req.query.sig;
+    const valido = validarLinkVisita(linkMorador, linkTipo, linkExp, linkSig);
+    if (!valido.ok) {
+      return res.status(403).json({
+        error: valido.motivo === 'expirado'
+          ? 'Este link expirou. Peça ao morador um novo link.'
+          : 'Link inválido. Peça ao morador um novo link.',
+        motivo: valido.motivo,
+      });
+    }
+
     const doc = (req.query.cpf || req.query.documento || '').trim();
     if (!doc) return res.status(400).json({ error: 'Informe o CPF para verificar.' });
 
@@ -845,7 +981,7 @@ app.get('/api/public/visitantes/verificar', async (req, res) => {
 });
 
 // Informacoes basicas do morador para exibicao publica (cadastro de visita)
-app.get('/api/public/moradores/:id', async (req, res) => {
+app.get('/api/public/moradores/:id', limitePublico, async (req, res) => {
   const { id } = req.params;
   const { data, error } = await supabaseAdmin
     .from('perfis')
@@ -987,8 +1123,8 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
 
   if (req.query.de) query = query.gte('entrada', req.query.de);
   if (req.query.ate) query = query.lte('entrada', req.query.ate);
-  if (req.query.cpf) query = query.ilike('documento', `%${req.query.cpf}%`);
-  if (req.query.lote) query = query.ilike('destino_bloco', `%${req.query.lote}%`);
+  if (req.query.cpf) query = query.ilike('documento', `%${likeSafe(req.query.cpf)}%`);
+  if (req.query.lote) query = query.ilike('destino_bloco', `%${likeSafe(req.query.lote)}%`);
 
   query = query.limit(40);
 
@@ -1003,8 +1139,8 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
 
   if (req.query.de) qAvisos = qAvisos.gte('data_prevista', req.query.de);
   if (req.query.ate) qAvisos = qAvisos.lte('data_prevista', req.query.ate);
-  if (req.query.cpf) qAvisos = qAvisos.ilike('documento_visitante', `%${req.query.cpf}%`);
-  if (req.query.lote) qAvisos = qAvisos.ilike('perfis.bloco', `%${req.query.lote}%`);
+  if (req.query.cpf) qAvisos = qAvisos.ilike('documento_visitante', `%${likeSafe(req.query.cpf)}%`);
+  if (req.query.lote) qAvisos = qAvisos.ilike('perfis.bloco', `%${likeSafe(req.query.lote)}%`);
 
   qAvisos = qAvisos.limit(40);
 

@@ -267,7 +267,14 @@
       btnVerificar.textContent = 'Verificando...';
 
       try {
-        const res = await api(`/api/public/visitantes/verificar?cpf=${encodeURIComponent(cpfVal)}`);
+        const paramsVerif = new URLSearchParams({
+          cpf: cpfVal,
+          morador: morador_id || '',
+          tipo: tipo || 'Visitante',
+          exp: linkExp || '',
+          sig: linkSig || '',
+        });
+        const res = await api(`/api/public/visitantes/verificar?${paramsVerif.toString()}`);
 
         // Visitante bloqueado: interrompe o fluxo e mostra o aviso.
         if (res && res.bloqueado) {
