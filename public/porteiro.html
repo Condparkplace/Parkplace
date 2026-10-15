@@ -696,9 +696,10 @@
         }
 
         // Cadastrado (Morador ou Visitante anterior)
-        mostrarFormEntrada();
         const p = r.pessoa;
 
+        // MORADOR: não abre o formulário. Mostra apenas a faixa amarela + o
+        // botão verde de entrada direta (mesmo procedimento do Fabio).
         if (r.eh_morador) {
           const m = r.morador || {};
           const loteTxt = m.bloco ? `do ${escapeHtml(m.bloco)}` : 'cadastrado no condomínio';
@@ -709,11 +710,27 @@
             alertaMorador.classList.remove('hidden');
             alertaMorador.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
+          // Observação do cadastro do morador (se houver).
+          const alertaObsM = document.getElementById('alerta-obs-visitante');
+          const alertaObsTextoM = document.getElementById('alerta-obs-visitante-texto');
+          const obsM = (p.observacao_cadastro || r.observacao_cadastro || '').trim();
+          if (obsM) {
+            if (alertaObsTextoM) alertaObsTextoM.textContent = obsM;
+            if (alertaObsM) alertaObsM.classList.remove('hidden');
+          } else if (alertaObsM) {
+            alertaObsM.classList.add('hidden');
+          }
           mostrarBotaoEntradaMorador(m, p);
-          msg.textContent = `Morador identificado (${m.bloco || 'Residência'}). Dados unificados com sucesso.`;
+          formEntrada.classList.add('hidden'); // não mostra o formulário para morador
+          msg.textContent = `Morador identificado (${m.bloco || 'Residência'}). Use o botão para registrar a entrada.`;
           msg.className = 'msg ok';
-        } else {
-          esconderBotaoEntradaMorador();
+          return;
+        }
+
+        // VISITANTE / PRESTADOR com cadastro: abre o formulário para confirmar.
+        esconderBotaoEntradaMorador();
+        mostrarFormEntrada();
+        {
           const fonte = r.origem === 'aviso' ? 'aviso de visita do morador' : 'visita anterior';
           msg.textContent = 'Cadastro encontrado (' + fonte + '). Confira os dados e confirme a entrada.';
           msg.className = 'msg ok';
@@ -757,6 +774,9 @@
         } else {
           if (alertaObs) alertaObs.classList.add('hidden');
         }
+
+        // Se o visitante está BLOQUEADO, impede a entrada: esconde o botão Confirmar.
+        aplicarBloqueioEntrada(!!r.bloqueado);
       } catch (err) {
         msg.textContent = err.message;
         msg.className = 'msg erro';
@@ -771,6 +791,7 @@
       document.getElementById('tipo').value = '';
       toggleEndereco();
       esconderBotaoEntradaMorador();
+      aplicarBloqueioEntrada(false);
       document.getElementById('aviso_id').value = '';
       document.getElementById('busca-doc').value = '';
       document.getElementById('msg-busca').classList.add('hidden');
@@ -866,6 +887,26 @@
         }
       } finally {
         btn.disabled = false;
+      }
+    }
+
+    // Bloqueia/libera o botão de confirmar entrada conforme o visitante estar bloqueado.
+    function aplicarBloqueioEntrada(bloqueado) {
+      const btn = document.getElementById('btn-entrada');
+      let aviso = document.getElementById('aviso-bloqueio-entrada');
+      if (bloqueado) {
+        if (btn) btn.classList.add('hidden');
+        if (!aviso) {
+          aviso = document.createElement('div');
+          aviso.id = 'aviso-bloqueio-entrada';
+          aviso.style.cssText = 'background:#fef2f2; border:2px solid var(--vermelho,#dc2626); color:#991b1b; border-radius:8px; padding:14px 16px; margin-top:12px; font-weight:600; text-align:center;';
+          aviso.innerHTML = '🚫 Visitante BLOQUEADO. Entrada não permitida — contate a administração.';
+          if (btn && btn.parentNode) btn.parentNode.insertBefore(aviso, btn.nextSibling);
+        }
+        aviso.classList.remove('hidden');
+      } else {
+        if (btn) btn.classList.remove('hidden');
+        if (aviso) aviso.classList.add('hidden');
       }
     }
 

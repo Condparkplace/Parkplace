@@ -285,3 +285,44 @@ drop policy if exists notif_morador_admin_all on public.notificacoes_morador;
 create policy notif_morador_admin_all on public.notificacoes_morador
   for all using (public.meu_tipo() = 'admin')
   with check (public.meu_tipo() = 'admin');
+
+-- ------------------------------------------------------------
+-- 9) Visitas recorrentes (frequência semanal)
+-- ------------------------------------------------------------
+-- O morador programa um visitante/prestador para dias fixos da semana.
+-- A lista da portaria calcula dinamicamente: se hoje é um dos dias marcados,
+-- a pessoa aparece como "visita avisada" (recorrente), sem precisar aviso manual.
+-- dias_semana: array de inteiros 0=Domingo ... 6=Sábado (padrão JS getDay()).
+create table if not exists public.visitas_recorrentes (
+  id             bigint generated always as identity primary key,
+  morador_id     uuid not null references public.perfis(id) on delete cascade,
+  nome_visitante text not null,
+  documento_visitante text,
+  tipo           tipo_acesso not null default 'Visitante',
+  veiculo_placa  text,
+  dias_semana    integer[] not null default '{}',
+  ativo          boolean not null default true,
+  criado_em      timestamptz not null default now()
+);
+
+create index if not exists idx_recorrentes_morador on public.visitas_recorrentes(morador_id);
+create index if not exists idx_recorrentes_ativo on public.visitas_recorrentes(ativo);
+
+alter table public.visitas_recorrentes enable row level security;
+
+-- Morador gerencia as próprias; porteiro e admin podem ler todas.
+drop policy if exists recorrentes_select on public.visitas_recorrentes;
+create policy recorrentes_select on public.visitas_recorrentes
+  for select using (morador_id = auth.uid() or public.meu_tipo() in ('admin', 'porteiro'));
+
+drop policy if exists recorrentes_insert on public.visitas_recorrentes;
+create policy recorrentes_insert on public.visitas_recorrentes
+  for insert with check (morador_id = auth.uid() or public.meu_tipo() = 'admin');
+
+drop policy if exists recorrentes_update on public.visitas_recorrentes;
+create policy recorrentes_update on public.visitas_recorrentes
+  for update using (morador_id = auth.uid() or public.meu_tipo() = 'admin');
+
+drop policy if exists recorrentes_delete on public.visitas_recorrentes;
+create policy recorrentes_delete on public.visitas_recorrentes
+  for delete using (morador_id = auth.uid() or public.meu_tipo() = 'admin');

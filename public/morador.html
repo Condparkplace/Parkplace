@@ -282,6 +282,32 @@
     </div>
   </div>
 
+  <!-- Modal: programar frequência semanal de um visitante -->
+  <div id="modal-frequencia" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    <div class="card" style="width: 100%; max-width: 440px; margin: 20px;">
+      <h3 style="margin-top:0; color:var(--verde-escuro);">&#128197; Frequência semanal</h3>
+      <p class="text-muted" style="margin:0 0 14px;">
+        Programe os dias fixos em que <strong id="freq-nome-visitante"></strong> pode acessar o condomínio.
+        Nos dias marcados, a portaria já verá a visita avisada automaticamente (sem horário).
+      </p>
+
+      <div id="freq-dias" style="display:flex; flex-direction:column; gap:8px;"></div>
+
+      <div id="msg-frequencia" class="msg hidden" style="margin-top:12px;"></div>
+
+      <button type="button" class="block" id="btn-salvar-frequencia" style="margin-top:16px; background:var(--verde);" onclick="salvarFrequencia()">
+        Salvar frequência
+      </button>
+      <button type="button" class="perigo block hidden" id="btn-remover-frequencia" style="margin-top:10px;" onclick="removerFrequencia()">
+        Remover frequência
+      </button>
+      <button type="button" class="secundario block" style="margin-top:10px;" onclick="fecharFrequencia()">
+        Cancelar
+      </button>
+    </div>
+  </div>
+
   <script src="/js/api.js"></script>
   <script>
     let perfil = null;
@@ -870,7 +896,15 @@
 
     // ---------- Visitas Frequentes ----------
     let frequentes = [];
+    let recorrencias = []; // regras de frequência semanal do morador
     let reagendamentoAtual = null;
+    let frequenteAtual = null; // item sendo configurado no popup de frequência
+
+    const DIAS_SEMANA = [
+      { v: 1, nome: 'Segunda' }, { v: 2, nome: 'Terça' }, { v: 3, nome: 'Quarta' },
+      { v: 4, nome: 'Quinta' }, { v: 5, nome: 'Sexta' }, { v: 6, nome: 'Sábado' }, { v: 0, nome: 'Domingo' },
+    ];
+    const DIAS_CURTO = { 0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb' };
 
     async function abrirFrequentes() {
       document.getElementById('area-visitas').classList.add('hidden');
@@ -878,12 +912,22 @@
       document.getElementById('lista-frequentes').innerHTML = '<p class="vazio">Buscando...</p>';
 
       try {
-        const res = await api('/api/morador/visitas-frequentes');
-        frequentes = res.frequentes || [];
+        const [resFreq, resRec] = await Promise.all([
+          api('/api/morador/visitas-frequentes'),
+          api('/api/morador/recorrencias').catch(() => ({ recorrencias: [] })),
+        ]);
+        frequentes = resFreq.frequentes || [];
+        recorrencias = resRec.recorrencias || [];
         renderFrequentes(frequentes);
       } catch (err) {
         document.getElementById('lista-frequentes').innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
+    }
+
+    // Retorna a recorrência ativa de um visitante pelo nome (ou null).
+    function recorrenciaDe(nome) {
+      const n = (nome || '').trim().toLowerCase();
+      return recorrencias.find((r) => (r.nome_visitante || '').trim().toLowerCase() === n) || null;
     }
 
     function fecharFrequentes() {
@@ -897,6 +941,31 @@
       renderFrequentes(filtrados);
     }
 
+    // Monta uma linha da tabela de frequentes.
+    function linhaFrequente(f) {
+      const realIndex = frequentes.findIndex(x => x.nome_visitante === f.nome_visitante);
+      const btnStyle = f.tipo === 'Prestador' ? 'background-color: #2b6cb0; border-color: #2b6cb0;' : '';
+      const rec = recorrenciaDe(f.nome_visitante);
+      const diasTxt = rec
+        ? (rec.dias_semana || []).slice().sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).map(d => DIAS_CURTO[d]).join(', ')
+        : '';
+      const btnFreqStyle = rec ? 'background-color:#16a34a; color:#fff;' : 'background-color:#f59e0b; color:#fff;';
+      const freqLabel = rec ? `📅 ${diasTxt}` : '📅 Frequente';
+      return `
+        <tr>
+          <td data-label="Nome">${escapeHtml(f.nome_visitante)}${rec ? `<br><span class="text-muted" style="font-size:12px;">Programado: ${escapeHtml(diasTxt)}</span>` : ''}</td>
+          <td data-label="Tipo">${escapeHtml(f.tipo)}</td>
+          <td data-label="Vezes que veio">${f.count} visita(s)</td>
+          <td data-label="">
+            <div class="row-inline" style="justify-content:flex-end;">
+              <button class="mini" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
+              <button class="mini" style="${btnFreqStyle}" onclick="abrirFrequencia(${realIndex})" title="Programar dias fixos da semana">${freqLabel}</button>
+              <button class="perigo mini" onclick="iniciarBloqueio(${realIndex})" title="Bloquear este visitante">&#128683; Bloquear</button>
+            </div>
+          </td>
+        </tr>`;
+    }
+
     function renderFrequentes(lista) {
       const alvo = document.getElementById('lista-frequentes');
       if (!lista.length) {
@@ -904,37 +973,30 @@
         return;
       }
 
-      // Armazena no array global para podermos acessar ao clicar no botao (usando index no array `frequentes`)
-      alvo.innerHTML = `
+      // Separa quem TEM frequência programada dos demais.
+      const comFreq = lista.filter((f) => recorrenciaDe(f.nome_visitante));
+      const semFreq = lista.filter((f) => !recorrenciaDe(f.nome_visitante));
+
+      const tabela = (linhas) => `
         <table>
           <thead>
             <tr><th>Nome</th><th>Tipo</th><th>Vezes que veio</th><th>Ação</th></tr>
           </thead>
-          <tbody>
-            ${lista.map((f, index) => {
-        // Encontra o index real no array original
-        const realIndex = frequentes.findIndex(x => x.nome_visitante === f.nome_visitante);
-        const btnStyle = f.tipo === 'Prestador'
-          ? 'background-color: #2b6cb0; border-color: #2b6cb0;'
-          : '';
+          <tbody>${linhas.map(linhaFrequente).join('')}</tbody>
+        </table>`;
 
-        return `
-                <tr>
-                  <td data-label="Nome">${escapeHtml(f.nome_visitante)}</td>
-                  <td data-label="Tipo">${escapeHtml(f.tipo)}</td>
-                  <td data-label="Vezes que veio">${f.count} visita(s)</td>
-                  <td data-label="">
-                    <div class="row-inline" style="justify-content:flex-end;">
-                      <button class="mini" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
-                      <button class="perigo mini" onclick="iniciarBloqueio(${realIndex})" title="Bloquear este visitante">&#128683; Bloquear</button>
-                    </div>
-                  </td>
-                </tr>
-              `;
-      }).join('')}
-          </tbody>
-        </table>
-      `;
+      let html = '';
+      if (comFreq.length) {
+        html += `
+          <h3 style="margin:0 0 10px; font-size:15px; color:var(--verde-escuro);">📅 Com frequência programada (${comFreq.length})</h3>
+          ${tabela(comFreq)}
+          <div style="height:22px;"></div>`;
+      }
+      html += `
+        <h3 style="margin:0 0 10px; font-size:15px; color:var(--texto-suave);">Demais visitantes${comFreq.length ? ` (${semFreq.length})` : ''}</h3>
+        ${semFreq.length ? tabela(semFreq) : '<p class="vazio">Nenhum.</p>'}`;
+
+      alvo.innerHTML = html;
     }
 
     function iniciarReagendamento(index) {
@@ -945,6 +1007,98 @@
       const modal = document.getElementById('modal-data');
       modal.classList.remove('hidden');
       modal.style.display = 'flex';
+    }
+
+    // ---------- Frequência semanal ----------
+    function abrirFrequencia(index) {
+      frequenteAtual = frequentes[index];
+      document.getElementById('freq-nome-visitante').textContent = frequenteAtual.nome_visitante;
+
+      const rec = recorrenciaDe(frequenteAtual.nome_visitante);
+      const marcados = rec ? (rec.dias_semana || []) : [];
+
+      // Monta os checkboxes dos dias.
+      document.getElementById('freq-dias').innerHTML = DIAS_SEMANA.map((d) => `
+        <label style="display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--cinza-borda); border-radius:8px; cursor:pointer; font-weight:normal;">
+          <input type="checkbox" value="${d.v}" ${marcados.includes(d.v) ? 'checked' : ''} style="width:auto; margin:0;" />
+          ${d.nome}
+        </label>
+      `).join('');
+
+      // Botão de remover só aparece se já existe recorrência.
+      document.getElementById('btn-remover-frequencia').classList.toggle('hidden', !rec);
+
+      const msg = document.getElementById('msg-frequencia');
+      msg.classList.add('hidden'); msg.textContent = '';
+
+      const modal = document.getElementById('modal-frequencia');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    }
+
+    function fecharFrequencia() {
+      const modal = document.getElementById('modal-frequencia');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+      frequenteAtual = null;
+    }
+
+    async function salvarFrequencia() {
+      if (!frequenteAtual) return;
+      const btn = document.getElementById('btn-salvar-frequencia');
+      const msg = document.getElementById('msg-frequencia');
+      const dias = Array.from(document.querySelectorAll('#freq-dias input:checked')).map((c) => parseInt(c.value, 10));
+
+      msg.classList.add('hidden');
+      if (!dias.length) {
+        msg.textContent = 'Selecione pelo menos um dia da semana.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      try {
+        await api('/api/morador/recorrencias', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_visitante: frequenteAtual.nome_visitante,
+            documento_visitante: frequenteAtual.documento_visitante || null,
+            tipo: frequenteAtual.tipo || 'Visitante',
+            veiculo_placa: frequenteAtual.veiculo_placa || null,
+            dias_semana: dias,
+          }),
+        });
+        // Recarrega as recorrências e a lista.
+        const resRec = await api('/api/morador/recorrencias').catch(() => ({ recorrencias: [] }));
+        recorrencias = resRec.recorrencias || [];
+        fecharFrequencia();
+        renderFrequentes(frequentes);
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salvar frequência';
+      }
+    }
+
+    async function removerFrequencia() {
+      if (!frequenteAtual) return;
+      const rec = recorrenciaDe(frequenteAtual.nome_visitante);
+      if (!rec) { fecharFrequencia(); return; }
+      if (!confirm('Remover a frequência programada deste visitante?')) return;
+      try {
+        await api(`/api/morador/recorrencias/${rec.id}`, { method: 'DELETE' });
+        const resRec = await api('/api/morador/recorrencias').catch(() => ({ recorrencias: [] }));
+        recorrencias = resRec.recorrencias || [];
+        fecharFrequencia();
+        renderFrequentes(frequentes);
+      } catch (err) {
+        alert(err.message);
+      }
     }
 
     document.getElementById('btn-confirmar-reagendamento').addEventListener('click', async () => {

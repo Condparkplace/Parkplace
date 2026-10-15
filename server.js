@@ -611,6 +611,89 @@ app.get('/api/morador/lote/visitas/:moradorId', requireAuth, requireRole('morado
   }
 });
 
+// ---------- Visitas recorrentes (frequência semanal) ----------
+
+// Lista as recorrências do próprio morador.
+app.get('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('visitas_recorrentes')
+    .select('*')
+    .eq('morador_id', req.user.id)
+    .eq('ativo', true)
+    .order('criado_em', { ascending: false });
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ recorrencias: data || [] });
+});
+
+// Cria/atualiza a recorrência de um visitante (define os dias da semana).
+// Se já existir uma recorrência ativa para o mesmo nome, substitui os dias.
+app.post('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const { nome_visitante, documento_visitante, tipo, veiculo_placa, dias_semana } = req.body || {};
+  const nome = (nome_visitante || '').trim();
+  if (!nome) return res.status(400).json({ error: 'Informe o nome do visitante.' });
+
+  // Normaliza os dias: inteiros únicos entre 0 (Dom) e 6 (Sáb).
+  const dias = Array.isArray(dias_semana)
+    ? [...new Set(dias_semana.map((d) => parseInt(d, 10)).filter((d) => d >= 0 && d <= 6))]
+    : [];
+  if (!dias.length) {
+    return res.status(400).json({ error: 'Selecione pelo menos um dia da semana.' });
+  }
+
+  // Se já há recorrência ativa para esse visitante (mesmo nome), atualiza os dias.
+  const nomeNorm = nome.toLowerCase();
+  const { data: existentes } = await supabaseAdmin
+    .from('visitas_recorrentes')
+    .select('*')
+    .eq('morador_id', req.user.id)
+    .eq('ativo', true);
+  const jaExiste = (existentes || []).find((r) => (r.nome_visitante || '').trim().toLowerCase() === nomeNorm);
+
+  if (jaExiste) {
+    const { data, error } = await supabaseAdmin
+      .from('visitas_recorrentes')
+      .update({
+        dias_semana: dias,
+        documento_visitante: documento_visitante || jaExiste.documento_visitante || null,
+        tipo: tipo || jaExiste.tipo || 'Visitante',
+        veiculo_placa: veiculo_placa || jaExiste.veiculo_placa || null,
+      })
+      .eq('id', jaExiste.id)
+      .select()
+      .single();
+    if (error) return res.status(400).json({ error: error.message });
+    return res.json({ recorrencia: data });
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from('visitas_recorrentes')
+    .insert({
+      morador_id: req.user.id,
+      nome_visitante: nome,
+      documento_visitante: documento_visitante || null,
+      tipo: tipo || 'Visitante',
+      veiculo_placa: veiculo_placa || null,
+      dias_semana: dias,
+      ativo: true,
+    })
+    .select()
+    .single();
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({ recorrencia: data });
+});
+
+// Remove (desativa) uma recorrência do morador.
+app.delete('/api/morador/recorrencias/:id', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  const { id } = req.params;
+  const { error } = await supabaseAdmin
+    .from('visitas_recorrentes')
+    .delete()
+    .eq('id', id)
+    .eq('morador_id', req.user.id); // só pode remover as próprias
+  if (error) return res.status(400).json({ error: error.message });
+  res.json({ ok: true });
+});
+
 // Busca visitas frequentes agregadas por nome/documento para o morador
 app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   try {
@@ -1062,7 +1145,51 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
     .in('status', ['Pendente', 'Autorizada'])
     .order('data_prevista', { ascending: true, nullsFirst: false });
   if (error) return res.status(400).json({ error: error.message });
-  res.json({ avisos: data });
+
+  let avisos = data || [];
+
+  // Acrescenta as VISITAS RECORRENTES cujo dia da semana corresponde a hoje.
+  try {
+    const hojeDOW = new Date().getDay(); // 0=Dom ... 6=Sáb
+    const { data: recs } = await supabaseAdmin
+      .from('visitas_recorrentes')
+      .select('*, morador:perfis!visitas_recorrentes_morador_id_fkey(nome, bloco, apartamento, telefone)')
+      .eq('ativo', true);
+
+    const doDia = (recs || []).filter(
+      (r) => Array.isArray(r.dias_semana) && r.dias_semana.includes(hojeDOW)
+    );
+
+    // Documentos já presentes em avisos reais de hoje (evita duplicar na lista).
+    const docsAvisos = new Set(
+      avisos.map((a) => (a.documento_visitante || '').replace(/\D/g, '')).filter(Boolean)
+    );
+
+    const recorrentes = doDia
+      .filter((r) => {
+        const d = (r.documento_visitante || '').replace(/\D/g, '');
+        return !d || !docsAvisos.has(d); // não duplica quem já tem aviso hoje
+      })
+      .map((r) => ({
+        id: 'rec-' + r.id,
+        recorrente: true,
+        morador_id: r.morador_id,
+        nome_visitante: r.nome_visitante,
+        documento_visitante: r.documento_visitante,
+        veiculo_placa: r.veiculo_placa,
+        tipo: r.tipo,
+        data_prevista: null,
+        status: 'Pendente',
+        observacao: 'Visita recorrente (frequência semanal)',
+        morador: r.morador || null,
+      }));
+
+    avisos = avisos.concat(recorrentes);
+  } catch (e) {
+    // Tabela de recorrências pode não existir ainda; segue só com os avisos.
+  }
+
+  res.json({ avisos });
 });
 
 // Marca um aviso como "Nao compareceu" (vai direto para o historico, sem entrada)
@@ -1559,6 +1686,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
   // Busca observação fixa no cadastro (se existir)
   const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNorm);
   const obsCad = obsVisitante ? (obsVisitante.observacao || '').trim() : '';
+  const estaBloqueado = visitanteEstaBloqueado(obsVisitante);
 
   // SE FOR MORADOR: Unifica o cadastro pelo perfil oficial do morador
   if (moradorEncontrado) {
@@ -1566,6 +1694,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
       encontrado: true,
       eh_morador: true,
       origem: 'morador',
+      bloqueado: estaBloqueado,
       observacao_cadastro: obsCad,
       morador: {
         nome: moradorEncontrado.nome,
@@ -1595,6 +1724,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
       encontrado: true,
       eh_morador: false,
       origem: 'registro',
+      bloqueado: estaBloqueado,
       observacao_cadastro: obsCad,
       pessoa: {
         nome_pessoa: achoReg.nome_pessoa,
@@ -1616,6 +1746,7 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
       encontrado: true,
       eh_morador: false,
       origem: 'aviso',
+      bloqueado: estaBloqueado,
       observacao_cadastro: obsCad,
       pessoa: {
         nome_pessoa: achoAviso.nome_visitante,
@@ -1657,6 +1788,16 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
   const docLimpo = (documento || '').replace(/\D/g, '');
   if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
     return res.status(400).json({ error: 'O CPF informado no documento é inválido.' });
+  }
+
+  // Segurança: recusa a entrada se o visitante estiver bloqueado (não confia só no front).
+  // Encomendas e entradas sem documento/nome identificável não entram nessa checagem.
+  if (nome_pessoa !== 'Encomenda') {
+    const nomeNormVis = (nome_pessoa || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const obsBloq = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNormVis);
+    if (visitanteEstaBloqueado(obsBloq)) {
+      return res.status(403).json({ error: 'Visitante bloqueado. Entrada não permitida. Contate a administração.' });
+    }
   }
 
   const docFormatado = formatarDocumento(documento);
