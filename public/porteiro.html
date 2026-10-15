@@ -83,6 +83,11 @@
         </div>
       </div>
 
+      <!-- Botão para registrar a entrada do próprio morador (abaixo da faixa amarela) -->
+      <button type="button" id="btn-entrada-morador" class="hidden"
+        style="width:100%; background:var(--verde); color:#fff; padding:14px; font-size:15px; font-weight:600; border:none; border-radius:8px; cursor:pointer; margin:0 0 18px;"
+        onclick="abrirEntradaMorador()">&#127968; Registrar entrada do morador</button>
+
       <!-- Segundo aviso: Observação do cadastro (se houver cadastrada) -->
       <div id="alerta-obs-visitante" class="hidden"
         style="background:#fefce8; border:2px solid #eab308; border-radius:8px; padding:14px 18px; margin:0 0 18px; display:flex; align-items:flex-start; gap:14px; box-shadow:0 3px 10px rgba(234,179,8,0.2);">
@@ -118,8 +123,19 @@
             <span id="aviso-cpf-documento" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
           </div>
           <div>
-            <label for="veiculo_placa">Veículo / placa *</label>
-            <input type="text" id="veiculo_placa" placeholder="Ex: ABC1D23 ou Sem veículo" style="text-transform: uppercase;" required />
+            <label for="acesso_tipo_entrada">Acesso *</label>
+            <select id="acesso_tipo_entrada" onchange="togglePlacaEntrada()">
+              <option value="carro">🚗 Entrada de carro</option>
+              <option value="pe">🚶 Entrada a pé</option>
+            </select>
+          </div>
+          <div id="wrap-placa-entrada">
+            <label for="veiculo_placa">Placa do veículo *</label>
+            <input type="text" id="veiculo_placa" placeholder="Ex: ABC1D23" style="text-transform: uppercase;" />
+            <!-- Aviso exibido no lugar do input quando o acesso é a pé (mantém a célula fixa no grid) -->
+            <div id="placa-ape-aviso" class="hidden" style="padding:10px 12px; border:1px dashed var(--cinza-borda); border-radius:8px; color:var(--texto-suave); font-size:14px; background:#f8fafc;">
+              🚶 Sem veículo (entrada a pé)
+            </div>
           </div>
           <div>
             <label for="destino_bloco">Lote de destino *</label>
@@ -607,6 +623,7 @@
       const alertaMorador = document.getElementById('alerta-morador-cpf');
       const alertaMoradorTexto = document.getElementById('alerta-morador-texto');
       if (alertaMorador) alertaMorador.classList.add('hidden');
+      esconderBotaoEntradaMorador();
 
       try {
         const docLimpo = doc.replace(/\D/g, '');
@@ -638,8 +655,10 @@
               const loteTxt = m.bloco ? `do ${escapeHtml(m.bloco)}` : 'cadastrado no condomínio';
               if (alertaMoradorTexto) alertaMoradorTexto.innerHTML = `Esta pessoa é moradora <strong>${loteTxt}</strong> (<strong>${escapeHtml(m.nome)}</strong>).`;
               if (alertaMorador) alertaMorador.classList.remove('hidden');
+              mostrarBotaoEntradaMorador(m, r.pessoa);
             } else {
               if (alertaMorador) alertaMorador.classList.add('hidden');
+              esconderBotaoEntradaMorador();
             }
             const obsTexto = (r?.observacao_cadastro || '').trim();
             if (obsTexto) {
@@ -667,6 +686,8 @@
           document.getElementById('aviso_id').value = '';
           document.getElementById('msg-cep').textContent = '';
           mostrarFormEntrada();
+          desbloquearNomeDocumento(); // cadastro novo: pode editar nome e documento
+          togglePlacaEntrada();        // garante o estado do campo de placa
           msg.textContent = 'Nenhum cadastro encontrado. Preencha os dados para cadastrar o visitante e registrar a entrada.';
           msg.className = 'msg erro';
           document.getElementById('documento').value = doc;
@@ -688,9 +709,11 @@
             alertaMorador.classList.remove('hidden');
             alertaMorador.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
           }
+          mostrarBotaoEntradaMorador(m, p);
           msg.textContent = `Morador identificado (${m.bloco || 'Residência'}). Dados unificados com sucesso.`;
           msg.className = 'msg ok';
         } else {
+          esconderBotaoEntradaMorador();
           const fonte = r.origem === 'aviso' ? 'aviso de visita do morador' : 'visita anterior';
           msg.textContent = 'Cadastro encontrado (' + fonte + '). Confira os dados e confirme a entrada.';
           msg.className = 'msg ok';
@@ -703,9 +726,23 @@
         toggleEndereco();
         document.getElementById('documento').value = p.documento ? (formatarCpf(p.documento) || p.documento) : doc;
         document.getElementById('veiculo_placa').value = ''; // Sempre zerada para nova entrada, pois cada entrada pode ter veículo diferente
-        document.getElementById('destino_bloco').value = p.destino_bloco || ''; // Se for morador, já vem com o lote dele!
-        if (p.cep_visitante) document.getElementById('cep').value = p.cep_visitante;
-        if (p.endereco_visitante) {
+        document.getElementById('acesso_tipo_entrada').value = 'carro'; // começa em carro; porteiro troca p/ a pé se precisar
+        togglePlacaEntrada();
+
+        // Cadastro encontrado: Nome e Documento não podem ser alterados.
+        bloquearNomeDocumento();
+
+        // O LOTE DE DESTINO NUNCA É PRÉ-PREENCHIDO: o prestador/visitante pode
+        // estar indo a outro lote. O porteiro sempre escolhe o lote da vez.
+        document.getElementById('destino_bloco').value = '';
+
+        // Para prestador com cadastro anterior, preenche o endereço completo:
+        // usa o CEP salvo + ViaCEP (logradouro/bairro/cidade/UF) e tenta extrair
+        // o número da string de endereço anterior.
+        if (p.cep_visitante) {
+          document.getElementById('cep').value = p.cep_visitante;
+          preencherEnderecoDoCadastroAnterior(p.cep_visitante, p.endereco_visitante || '');
+        } else if (p.endereco_visitante) {
           document.getElementById('msg-cep').textContent = 'Endereço do cadastro anterior: ' + p.endereco_visitante;
           document.getElementById('msg-cep').style.color = 'var(--verde-escuro)';
         }
@@ -733,6 +770,7 @@
       formEntrada.reset();
       document.getElementById('tipo').value = '';
       toggleEndereco();
+      esconderBotaoEntradaMorador();
       document.getElementById('aviso_id').value = '';
       document.getElementById('busca-doc').value = '';
       document.getElementById('msg-busca').classList.add('hidden');
@@ -747,9 +785,102 @@
       if (avisoDoc) { avisoDoc.textContent = ''; avisoDoc.classList.add('hidden'); }
       document.getElementById('busca-doc').style.borderColor = '';
       document.getElementById('documento').style.borderColor = '';
+      desbloquearNomeDocumento();
+      document.getElementById('acesso_tipo_entrada').value = 'carro';
+      togglePlacaEntrada();
       formEntrada.classList.add('hidden');
       carregarPrevistas(); // volta a lista completa de hoje
       document.getElementById('busca-doc').focus();
+    }
+
+    // ---------- Bloqueio de Nome/Documento e seletor de acesso ----------
+    function bloquearNomeDocumento() {
+      ['nome_pessoa', 'documento'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) { el.readOnly = true; el.style.background = '#f1f5f9'; el.style.cursor = 'not-allowed'; }
+      });
+    }
+    function desbloquearNomeDocumento() {
+      ['nome_pessoa', 'documento'].forEach((id) => {
+        const el = document.getElementById(id);
+        if (el) { el.readOnly = false; el.style.background = ''; el.style.cursor = ''; }
+      });
+    }
+
+    // ---------- Entrada direta de morador ----------
+    let moradorParaEntrada = null; // dados do morador identificado na busca
+
+    function mostrarBotaoEntradaMorador(m, pessoa) {
+      moradorParaEntrada = {
+        nome_pessoa: (pessoa && pessoa.nome_pessoa) || (m && m.nome) || 'Morador',
+        documento: (pessoa && pessoa.documento) || (m && m.cpf) || null,
+        destino_bloco: (m && m.bloco) || (pessoa && pessoa.destino_bloco) || '',
+      };
+      const btn = document.getElementById('btn-entrada-morador');
+      if (btn) {
+        btn.textContent = '🏠 Registrar entrada de ' + (m && m.nome ? m.nome : 'morador');
+        btn.classList.remove('hidden');
+      }
+    }
+
+    function esconderBotaoEntradaMorador() {
+      moradorParaEntrada = null;
+      const btn = document.getElementById('btn-entrada-morador');
+      if (btn) btn.classList.add('hidden');
+    }
+
+    // Registra a entrada do morador diretamente (sem precisar preencher o formulário).
+    async function abrirEntradaMorador() {
+      if (!moradorParaEntrada) return;
+      const btn = document.getElementById('btn-entrada-morador');
+      const msg = document.getElementById('msg-busca');
+      btn.disabled = true;
+      btn.textContent = 'Registrando...';
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            nome_pessoa: moradorParaEntrada.nome_pessoa,
+            tipo: 'Morador',
+            documento: moradorParaEntrada.documento,
+            destino_bloco: moradorParaEntrada.destino_bloco || null,
+            veiculo_placa: '',
+            observacao: '',
+          }),
+        });
+        esconderBotaoEntradaMorador();
+        document.getElementById('alerta-morador-cpf')?.classList.add('hidden');
+        document.getElementById('alerta-obs-visitante')?.classList.add('hidden');
+        if (msg) {
+          msg.textContent = 'Entrada do morador registrada com sucesso por ' + (perfil?.nome || 'porteiro') + '.';
+          msg.className = 'msg ok';
+          msg.classList.remove('hidden');
+        }
+        document.getElementById('busca-doc').value = '';
+        document.getElementById('busca-doc').focus();
+      } catch (err) {
+        if (msg) {
+          msg.textContent = 'Erro ao registrar entrada do morador: ' + err.message;
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+        }
+      } finally {
+        btn.disabled = false;
+      }
+    }
+
+    // Mostra/esconde o campo de placa conforme Entrada de carro x a pé.
+    function togglePlacaEntrada() {
+      const sel = document.getElementById('acesso_tipo_entrada');
+      const ehCarro = !sel || sel.value === 'carro';
+      // A célula da placa fica SEMPRE visível (posição fixa no grid).
+      // Só alternamos o conteúdo interno: input de placa (carro) x aviso "a pé".
+      const input = document.getElementById('veiculo_placa');
+      const aviso = document.getElementById('placa-ape-aviso');
+      const label = document.querySelector('#wrap-placa-entrada label');
+      if (input) input.classList.toggle('hidden', !ehCarro);
+      if (aviso) aviso.classList.toggle('hidden', ehCarro);
+      if (label) label.textContent = ehCarro ? 'Placa do veículo *' : 'Veículo';
     }
 
     // Mascara e validação em tempo real para campos de CPF na portaria
@@ -835,6 +966,47 @@
       }
     }
 
+    // Preenche automaticamente o endereço do prestador a partir do cadastro
+    // anterior: usa o CEP (ViaCEP) para logradouro/bairro/cidade/UF e tenta
+    // extrair o número da string de endereço salva.
+    async function preencherEnderecoDoCadastroAnterior(cepSalvo, enderecoStr) {
+      const msg = document.getElementById('msg-cep');
+      const cep = (cepSalvo || '').replace(/\D/g, '');
+
+      // Tenta extrair o número da string salva (formato "Logradouro, 123, Bairro...").
+      const mNum = (enderecoStr || '').match(/,\s*(\d{1,6})\b/);
+      if (mNum) document.getElementById('end_numero').value = mNum[1];
+
+      if (cep.length !== 8) {
+        if (enderecoStr) {
+          msg.textContent = 'Endereço do cadastro anterior: ' + enderecoStr;
+          msg.style.color = 'var(--verde-escuro)';
+        }
+        return;
+      }
+
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await resp.json();
+        if (dados && !dados.erro) {
+          document.getElementById('end_logradouro').value = dados.logradouro || '';
+          document.getElementById('end_bairro').value = dados.bairro || '';
+          document.getElementById('end_cidade').value = dados.localidade || '';
+          document.getElementById('end_uf').value = dados.uf || '';
+          msg.textContent = 'Endereço preenchido do cadastro anterior. Confira o número.';
+          msg.style.color = 'var(--verde-escuro)';
+        } else if (enderecoStr) {
+          msg.textContent = 'Endereço do cadastro anterior: ' + enderecoStr;
+          msg.style.color = 'var(--verde-escuro)';
+        }
+      } catch (err) {
+        if (enderecoStr) {
+          msg.textContent = 'Endereço do cadastro anterior: ' + enderecoStr;
+          msg.style.color = 'var(--verde-escuro)';
+        }
+      }
+    }
+
     // Monta o endereco completo em uma string para salvar no registro.
     function montarEnderecoVisitante() {
       const cep = document.getElementById('cep').value.trim();
@@ -881,12 +1053,42 @@
         return;
       }
 
+      // Para prestador, o endereço completo é obrigatório.
+      if (document.getElementById('tipo').value === 'Prestador') {
+        const campos = {
+          cep: 'o CEP', end_logradouro: 'o logradouro', end_numero: 'o número',
+          end_bairro: 'o bairro', end_cidade: 'a cidade', end_uf: 'a UF',
+        };
+        for (const [id, rotulo] of Object.entries(campos)) {
+          const el = document.getElementById(id);
+          if (!el || !el.value.trim()) {
+            msgEntrada.textContent = `Para prestador, informe ${rotulo} do endereço.`;
+            msgEntrada.className = 'msg erro';
+            msgEntrada.classList.remove('hidden');
+            if (el) el.focus();
+            return;
+          }
+        }
+      }
+
+      // Acesso de carro exige placa; a pé grava "A pé" no lugar da placa.
+      const acessoEntrada = document.getElementById('acesso_tipo_entrada').value;
+      const placaDigitadaEntrada = document.getElementById('veiculo_placa').value.trim();
+      if (acessoEntrada === 'carro' && !placaDigitadaEntrada) {
+        msgEntrada.textContent = 'Informe a placa do veículo ou selecione "Entrada a pé".';
+        msgEntrada.className = 'msg erro';
+        msgEntrada.classList.remove('hidden');
+        document.getElementById('veiculo_placa').focus();
+        return;
+      }
+      const placaFinal = acessoEntrada === 'pe' ? 'A pé' : placaDigitadaEntrada;
+
       dadosEntradaPendente = {
         aviso_id: document.getElementById('aviso_id').value || null,
         nome_pessoa: document.getElementById('nome_pessoa').value.trim(),
         tipo: document.getElementById('tipo').value,
         documento: formatarDocumento(docForm) || null,
-        veiculo_placa: document.getElementById('veiculo_placa').value.trim(),
+        veiculo_placa: placaFinal,
         destino_bloco: lote,
         endereco_visitante: montarEnderecoVisitante(),
         cep_visitante: document.getElementById('cep').value.trim() || null,

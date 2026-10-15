@@ -53,8 +53,16 @@
           </div>
 
           <form id="form-confirmacao-rapida" onsubmit="event.preventDefault(); enviarAvisoExistente();">
-            <label for="veiculo_placa_rapido">Veículo / placa *</label>
-            <input type="text" id="veiculo_placa_rapido" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" required />
+            <label for="acesso_tipo_rapido">Como vai acessar? *</label>
+            <select id="acesso_tipo_rapido" onchange="togglePlacaRapido()">
+              <option value="carro">🚗 Acesso de carro</option>
+              <option value="pe">🚶 Acesso a pé</option>
+            </select>
+
+            <div id="wrap-placa-rapido">
+              <label for="veiculo_placa_rapido">Placa do veículo *</label>
+              <input type="text" id="veiculo_placa_rapido" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" />
+            </div>
 
             <label for="data_prevista_rapida">Data/hora prevista *</label>
             <input type="datetime-local" id="data_prevista_rapida" required />
@@ -85,8 +93,16 @@
             <input type="text" id="documento_visitante" required />
             <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
-            <label for="veiculo_placa">Veículo / placa *</label>
-            <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" required />
+            <label for="acesso_tipo">Como vai acessar? *</label>
+            <select id="acesso_tipo" onchange="togglePlaca()">
+              <option value="carro">🚗 Acesso de carro</option>
+              <option value="pe">🚶 Acesso a pé</option>
+            </select>
+
+            <div id="wrap-placa">
+              <label for="veiculo_placa">Placa do veículo *</label>
+              <input type="text" id="veiculo_placa" placeholder="Ex: ABC-1D23" style="text-transform:uppercase;" />
+            </div>
 
             <label for="data_prevista">Data/hora prevista *</label>
             <input type="datetime-local" id="data_prevista" required />
@@ -136,8 +152,22 @@
           &#9989; Solicitação de entrada enviada com sucesso!
         </div>
         <p class="text-muted" style="margin-top:14px; font-size:14px;">
-          Seus dados já foram enviados para a portaria do Park Place. Ao chegar ao condomínio, basta se identificar na portaria com seu documento para liberação.
+          <strong id="sucesso-visitante"></strong>, o morador <strong id="sucesso-morador"></strong> estará te aguardando. Ao chegar ao condomínio, basta se identificar na portaria com seu documento para liberação.
         </p>
+
+        <h3 style="margin:22px 0 12px; font-size:16px; color:var(--verde-escuro);">Como chegar</h3>
+        <div class="lp-mapa-acoes" style="margin-top:0;">
+          <a class="lp-btn-waze"
+             href="https://waze.com/ul?q=Av.%20Comendador%20Ant%C3%B4nio%20Borin%2C%204499%20-%20Jardim%20Colonial%2C%20Jundia%C3%AD%20-%20SP%2C%2013219-807&navigate=yes"
+             target="_blank" rel="noopener">
+            Navegar pelo Waze
+          </a>
+          <a class="lp-btn-maps"
+             href="https://www.google.com/maps/dir/?api=1&destination=Av.%20Comendador%20Ant%C3%B4nio%20Borin%2C%204499%20-%20Jardim%20Colonial%2C%20Jundia%C3%AD%20-%20SP%2C%2013219-807"
+             target="_blank" rel="noopener">
+            Navegar pelo Google Maps
+          </a>
+        </div>
       </div>
 
       <div id="area-erro-link" class="hidden" style="text-align:center;">
@@ -175,6 +205,20 @@
     const tipo = urlParams.get('tipo') || 'Visitante';
     const linkExp = urlParams.get('exp');
     const linkSig = urlParams.get('sig');
+    let moradorNomeCompleto = ''; // preenchido ao carregar os dados do morador
+
+    // Primeiro nome de um nome completo.
+    function primeiroNome(nome) {
+      return (nome || '').trim().split(/\s+/)[0] || '';
+    }
+
+    // Preenche a mensagem personalizada e exibe a tela de sucesso.
+    function mostrarSucesso(nomeVisitante) {
+      document.getElementById('sucesso-visitante').textContent = primeiroNome(nomeVisitante) || 'Visitante';
+      document.getElementById('sucesso-morador').textContent = primeiroNome(moradorNomeCompleto) || 'o morador';
+      document.getElementById('area-form').classList.add('hidden');
+      document.getElementById('area-sucesso').classList.remove('hidden');
+    }
 
     let visitanteCadastradoCache = null;
 
@@ -204,6 +248,7 @@
 
       api(`/api/public/moradores/${morador_id}`).then(res => {
         if (res && res.morador) {
+          moradorNomeCompleto = res.morador.nome || '';
           document.getElementById('morador-nome').textContent = res.morador.nome;
           document.getElementById('morador-lote').textContent = res.morador.bloco || 'Lote Não Informado';
         }
@@ -287,7 +332,16 @@
 
           document.getElementById('cadastrado-nome').textContent = res.visitante.nome;
           document.getElementById('cadastrado-doc').textContent = formatarCpf(res.visitante.documento) || res.visitante.documento || cpfVal;
-          document.getElementById('veiculo_placa_rapido').value = res.visitante.veiculo_placa || '';
+          // Pré-seleciona o tipo de acesso conforme o último cadastro.
+          const placaAnterior = res.visitante.veiculo_placa || '';
+          if (/^a\s*p[ée]$/i.test(placaAnterior.trim())) {
+            document.getElementById('acesso_tipo_rapido').value = 'pe';
+            document.getElementById('veiculo_placa_rapido').value = '';
+          } else {
+            document.getElementById('acesso_tipo_rapido').value = 'carro';
+            document.getElementById('veiculo_placa_rapido').value = placaAnterior;
+          }
+          togglePlacaRapido();
 
           document.getElementById('etapa-cpf').classList.add('hidden');
           document.getElementById('etapa-novo-cadastro').classList.add('hidden');
@@ -318,6 +372,16 @@
       inpCpfConsulta.focus();
     }
 
+    // Mostra/esconde o campo de placa conforme o tipo de acesso (carro x a pé).
+    function togglePlaca() {
+      const ehCarro = document.getElementById('acesso_tipo').value === 'carro';
+      document.getElementById('wrap-placa').classList.toggle('hidden', !ehCarro);
+    }
+    function togglePlacaRapido() {
+      const ehCarro = document.getElementById('acesso_tipo_rapido').value === 'carro';
+      document.getElementById('wrap-placa-rapido').classList.toggle('hidden', !ehCarro);
+    }
+
     // Confirmação para visitante já cadastrado
     async function enviarAvisoExistente() {
       if (!visitanteCadastradoCache) return;
@@ -326,15 +390,19 @@
       msgRapido.classList.add('hidden');
 
       const dt = document.getElementById('data_prevista_rapida').value;
-      const placa = document.getElementById('veiculo_placa_rapido').value.trim();
+      const acessoTipo = document.getElementById('acesso_tipo_rapido').value;
+      const placaDigitada = document.getElementById('veiculo_placa_rapido').value.trim();
 
-      if (!placa) {
+      if (acessoTipo === 'carro' && !placaDigitada) {
         msgRapido.textContent = 'Por favor, informe a placa do veículo.';
         msgRapido.className = 'msg erro';
         msgRapido.classList.remove('hidden');
         document.getElementById('veiculo_placa_rapido').focus();
         return;
       }
+
+      // Se for a pé, grava "A pé" no lugar da placa (para a portaria ver).
+      const placa = acessoTipo === 'pe' ? 'A pé' : placaDigitada;
 
       if (!dt) {
         msgRapido.textContent = 'Por favor, informe a data/hora prevista.';
@@ -355,7 +423,7 @@
             nome_visitante: visitanteCadastradoCache.nome,
             tipo: tipo,
             documento_visitante: formatarDocumento(visitanteCadastradoCache.documento || inpCpfConsulta.value.trim()) || null,
-            veiculo_placa: placa || visitanteCadastradoCache.veiculo_placa || null,
+            veiculo_placa: placa || null,
             data_prevista: dt ? new Date(dt).toISOString() : null,
             endereco_visitante: visitanteCadastradoCache.endereco_visitante || null,
             cep_visitante: visitanteCadastradoCache.cep_visitante || null,
@@ -364,8 +432,7 @@
           }),
         });
 
-        document.getElementById('area-form').classList.add('hidden');
-        document.getElementById('area-sucesso').classList.remove('hidden');
+        mostrarSucesso(visitanteCadastradoCache.nome);
       } catch (err) {
         if (ehErroDeBloqueio(err)) {
           mostrarBloqueio();
@@ -454,7 +521,10 @@
       const nomeVal = document.getElementById('nome_visitante').value.trim();
       const docExt = document.getElementById('documento_visitante').value.trim();
       const docExtLimpo = docExt.replace(/\D/g, '');
-      const placaVal = document.getElementById('veiculo_placa').value.trim();
+      const acessoTipo = document.getElementById('acesso_tipo').value;
+      const placaDigitada = document.getElementById('veiculo_placa').value.trim();
+      // Se for a pé, grava "A pé" no lugar da placa (para a portaria ver).
+      const placaVal = acessoTipo === 'pe' ? 'A pé' : placaDigitada;
       const dtVal = document.getElementById('data_prevista').value;
 
       if (!nomeVal) {
@@ -494,8 +564,8 @@
         return;
       }
 
-      if (!placaVal) {
-        msg.textContent = 'Por favor, informe o veículo / placa.';
+      if (acessoTipo === 'carro' && !placaDigitada) {
+        msg.textContent = 'Por favor, informe a placa do veículo.';
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
         document.getElementById('veiculo_placa').focus();
@@ -546,8 +616,7 @@
           }),
         });
 
-        document.getElementById('area-form').classList.add('hidden');
-        document.getElementById('area-sucesso').classList.remove('hidden');
+        mostrarSucesso(nomeVal);
       } catch (err) {
         if (ehErroDeBloqueio(err)) {
           mostrarBloqueio();
