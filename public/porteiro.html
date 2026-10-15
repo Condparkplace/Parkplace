@@ -23,7 +23,9 @@
     <div class="tabs">
       <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
       <button data-tab="presentes" onclick="trocarAba('presentes')">No condomínio</button>
-      <button data-tab="encomendas" onclick="trocarAba('encomendas')">Retirada Encomendas</button>
+      <button data-tab="encomendas" onclick="trocarAba('encomendas')">Encomendas</button>
+      <button data-tab="condominio" onclick="trocarAba('condominio')">Moradores</button>
+      <button data-tab="mapa" onclick="trocarAba('mapa')">Mapa</button>
       <button data-tab="historico" onclick="trocarAba('historico')">Histórico</button>
     </div>
 
@@ -245,10 +247,15 @@
       </div>
     </section>
 
-    <!-- Retirada Encomendas -->
+    <!-- Encomendas -->
     <section id="tab-encomendas" class="card hidden">
-      <h2>Encomendas Pendentes de Retirada</h2>
-      <div id="msg-encomenda" class="msg hidden"></div>
+      <div class="row-inline" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+        <h2 style="margin:0;">Encomendas Pendentes de Retirada</h2>
+        <button type="button"
+          style="background-color: #2b6cb0; color: white; padding: 10px 18px; font-size: 14px; font-weight:600; border:none; border-radius:6px; cursor:pointer;"
+          onclick="abrirModalEncomenda()">&#128230; Recebimento de Encomenda</button>
+      </div>
+      <div id="msg-encomenda-tab" class="msg hidden"></div>
       <div id="lista-encomendas">
         <p class="vazio">Carregando...</p>
       </div>
@@ -283,6 +290,39 @@
       <div id="lista-historico">
         <p class="vazio">Carregando...</p>
       </div>
+    </section>
+
+    <!-- Condominio: localizar morador -->
+    <section id="tab-condominio" class="card hidden">
+      <h2>Localizar morador</h2>
+      <p class="text-muted" style="margin:0 0 14px; font-size:14px;">
+        Busque por lote ou nome. Clique no telefone para falar no WhatsApp.
+      </p>
+      <div class="row-inline" style="margin-bottom:14px; flex-wrap: wrap; gap:10px;">
+        <input type="search" id="busca-condominio" placeholder="Digite o lote (ex: 12) ou o nome do morador..."
+          name="busca-condominio-pp" autocomplete="off" autocorrect="off" autocapitalize="off"
+          spellcheck="false" data-form-type="other" data-lpignore="true"
+          oninput="buscarCondominio()" style="flex:1; min-width:260px; margin:0;" />
+        <button type="button" class="secundario" onclick="limparBuscaCondominio()">Limpar</button>
+      </div>
+      <div id="lista-condominio">
+        <p class="vazio">Digite um lote ou nome para começar a busca.</p>
+      </div>
+    </section>
+
+    <!-- Mapa do condominio -->
+    <section id="tab-mapa" class="card hidden">
+      <h2>Mapa do condomínio</h2>
+      <p class="text-muted" style="margin:0 0 14px; font-size:14px;">
+        Clique em um lote para destacá-lo. Use a busca para localizar rapidamente.
+      </p>
+      <div class="row-inline" style="margin-bottom:14px; flex-wrap: wrap; gap:10px;">
+        <input type="search" id="busca-mapa" placeholder="Destacar lote (ex: 11)..."
+          autocomplete="off" oninput="destacarLoteMapa(this.value)"
+          style="max-width:260px; margin:0;" />
+        <button type="button" class="secundario" onclick="limparDestaqueMapa()">Limpar destaque</button>
+      </div>
+      <div id="mapa-container" style="overflow:auto; border:1px solid var(--cinza-borda); border-radius:10px; background:#eef2f7; padding:10px;"></div>
     </section>
   </div>
 
@@ -393,7 +433,7 @@
       document.querySelectorAll('.tabs button').forEach((b) =>
         b.classList.toggle('ativo', b.dataset.tab === aba)
       );
-      ['entrada', 'presentes', 'encomendas', 'historico'].forEach((t) =>
+      ['entrada', 'presentes', 'encomendas', 'historico', 'condominio', 'mapa'].forEach((t) =>
         document.getElementById('tab-' + t).classList.toggle('hidden', t !== aba)
       );
       if (aba === 'entrada') {
@@ -406,10 +446,15 @@
         carregarPresentes();
       }
       if (aba === 'encomendas') {
-        document.getElementById('msg-encomenda')?.classList.add('hidden');
+        document.getElementById('msg-encomenda-tab')?.classList.add('hidden');
         carregarEncomendas();
       }
       if (aba === 'historico') carregarHistorico();
+      if (aba === 'condominio') {
+        const campo = document.getElementById('busca-condominio');
+        if (campo) setTimeout(() => campo.focus(), 50);
+      }
+      if (aba === 'mapa') renderMapaCondominio();
     }
 
     // Exibe o formulario de entrada (chamado apos buscar ou escolher um aviso).
@@ -425,6 +470,22 @@
       } else {
         areaEndereco.classList.add('hidden');
       }
+    }
+
+    // Monta um link clicável de WhatsApp a partir de um telefone.
+    // Normaliza o número (só dígitos) e assume DDI 55 (Brasil) quando não houver.
+    function linkWhatsapp(telefone) {
+      const bruto = (telefone || '').toString();
+      let num = bruto.replace(/\D/g, '');
+      if (!num) return escapeHtml(bruto);
+      // Se não começar com o DDI do Brasil (55) e tiver 10 ou 11 dígitos (DDD + número), adiciona.
+      if (!num.startsWith('55') && (num.length === 10 || num.length === 11)) {
+        num = '55' + num;
+      }
+      return `<a href="https://wa.me/${num}" target="_blank" rel="noopener"
+        style="color:#128C7E; text-decoration:none; font-weight:600;"
+        title="Conversar no WhatsApp"
+        onclick="event.stopPropagation();">&#128172; ${escapeHtml(bruto)}</a>`;
     }
 
     // ---------- Visitas previstas ----------
@@ -548,7 +609,7 @@
                   <tr style="${trStyle}">
                     <td data-label="Visitante">${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
                     <td data-label="Tipo">${escapeHtml(a.tipo)}</td>
-                    <td data-label="Morador / destino">${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + escapeHtml(m.telefone) : ''}</span></td>
+                    <td data-label="Morador / destino">${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + linkWhatsapp(m.telefone) : ''}</span></td>
                     <td data-label="Previsto">${formatarData(a.data_prevista)}</td>
                     <td data-label="Status">${badgeStatus(a.status)}</td>
                     <td data-label="">
@@ -696,7 +757,7 @@
 
         // Se é CPF (só números) mas está incompleto, exige os 11 dígitos.
         if (soNumeros && docLimpo.length > 0 && docLimpo.length < 11) {
-          msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (RG).';
+          msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (CPF).';
           msg.className = 'msg erro';
           msg.classList.remove('hidden');
           document.getElementById('busca-doc').focus();
@@ -1485,6 +1546,8 @@
 
     // ---------- Historico ----------
     let registrosHistorico = [];
+    const HISTORICO_PAGINA = 20; // quantos registros exibir por vez
+    let historicoMostrados = HISTORICO_PAGINA;
 
     async function carregarHistorico() {
       const alvo = document.getElementById('lista-historico');
@@ -1501,58 +1564,89 @@
       try {
         const { registros } = await api('/api/portaria/historico?' + params.toString());
         registrosHistorico = registros;
-        if (!registros.length) {
-          alvo.innerHTML = '<p class="vazio">Nenhum registro no período.</p>';
-          return;
-        }
-        alvo.innerHTML = `
-          <table>
-            <thead>
-              <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saída</th><th>Porteiro</th><th>Observação</th></tr>
-            </thead>
-            <tbody>
-              ${registros.map((r) => {
-          const destino = r.destino_bloco || '-';
-          const naoVeio = r.status === 'Nao compareceu';
-          let observacaoText = r.observacao || '';
-
-          let saidaCol;
-          if (observacaoText.startsWith('[Cancelado]')) {
-            saidaCol = '<span class="badge cancelada">Cancelado</span>';
-          } else if (naoVeio) {
-            saidaCol = '<span class="badge cancelada">Não compareceu</span>';
-          } else if (r.tipo === 'Morador') {
-            saidaCol = '<span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">Morador</span>';
-          } else if (r.saida) {
-            saidaCol = formatarData(r.saida);
-          } else {
-            saidaCol = '<span class="badge entrada">No local</span>';
-          }
-          let porteiroCol;
-          if (naoVeio) {
-            porteiroCol = `<span class="text-muted">Não veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
-          } else if (r.tipo === 'Morador') {
-            porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
-          } else {
-            porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
-            if (r.saida) porteiroCol += `<br><span class="text-muted">Saída:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
-          }
-          return `
-                  <tr>
-                    <td data-label="Nome">${escapeHtml(r.nome_pessoa)}</td>
-                    <td data-label="Tipo">${escapeHtml(r.tipo)}</td>
-                    <td data-label="Destino">${escapeHtml(destino || '-')}</td>
-                    <td data-label="Entrada">${naoVeio ? '<span class="text-muted">previsto ' + formatarData(r.entrada) + '</span>' : formatarData(r.entrada)}</td>
-                    <td data-label="Saída">${saidaCol}</td>
-                    <td data-label="Porteiro" style="font-size:13px;">${porteiroCol}</td>
-                    <td data-label="Observação" style="font-size:13px; color:var(--vermelho);">${escapeHtml(observacaoText)}</td>
-                  </tr>`;
-        }).join('')}
-            </tbody>
-          </table>`;
+        // Reinicia a paginação a cada nova busca.
+        historicoMostrados = HISTORICO_PAGINA;
+        renderHistorico();
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
+    }
+
+    // Monta a linha de um registro do histórico.
+    function montarLinhaHistorico(r) {
+      const destino = r.destino_bloco || '-';
+      const naoVeio = r.status === 'Nao compareceu';
+      let observacaoText = r.observacao || '';
+
+      let saidaCol;
+      if (observacaoText.startsWith('[Cancelado]')) {
+        saidaCol = '<span class="badge cancelada">Cancelado</span>';
+      } else if (naoVeio) {
+        saidaCol = '<span class="badge cancelada">Não compareceu</span>';
+      } else if (r.tipo === 'Morador') {
+        saidaCol = '<span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:600;">Morador</span>';
+      } else if (r.saida) {
+        saidaCol = formatarData(r.saida);
+      } else {
+        saidaCol = '<span class="badge entrada">No local</span>';
+      }
+      let porteiroCol;
+      if (naoVeio) {
+        porteiroCol = `<span class="text-muted">Não veio:</span> ${escapeHtml(r.porteiro_nao_veio || '-')}`;
+      } else if (r.tipo === 'Morador') {
+        porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
+      } else {
+        porteiroCol = `<span class="text-muted">Entrada:</span> ${escapeHtml(r.porteiro_entrada || '-')}`;
+        if (r.saida) porteiroCol += `<br><span class="text-muted">Saída:</span> ${escapeHtml(r.porteiro_saida || '-')}`;
+      }
+      return `
+              <tr>
+                <td data-label="Nome">${escapeHtml(r.nome_pessoa)}</td>
+                <td data-label="Tipo">${escapeHtml(r.tipo)}</td>
+                <td data-label="Destino">${escapeHtml(destino || '-')}</td>
+                <td data-label="Entrada">${naoVeio ? '<span class="text-muted">previsto ' + formatarData(r.entrada) + '</span>' : formatarData(r.entrada)}</td>
+                <td data-label="Saída">${saidaCol}</td>
+                <td data-label="Porteiro" style="font-size:13px;">${porteiroCol}</td>
+                <td data-label="Observação" style="font-size:13px; color:var(--vermelho);">${escapeHtml(observacaoText)}</td>
+              </tr>`;
+    }
+
+    // Renderiza apenas os primeiros "historicoMostrados" registros + botão "Carregar mais".
+    function renderHistorico() {
+      const alvo = document.getElementById('lista-historico');
+      if (!registrosHistorico.length) {
+        alvo.innerHTML = '<p class="vazio">Nenhum registro no período.</p>';
+        return;
+      }
+      const visiveis = registrosHistorico.slice(0, historicoMostrados);
+      const total = registrosHistorico.length;
+      const restantes = total - visiveis.length;
+
+      let rodape = `<p class="text-muted" style="text-align:center; margin:14px 0 0; font-size:13px;">Mostrando ${visiveis.length} de ${total} registro(s).</p>`;
+      if (restantes > 0) {
+        const proximo = Math.min(HISTORICO_PAGINA, restantes);
+        rodape += `<div style="text-align:center; margin-top:10px;">
+          <button type="button" onclick="carregarMaisHistorico()"
+            style="background-color:#2b6cb0; color:white; border:none; border-radius:6px; padding:10px 20px; font-weight:600; cursor:pointer;">
+            Carregar mais ${proximo}
+          </button></div>`;
+      }
+
+      alvo.innerHTML = `
+        <table>
+          <thead>
+            <tr><th>Nome</th><th>Tipo</th><th>Destino</th><th>Entrada</th><th>Saída</th><th>Porteiro</th><th>Observação</th></tr>
+          </thead>
+          <tbody>
+            ${visiveis.map(montarLinhaHistorico).join('')}
+          </tbody>
+        </table>${rodape}`;
+    }
+
+    // Mostra o próximo lote de registros (20 por vez).
+    function carregarMaisHistorico() {
+      historicoMostrados += HISTORICO_PAGINA;
+      renderHistorico();
     }
 
     function exportarExcel() {
@@ -1594,6 +1688,231 @@
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+    }
+
+    // ====================================================
+    // Condomínio: localizar morador por lote ou nome
+    // ====================================================
+    let buscaCondominioTimer = null;
+
+    function limparBuscaCondominio() {
+      const campo = document.getElementById('busca-condominio');
+      if (campo) campo.value = '';
+      document.getElementById('lista-condominio').innerHTML =
+        '<p class="vazio">Digite um lote ou nome para começar a busca.</p>';
+      campo?.focus();
+    }
+
+    function buscarCondominio() {
+      // Debounce para não disparar uma requisição a cada tecla.
+      clearTimeout(buscaCondominioTimer);
+      buscaCondominioTimer = setTimeout(executarBuscaCondominio, 300);
+    }
+
+    async function executarBuscaCondominio() {
+      const termo = (document.getElementById('busca-condominio')?.value || '').trim();
+      const alvo = document.getElementById('lista-condominio');
+      if (!termo) {
+        alvo.innerHTML = '<p class="vazio">Digite um lote ou nome para começar a busca.</p>';
+        return;
+      }
+      alvo.innerHTML = '<p class="vazio">Buscando...</p>';
+      try {
+        const { moradores } = await api('/api/portaria/condominio/moradores?q=' + encodeURIComponent(termo));
+        if (!moradores || !moradores.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhum morador encontrado para "' + escapeHtml(termo) + '".</p>';
+          return;
+        }
+        alvo.innerHTML = `
+          <table>
+            <thead>
+              <tr><th>Lote</th><th>Morador</th><th>Tipo</th><th>Telefone</th></tr>
+            </thead>
+            <tbody>
+              ${moradores.map((m) => `
+                <tr>
+                  <td data-label="Lote"><strong>${escapeHtml(m.bloco || '-')}</strong>${m.apartamento ? '<br><span class="text-muted">' + escapeHtml(m.apartamento) + '</span>' : ''}</td>
+                  <td data-label="Morador">${escapeHtml(m.nome || '-')}</td>
+                  <td data-label="Tipo">${escapeHtml(m.tipo === 'admin' ? 'Administrador' : 'Morador')}</td>
+                  <td data-label="Telefone">${m.telefone ? linkWhatsapp(m.telefone) : '<span class="text-muted">Sem telefone</span>'}</td>
+                </tr>`).join('')}
+            </tbody>
+          </table>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    // ====================================================
+    // Mapa do condomínio (esquemático, lotes 01 a 25)
+    // ====================================================
+    // Layout em linhas espelhando a disposição real do loteamento.
+    // Cada lote tem posição/tamanho em uma grade; a rua principal
+    // (R. João de Favre) corre à direita e a R. Yossef Yatim no miolo.
+    const MAPA_LOTES = [
+      // id, x, y, largura, altura
+      { n: 1,  x: 325, y: 20,  w: 150, h: 90 },
+
+      { n: 5,  x: 40,  y: 150, w: 90,  h: 120 },
+      { n: 4,  x: 135, y: 150, w: 90,  h: 120 },
+      { n: 3,  x: 230, y: 150, w: 90,  h: 120 },
+      { n: 2,  x: 325, y: 150, w: 90,  h: 120 },
+
+      { n: 6,  x: 40,  y: 300, w: 90,  h: 130 },
+      { n: 7,  x: 135, y: 300, w: 90,  h: 130 },
+      { n: 8,  x: 230, y: 300, w: 90,  h: 130 },
+      { n: 9,  x: 325, y: 300, w: 70,  h: 130 },
+      { n: 10, x: 400, y: 300, w: 90,  h: 60  },
+      { n: 11, x: 400, y: 365, w: 90,  h: 65  },
+
+      { n: 16, x: 40,  y: 445, w: 90,  h: 120 },
+      { n: 15, x: 135, y: 445, w: 90,  h: 120 },
+      { n: 14, x: 230, y: 445, w: 90,  h: 120 },
+      { n: 13, x: 325, y: 445, w: 75,  h: 120 },
+      { n: 12, x: 405, y: 445, w: 95,  h: 120 },
+
+      { n: 17, x: 40,  y: 610, w: 85,  h: 130 },
+      { n: 18, x: 130, y: 610, w: 85,  h: 130 },
+      { n: 19, x: 220, y: 610, w: 85,  h: 130 },
+      { n: 20, x: 310, y: 610, w: 85,  h: 130 },
+      { n: 21, x: 400, y: 610, w: 85,  h: 130 },
+      { n: 22, x: 490, y: 610, w: 85,  h: 130 },
+      { n: 23, x: 580, y: 610, w: 70,  h: 130 },
+      { n: 24, x: 655, y: 610, w: 80,  h: 130 },
+      { n: 25, x: 740, y: 610, w: 80,  h: 130 },
+    ];
+
+    let loteDestacadoMapa = null;
+    let casasMapa = {}; // lote (número) -> número da casa (apenas moradores com ver_lote)
+
+    async function renderMapaCondominio() {
+      const cont = document.getElementById('mapa-container');
+      if (!cont) return;
+
+      // Busca os números das casas dos moradores que liberaram "ver_lote".
+      try {
+        const { casas } = await api('/api/portaria/mapa/casas');
+        casasMapa = casas || {};
+      } catch (e) {
+        casasMapa = {};
+      }
+
+      const larguraVB = 840;
+      const alturaVB = 770;
+
+      // Ruas (faixas cinza) desenhadas atrás dos lotes.
+      const ruas = `
+        <!-- R. João de Favre (vertical, à direita) - termina no cruzamento com a Antônio Cecchini -->
+        <rect x="508" y="20" width="52" height="581" fill="#cbd5e1" rx="10" />
+        <!-- R. Antônio Cecchini (horizontal, embaixo) -->
+        <rect x="30" y="575" width="810" height="26" fill="#cbd5e1" rx="12" />
+        <!-- R. Yossef Yatim (miolo) - conecta na R. João de Favre à direita -->
+        <rect x="30" y="278" width="508" height="20" fill="#cbd5e1" rx="10" />
+      `;
+
+      const lotes = MAPA_LOTES.map((l) => {
+        const label = 'Lote ' + String(l.n).padStart(2, '0');
+        const cx = l.x + l.w / 2;
+        const cy = l.y + l.h / 2;
+        // Número da casa, só para lotes cujo morador liberou "ver_lote".
+        const numCasa = casasMapa[String(l.n)];
+        // Se há casa, sobe o rótulo do lote e mostra a linha "Casa (número)" embaixo.
+        const yLote = numCasa ? cy - 9 : cy;
+        const linhaCasa = numCasa ? `
+            <text class="mapa-casa" x="${cx}" y="${cy + 11}" text-anchor="middle" dominant-baseline="central"
+              font-size="12" font-weight="600" fill="#475569"
+              style="pointer-events:none;">Casa Nº ${escapeHtml(numCasa)}</text>` : '';
+        return `
+          <g class="mapa-lote" data-lote="${l.n}" style="cursor:pointer;"
+             onclick="destacarLoteMapa('${l.n}')">
+            <rect x="${l.x}" y="${l.y}" width="${l.w}" height="${l.h}" rx="6"
+              fill="#ffffff" stroke="#334155" stroke-width="2"></rect>
+            <text class="mapa-rotulo" x="${cx}" y="${yLote}" text-anchor="middle" dominant-baseline="central"
+              font-size="15" font-weight="600" fill="#1e293b"
+              style="pointer-events:none;">${label}</text>${linhaCasa}
+          </g>`;
+      }).join('');
+
+      // Portaria: no centro da entrada (R. João de Favre), no topo do mapa.
+      const portaria = `
+        <g>
+          <rect x="498" y="18" width="66" height="40" rx="6"
+            fill="#16a34a" stroke="#166534" stroke-width="2"></rect>
+          <text x="531" y="34" text-anchor="middle" dominant-baseline="central"
+            font-size="12" font-weight="700" fill="#ffffff" style="pointer-events:none;">&#128682;</text>
+          <text x="531" y="48" text-anchor="middle" dominant-baseline="central"
+            font-size="11" font-weight="700" fill="#ffffff" style="pointer-events:none;">Portaria</text>
+        </g>
+      `;
+
+      const nomesRuas = `
+        <text x="533" y="400" fill="#475569" font-size="15" font-weight="700"
+          transform="rotate(90 533 400)" text-anchor="middle">R. João de Favre</text>
+        <text x="250" y="291" fill="#475569" font-size="13" font-weight="700"
+          text-anchor="middle">R. Yossef Yatim</text>
+        <text x="250" y="593" fill="#475569" font-size="13" font-weight="700"
+          text-anchor="middle">R. Antônio Cecchini</text>
+        <text x="690" y="593" fill="#475569" font-size="13" font-weight="700"
+          text-anchor="middle">R. Antônio Cecchini</text>
+      `;
+
+      cont.innerHTML = `
+        <svg viewBox="0 0 ${larguraVB} ${alturaVB}" width="100%" style="min-width:680px; max-width:900px; display:block; margin:0 auto;" xmlns="http://www.w3.org/2000/svg">
+          <rect x="0" y="0" width="${larguraVB}" height="${alturaVB}" fill="#eef2f7"></rect>
+          ${ruas}
+          ${nomesRuas}
+          ${lotes}
+          ${portaria}
+        </svg>`;
+
+      // Reaplica o destaque, se houver.
+      if (loteDestacadoMapa) aplicarDestaqueMapa(loteDestacadoMapa);
+    }
+
+    function aplicarDestaqueMapa(numero) {
+      const cont = document.getElementById('mapa-container');
+      if (!cont) return;
+      // Limpa destaques anteriores.
+      cont.querySelectorAll('.mapa-lote').forEach((g) => {
+        const r = g.querySelector('rect');
+        if (r) {
+          r.setAttribute('fill', '#ffffff');
+          r.setAttribute('stroke', '#334155');
+          r.setAttribute('stroke-width', '2');
+        }
+        // Restaura as cores originais do rótulo do lote e da linha "Casa".
+        const rotulo = g.querySelector('.mapa-rotulo');
+        if (rotulo) rotulo.setAttribute('fill', '#1e293b');
+        const casa = g.querySelector('.mapa-casa');
+        if (casa) casa.setAttribute('fill', '#475569');
+      });
+      if (!numero) return;
+      const num = parseInt(String(numero).replace(/\D/g, ''), 10);
+      const g = cont.querySelector(`.mapa-lote[data-lote="${num}"]`);
+      if (g) {
+        const rect = g.querySelector('rect');
+        rect.setAttribute('fill', '#4f46e5');
+        rect.setAttribute('stroke', '#312e81');
+        rect.setAttribute('stroke-width', '3');
+        // Deixa ambos os textos (lote e casa) brancos para contrastar com o roxo.
+        g.querySelectorAll('text').forEach((t) => t.setAttribute('fill', '#ffffff'));
+        g.parentNode.appendChild(g); // traz para frente
+      }
+    }
+
+    function destacarLoteMapa(valor) {
+      const num = parseInt(String(valor).replace(/\D/g, ''), 10);
+      if (!num) { limparDestaqueMapa(); return; }
+      loteDestacadoMapa = num;
+      document.getElementById('busca-mapa').value = String(num);
+      aplicarDestaqueMapa(num);
+    }
+
+    function limparDestaqueMapa() {
+      loteDestacadoMapa = null;
+      const campo = document.getElementById('busca-mapa');
+      if (campo) campo.value = '';
+      aplicarDestaqueMapa(null);
     }
   </script>
 
@@ -1883,7 +2202,14 @@
           }),
         });
         fecharModalEncomenda();
+        // Vai para a aba de encomendas, atualiza a lista e avisa o sucesso.
         trocarAba('encomendas');
+        const msgTab = document.getElementById('msg-encomenda-tab');
+        if (msgTab) {
+          msgTab.textContent = `Encomenda registrada para ${nomeMorador} (${lote}).`;
+          msgTab.className = 'msg ok';
+          msgTab.classList.remove('hidden');
+        }
       } catch (err) {
         msg.textContent = err.message;
         msg.className = 'msg erro';
@@ -1969,7 +2295,7 @@
         fecharModalRetiradaEncomenda();
         // Permanece na aba "Retirada Encomendas"; só atualiza a lista e avisa o sucesso.
         await carregarEncomendas();
-        const msgEncomenda = document.getElementById('msg-encomenda');
+        const msgEncomenda = document.getElementById('msg-encomenda-tab');
         if (msgEncomenda) {
           msgEncomenda.textContent = retiradoPor
             ? `Encomenda retirada por ${retiradoPor} com sucesso.`

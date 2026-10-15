@@ -319,24 +319,38 @@ app.post('/api/public/cadastro', limitePublico, async (req, res) => {
 
 // Dados do usuario logado
 app.get('/api/me', requireAuth, (req, res) => {
-  res.json({ perfil: req.perfil });
+  // Anexa o e-mail (vive no Auth) ao perfil, só para exibição.
+  res.json({ perfil: { ...req.perfil, email: req.user?.email || null } });
 });
 
 // Atualiza o proprio cadastro (campos que o usuario pode editar)
 app.put('/api/me', requireAuth, async (req, res) => {
-  const { nome, telefone, bloco, apartamento } = req.body || {};
+  const {
+    nome, telefone, bloco, apartamento,
+    cep, endereco_logradouro, endereco_numero, endereco_bairro,
+    endereco_cidade, endereco_uf, endereco_complemento,
+  } = req.body || {};
   if (!nome || !nome.trim()) {
     return res.status(400).json({ error: 'Informe o nome.' });
   }
 
+  // Monta a atualização apenas com os campos realmente enviados, para não
+  // apagar dados que o formulário não envia (ex: o lote, que nunca muda aqui).
+  const patch = { nome: nome.trim() };
+  if (telefone !== undefined) patch.telefone = telefone?.trim() || null;
+  if (bloco !== undefined) patch.bloco = bloco?.trim() || null;
+  if (apartamento !== undefined) patch.apartamento = apartamento?.trim() || null;
+  if (cep !== undefined) patch.cep = String(cep).replace(/\D/g, '') || null;
+  if (endereco_logradouro !== undefined) patch.endereco_logradouro = endereco_logradouro?.trim() || null;
+  if (endereco_numero !== undefined) patch.endereco_numero = endereco_numero?.trim() || null;
+  if (endereco_bairro !== undefined) patch.endereco_bairro = endereco_bairro?.trim() || null;
+  if (endereco_cidade !== undefined) patch.endereco_cidade = endereco_cidade?.trim() || null;
+  if (endereco_uf !== undefined) patch.endereco_uf = endereco_uf?.trim().toUpperCase().slice(0, 2) || null;
+  if (endereco_complemento !== undefined) patch.endereco_complemento = endereco_complemento?.trim() || null;
+
   const { data, error } = await supabaseAdmin
     .from('perfis')
-    .update({
-      nome: nome.trim(),
-      telefone: telefone?.trim() || null,
-      bloco: bloco?.trim() || null,
-      apartamento: apartamento?.trim() || null,
-    })
+    .update(patch)
     .eq('id', req.user.id)
     .select()
     .single();
@@ -2082,6 +2096,76 @@ app.get('/api/portaria/moradores', requireAuth, requireRole('porteiro', 'admin')
 
   if (error) return res.status(400).json({ error: error.message });
   res.json({ moradores: data || [] });
+});
+
+// Busca de moradores por lote OU nome (aba "Condomínio" da portaria).
+// Retorna os dados do morador EXCETO o CPF.
+app.get('/api/portaria/condominio/moradores', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const termo = (req.query.q || '').trim();
+  if (!termo) return res.json({ moradores: [] });
+
+  let query = supabaseAdmin
+    .from('perfis')
+    .select('id, nome, bloco, apartamento, telefone, tipo')
+    .in('tipo', ['morador', 'admin'])
+    .order('bloco', { ascending: true })
+    .order('nome', { ascending: true });
+
+  const numLote = termo.replace(/\D/g, '');
+  // Se o termo é essencialmente numérico, trata como busca por lote (vários formatos).
+  if (numLote && numLote.length === termo.replace(/\s|lote/gi, '').length) {
+    let formats = [termo.trim()];
+    formats.push(`Lote ${String(numLote).padStart(2, '0')}`);
+    formats.push(`Lote ${String(parseInt(numLote, 10))}`);
+    formats.push(String(parseInt(numLote, 10)));
+    formats.push(String(numLote).padStart(2, '0'));
+    formats = [...new Set(formats)];
+    query = query.in('bloco', formats);
+  } else {
+    // Busca por nome (parcial, sem diferenciar maiúsculas) OU por texto do lote.
+    const like = `%${termo}%`;
+    query = query.or(`nome.ilike.${like},bloco.ilike.${like}`);
+  }
+
+  const { data, error } = await query;
+  if (error) return res.status(400).json({ error: error.message });
+
+  // Retorna apenas os campos necessários (sem CPF e sem e-mail).
+  const moradores = (data || []).map(m => ({
+    nome: m.nome,
+    bloco: m.bloco,
+    apartamento: m.apartamento,
+    telefone: m.telefone,
+    tipo: m.tipo,
+  }));
+
+  res.json({ moradores });
+});
+
+// Mapa do condomínio: retorna, por lote, o número da casa dos moradores que
+// habilitaram a permissão "ver_lote". Usado para exibir "Casa (número)" no mapa.
+app.get('/api/portaria/mapa/casas', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { data, error } = await supabaseAdmin
+    .from('perfis')
+    .select('bloco, endereco_numero, ver_lote, tipo')
+    .in('tipo', ['morador', 'admin'])
+    .eq('ver_lote', true)
+    .not('endereco_numero', 'is', null);
+
+  if (error) return res.status(400).json({ error: error.message });
+
+  // Monta um mapa: número do lote -> número da casa.
+  // Se houver mais de um morador com ver_lote no mesmo lote, usa o primeiro número encontrado.
+  const casas = {};
+  (data || []).forEach((p) => {
+    const numLote = (p.bloco || '').replace(/\D/g, '');
+    const numCasa = (p.endereco_numero || '').trim();
+    if (!numLote || !numCasa) return;
+    const chave = String(parseInt(numLote, 10));
+    if (!casas[chave]) casas[chave] = numCasa;
+  });
+
+  res.json({ casas });
 });
 
 // ============================================================

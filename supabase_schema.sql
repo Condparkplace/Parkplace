@@ -51,6 +51,15 @@ create unique index if not exists idx_perfis_cpf on public.perfis(cpf) where cpf
 -- mesmo lote (liberada pelo admin). Padrao: false (so ve as proprias).
 alter table public.perfis add column if not exists ver_lote boolean not null default false;
 
+-- Migracao: endereco do morador (preenchido por busca de CEP / ViaCEP).
+alter table public.perfis add column if not exists cep text;
+alter table public.perfis add column if not exists endereco_logradouro text;
+alter table public.perfis add column if not exists endereco_numero text;
+alter table public.perfis add column if not exists endereco_bairro text;
+alter table public.perfis add column if not exists endereco_cidade text;
+alter table public.perfis add column if not exists endereco_uf text;
+alter table public.perfis add column if not exists endereco_complemento text;
+
 -- ------------------------------------------------------------
 -- 3) Avisos de visita (morador avisa a portaria)
 -- ------------------------------------------------------------

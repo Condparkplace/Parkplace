@@ -89,7 +89,7 @@
             <label for="nome_visitante">Seu nome completo *</label>
             <input type="text" id="nome_visitante" required />
 
-            <label for="documento_visitante">Documento (RG ou CPF) *</label>
+            <label for="documento_visitante">Documento CPF *</label>
             <input type="text" id="documento_visitante" required />
             <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
@@ -544,10 +544,10 @@
       }
 
       // Se o documento é só números, tratamos como CPF: exige 11 dígitos válidos.
-      // (Documentos com letras — RG com "X", etc. — são aceitos como estão.)
+      // (Documentos com letras — CPF com "X", etc. — são aceitos como estão.)
       const docSoNumeros = /^\d+$/.test(docExt.replace(/[.\-\s]/g, ''));
       if (docSoNumeros && docExtLimpo.length !== 11) {
-        msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (RG).';
+        msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (CPF).';
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
         document.getElementById('documento_visitante').focus();

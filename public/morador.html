@@ -34,45 +34,51 @@
         <div class="grid grid-2">
           <div>
             <label for="cad_bloco">Lote</label>
-            <select id="cad_bloco">
-              <option value="">Selecione o Lote</option>
-              <option value="Lote 01">Lote 01</option>
-              <option value="Lote 02">Lote 02</option>
-              <option value="Lote 03">Lote 03</option>
-              <option value="Lote 04">Lote 04</option>
-              <option value="Lote 05">Lote 05</option>
-              <option value="Lote 06">Lote 06</option>
-              <option value="Lote 07">Lote 07</option>
-              <option value="Lote 08">Lote 08</option>
-              <option value="Lote 09">Lote 09</option>
-              <option value="Lote 10">Lote 10</option>
-              <option value="Lote 11">Lote 11</option>
-              <option value="Lote 12">Lote 12</option>
-              <option value="Lote 13">Lote 13</option>
-              <option value="Lote 14">Lote 14</option>
-              <option value="Lote 15">Lote 15</option>
-              <option value="Lote 16">Lote 16</option>
-              <option value="Lote 17">Lote 17</option>
-              <option value="Lote 18">Lote 18</option>
-              <option value="Lote 19">Lote 19</option>
-              <option value="Lote 20">Lote 20</option>
-              <option value="Lote 21">Lote 21</option>
-              <option value="Lote 22">Lote 22</option>
-              <option value="Lote 23">Lote 23</option>
-              <option value="Lote 24">Lote 24</option>
-              <option value="Lote 25">Lote 25</option>
-              <option value="Lote 26">Lote 26</option>
-              <option value="Lote 27">Lote 27</option>
-              <option value="Lote 28">Lote 28</option>
-            </select>
+            <input type="text" id="cad_bloco" readonly
+              style="background:#f1f5f9; cursor:not-allowed;" />
+          </div>
+          <div>
+            <label for="cad_email">E-mail</label>
+            <input type="text" id="cad_email" readonly
+              style="background:#f1f5f9; cursor:not-allowed;" />
           </div>
         </div>
 
-        <p class="text-muted" style="margin-top:12px;">
-          Tipo de usuário e e-mail não podem ser alterados aqui. Fale com a administração se precisar mudá-los.
-        </p>
+        <h3 style="margin:18px 0 4px;">Endereço</h3>
+        <p class="text-muted" style="margin:0 0 10px; font-size:13px;"></p>Digite o CEP para preencher automaticamente.Importante atualizar o endereço com o cep e numero da casa, assim atualiza os dados na portaria automatico o Lote  
+        <div class="grid grid-2">
+          <div>
+            <label for="cad_cep">CEP</label>
+            <div class="row-inline" style="align-items:center;">
+              <input type="text" id="cad_cep" placeholder="00000-000" maxlength="9"
+                autocomplete="off" style="flex:1; min-width:120px;" />
+              <button type="button" class="mini" id="btn-cad-cep" onclick="buscarCepCadastro()">Buscar</button>
+            </div>
+            <span id="msg-cad-cep" class="text-muted" style="font-size:12px;"></span>
+          </div>
+          <div>
+            <label for="cad_end_numero">Número</label>
+            <input type="text" id="cad_end_numero" placeholder="Ex: 123" autocomplete="off" />
+          </div>
+          <div>
+            <label for="cad_end_logradouro">Logradouro</label>
+            <input type="text" id="cad_end_logradouro" placeholder="Rua / Avenida" autocomplete="off" />
+          </div>
+          <div>
+            <label for="cad_end_bairro">Bairro</label>
+            <input type="text" id="cad_end_bairro" autocomplete="off" />
+          </div>
+          <div>
+            <label for="cad_end_cidade">Cidade</label>
+            <input type="text" id="cad_end_cidade" autocomplete="off" />
+          </div>
+          <div>
+            <label for="cad_end_uf">UF</label>
+            <input type="text" id="cad_end_uf" maxlength="2" style="text-transform:uppercase;" autocomplete="off" />
+          </div>
+        </div>
 
-        <button type="submit" class="block" id="btn-cad-salvar">Salvar alterações</button>
+        <button type="submit" class="block" id="btn-cad-salvar" style="margin-top:16px;">Salvar alterações</button>
         <button type="button" class="block secundario" style="margin-top:10px;" onclick="fecharMeuCadastro()">&#8592;
           Voltar</button>
       </form>
@@ -325,6 +331,21 @@
       carregarAvisos();
       carregarMinhasEncomendas();
       carregarNotificacoes();
+
+      // Primeiro acesso / endereço ainda não cadastrado: abre "Meu cadastro"
+      // e pede para o morador informar o endereço.
+      const temEndereco = (perfil.cep && String(perfil.cep).trim())
+        || (perfil.endereco_logradouro && perfil.endereco_logradouro.trim())
+        || (perfil.endereco_numero && perfil.endereco_numero.trim());
+      if (!temEndereco) {
+        abrirMeuCadastro();
+        const msg = document.getElementById('msg-cadastro');
+        if (msg) {
+          msg.textContent = 'Bem-vindo(a)! Para concluir seu cadastro, informe seu endereço (digite o CEP para preencher automaticamente).';
+          msg.className = 'msg ok';
+          msg.classList.remove('hidden');
+        }
+      }
     })();
 
     // ---------- Abas de visitas (Minhas / Lote) ----------
@@ -590,6 +611,15 @@
       document.getElementById('cad_nome').value = perfil?.nome || '';
       document.getElementById('cad_telefone').value = perfil?.telefone || '';
       document.getElementById('cad_bloco').value = perfil?.bloco || '';
+      document.getElementById('cad_email').value = perfil?.email || '';
+      // Endereço
+      document.getElementById('cad_cep').value = formatarCep(perfil?.cep || '');
+      document.getElementById('cad_end_logradouro').value = perfil?.endereco_logradouro || '';
+      document.getElementById('cad_end_numero').value = perfil?.endereco_numero || '';
+      document.getElementById('cad_end_bairro').value = perfil?.endereco_bairro || '';
+      document.getElementById('cad_end_cidade').value = perfil?.endereco_cidade || '';
+      document.getElementById('cad_end_uf').value = perfil?.endereco_uf || '';
+      document.getElementById('msg-cad-cep').textContent = '';
       msgCadastro.classList.add('hidden');
       document.getElementById('area-visitas').classList.add('hidden');
       document.getElementById('area-cadastro').classList.remove('hidden');
@@ -612,7 +642,12 @@
           body: JSON.stringify({
             nome: document.getElementById('cad_nome').value.trim(),
             telefone: document.getElementById('cad_telefone').value.trim(),
-            bloco: document.getElementById('cad_bloco').value.trim(),
+            cep: document.getElementById('cad_cep').value.replace(/\D/g, ''),
+            endereco_logradouro: document.getElementById('cad_end_logradouro').value.trim(),
+            endereco_numero: document.getElementById('cad_end_numero').value.trim(),
+            endereco_bairro: document.getElementById('cad_end_bairro').value.trim(),
+            endereco_cidade: document.getElementById('cad_end_cidade').value.trim(),
+            endereco_uf: document.getElementById('cad_end_uf').value.trim(),
           }),
         });
         perfil = atualizado;
@@ -629,6 +664,52 @@
         btnCad.textContent = 'Salvar alterações';
       }
     });
+
+    // ---------- Busca de endereço por CEP (ViaCEP) ----------
+    function formatarCep(valor) {
+      const d = (valor || '').toString().replace(/\D/g, '').slice(0, 8);
+      if (d.length <= 5) return d;
+      return d.slice(0, 5) + '-' + d.slice(5);
+    }
+
+    async function buscarCepCadastro() {
+      const campoCep = document.getElementById('cad_cep');
+      const msg = document.getElementById('msg-cad-cep');
+      const cep = (campoCep.value || '').replace(/\D/g, '');
+      msg.className = 'text-muted';
+      if (cep.length !== 8) {
+        msg.textContent = 'Informe um CEP com 8 dígitos.';
+        return;
+      }
+      msg.textContent = 'Buscando endereço...';
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await resp.json();
+        if (dados.erro) {
+          msg.textContent = 'CEP não encontrado.';
+          return;
+        }
+        // Preenche os campos retornados pelo ViaCEP.
+        if (dados.logradouro) document.getElementById('cad_end_logradouro').value = dados.logradouro;
+        if (dados.bairro) document.getElementById('cad_end_bairro').value = dados.bairro;
+        if (dados.localidade) document.getElementById('cad_end_cidade').value = dados.localidade;
+        if (dados.uf) document.getElementById('cad_end_uf').value = dados.uf;
+        msg.textContent = 'Endereço preenchido. Confira e informe o número.';
+        document.getElementById('cad_end_numero').focus();
+      } catch (err) {
+        msg.textContent = 'Não foi possível consultar o CEP agora.';
+      }
+    }
+
+    // Formata o CEP enquanto digita e busca automaticamente ao completar 8 dígitos.
+    (function vincularCepCadastro() {
+      const campoCep = document.getElementById('cad_cep');
+      if (!campoCep) return;
+      campoCep.addEventListener('input', () => {
+        campoCep.value = formatarCep(campoCep.value);
+        if (campoCep.value.replace(/\D/g, '').length === 8) buscarCepCadastro();
+      });
+    })();
 
     const inpDocVis = document.getElementById('documento_visitante');
     const avisoDocVis = document.getElementById('aviso-cpf-visitante');
@@ -950,7 +1031,7 @@
         ? (rec.dias_semana || []).slice().sort((a, b) => (a === 0 ? 7 : a) - (b === 0 ? 7 : b)).map(d => DIAS_CURTO[d]).join(', ')
         : '';
       const btnFreqStyle = rec ? 'background-color:#16a34a; color:#fff;' : 'background-color:#f59e0b; color:#fff;';
-      const freqLabel = rec ? `📅 ${diasTxt}` : '📅 Frequente';
+      const freqLabel = rec ? `📅 ${diasTxt}` : '📅 Confg Frequencia';
       return `
         <tr>
           <td data-label="Nome">${escapeHtml(f.nome_visitante)}${rec ? `<br><span class="text-muted" style="font-size:12px;">Programado: ${escapeHtml(diasTxt)}</span>` : ''}</td>
@@ -958,7 +1039,7 @@
           <td data-label="Vezes que veio">${f.count} visita(s)</td>
           <td data-label="">
             <div class="row-inline" style="justify-content:flex-end;">
-              <button class="mini" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar de novo</button>
+              <button class="mini" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar Visita</button>
               <button class="mini" style="${btnFreqStyle}" onclick="abrirFrequencia(${realIndex})" title="Programar dias fixos da semana">${freqLabel}</button>
               <button class="perigo mini" onclick="iniciarBloqueio(${realIndex})" title="Bloquear este visitante">&#128683; Bloquear</button>
             </div>
