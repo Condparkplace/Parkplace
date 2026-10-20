@@ -6,17 +6,18 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portaria - Park Place</title>
   <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/porteiro.css" />
 </head>
 
-<body>
+<body class="tela-porteiro">
   <div class="container">
     <div class="tabs">
-      <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
-      <button data-tab="presentes" onclick="trocarAba('presentes')">No condomínio</button>
-      <button data-tab="encomendas" onclick="trocarAba('encomendas')">Encomendas</button>
-      <button data-tab="condominio" onclick="trocarAba('condominio')">Moradores</button>
-      <button data-tab="mapa" onclick="trocarAba('mapa')">Mapa</button>
-      <button data-tab="historico" onclick="trocarAba('historico')">Histórico</button>
+      <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">&#128273; Registrar entrada</button>
+      <button data-tab="presentes" onclick="trocarAba('presentes')">&#128694; No condomínio</button>
+      <button data-tab="encomendas" onclick="trocarAba('encomendas')">&#128230; Encomendas</button>
+      <button data-tab="condominio" onclick="trocarAba('condominio')">&#127968; Moradores</button>
+      <button data-tab="mapa" onclick="trocarAba('mapa')">&#128506;&#65039; Mapa</button>
+      <button data-tab="historico" onclick="trocarAba('historico')">&#128340; Histórico</button>
     </div>
 
     <!-- Registrar entrada (unificada com busca) -->
@@ -25,8 +26,7 @@
         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
         <h2 style="margin:0;">Registrar entrada</h2>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <span class="badge porteiro" style="font-size:13px;">&#128110; Porteiro de plantão: <strong
-              id="porteiro-plantao"></strong></span>
+          <span class="badge porteiro">&#128110; Porteiro de plantão: <strong id="porteiro-plantao"></strong></span>
           <button type="button" class="secundario mini" id="btn-trocar-turno" onclick="abrirTrocaTurno()"
             style="white-space:nowrap;">&#128260; Trocar turno</button>
         </div>
@@ -36,17 +36,20 @@
       <div id="area-notif-porteiro"></div>
 
       <!-- Botoes de acao principais -->
-      <div class="row-inline" style="margin-bottom: 20px; gap: 12px; flex-wrap: wrap;">
+      <div class="row-inline" style="margin-bottom: 22px; gap: 14px; flex-wrap: wrap;">
         <button type="button"
           id="btn-visita-prestadores"
-          style="background-color: var(--verde); color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
-          onclick="alternarBuscaCpf()">Visita / Prestadores</button>
+          class="btn-acao-destaque btn-visitas"
+          style="flex: 1; min-width: 180px;"
+          onclick="alternarBuscaCpf()">&#128100; Visita / Prestadores</button>
         <button type="button"
-          style="background-color: #ea1d2c; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
-          onclick="abrirModalIfood()">iFood</button>
+          class="btn-acao-destaque btn-ifood"
+          style="flex: 1; min-width: 180px;"
+          onclick="abrirModalIfood()">&#128757; iFood</button>
         <button type="button"
-          style="background-color: #2b6cb0; color: white; flex: 1; min-width: 150px; padding: 12px; font-size: 15px;"
-          onclick="abrirModalEncomenda()">Recebimento de Encomenda</button>
+          class="btn-acao-destaque btn-encomenda"
+          style="flex: 1; min-width: 180px;"
+          onclick="abrirModalEncomenda()">&#128230; Recebimento de Encomenda</button>
       </div>
 
       <!-- Linha com as duas buscas lado a lado -->
@@ -1623,7 +1626,25 @@
       if (lote) params.set('lote', lote);
       try {
         const { registros } = await api('/api/portaria/historico?' + params.toString());
-        registrosHistorico = registros;
+        // Ordena sequencialmente pela última ação (horário de saída quando houver, ou entrada)
+        const obterTs = (r) => {
+          if (r.saida) {
+            const t = new Date(r.saida).getTime();
+            if (!Number.isNaN(t)) return t;
+          }
+          if (r.status === 'Nao compareceu') {
+            const tReal = r.data_acao_real ? new Date(r.data_acao_real).getTime() : Date.now();
+            return Math.min(new Date(r.entrada || 0).getTime(), tReal || Date.now());
+          }
+          return new Date(r.entrada || 0).getTime();
+        };
+
+        registrosHistorico = (registros || []).slice().sort((a, b) => {
+          const diff = obterTs(b) - obterTs(a);
+          if (diff !== 0) return diff;
+          return (Number(b.id) || 0) - (Number(a.id) || 0);
+        });
+
         // Reinicia a paginação a cada nova busca.
         historicoMostrados = HISTORICO_PAGINA;
         renderHistorico();

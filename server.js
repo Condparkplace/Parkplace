@@ -1,4 +1,5 @@
 require('dotenv').config();
+try { require('iconv-lite'); require('iconv-lite/encodings'); } catch {}
 
 const express = require('express');
 const cookieParser = require('cookie-parser');
@@ -105,6 +106,45 @@ function assinarLinkVisita(moradorId, tipo, exp) {
     .digest('hex');
 }
 
+// Gera um token curto compacto (stateless, ~42 caracteres em base64url)
+// Evita links com mais de 200 caracteres no WhatsApp que o iOS quebra
+function gerarTokenCurtoVisita(moradorId, tipo, exp) {
+  try {
+    const uuidClean = (moradorId || '').replace(/-/g, '');
+    if (uuidClean.length !== 32) return null;
+    const bufUuid = Buffer.from(uuidClean, 'hex');
+    const bufTipo = Buffer.from([tipo === 'Prestador' ? 1 : 0]);
+    const bufExp = Buffer.alloc(6);
+    bufExp.writeUIntBE(Number(exp), 0, 6);
+    const payload = Buffer.concat([bufUuid, bufTipo, bufExp]);
+    const hmac = crypto.createHmac('sha256', LINK_SECRET).update(payload).digest().subarray(0, 8);
+    return Buffer.concat([payload, hmac]).toString('base64url');
+  } catch {
+    return null;
+  }
+}
+
+// Decodifica e valida o token curto
+function decodificarTokenCurtoVisita(token) {
+  try {
+    const buf = Buffer.from(token, 'base64url');
+    if (buf.length !== 31) return null;
+    const payload = buf.subarray(0, 23);
+    const hmacRecebido = buf.subarray(23, 31);
+    const hmacEsperado = crypto.createHmac('sha256', LINK_SECRET).update(payload).digest().subarray(0, 8);
+    if (!crypto.timingSafeEqual(hmacRecebido, hmacEsperado)) return null;
+
+    const hexUuid = payload.subarray(0, 16).toString('hex');
+    const moradorId = `${hexUuid.slice(0, 8)}-${hexUuid.slice(8, 12)}-${hexUuid.slice(12, 16)}-${hexUuid.slice(16, 20)}-${hexUuid.slice(20)}`;
+    const tipo = payload[16] === 1 ? 'Prestador' : 'Visitante';
+    const exp = payload.readUIntBE(17, 6);
+
+    return { moradorId, tipo, exp };
+  } catch {
+    return null;
+  }
+}
+
 // Retorna { ok } ou { ok:false, motivo:'expirado'|'invalido' }
 function validarLinkVisita(moradorId, tipo, exp, sig) {
   const expNum = Number(exp);
@@ -123,6 +163,27 @@ function validarLinkVisita(moradorId, tipo, exp, sig) {
   }
   return { ok: true };
 }
+
+// Rota de link curto para convites (/c/:token ou /convite/:token)
+// Redireciona com segurança para a página completa de cadastro de visita
+app.get(['/c/:token', '/convite/:token'], (req, res) => {
+  const { token } = req.params;
+  const dados = decodificarTokenCurtoVisita(token);
+  if (!dados) {
+    return res.redirect('/cadastro-visita.html?erro=invalido');
+  }
+  if (Date.now() > dados.exp) {
+    return res.redirect('/cadastro-visita.html?erro=expirado');
+  }
+  const sig = assinarLinkVisita(dados.moradorId, dados.tipo, dados.exp);
+  const params = new URLSearchParams({
+    morador: dados.moradorId,
+    tipo: dados.tipo,
+    exp: String(dados.exp),
+    sig,
+  });
+  return res.redirect(`/cadastro-visita.html?${params.toString()}`);
+});
 
 // ============================================================
 // AUTENTICACAO
@@ -828,8 +889,12 @@ app.get('/api/morador/link-visita', requireAuth, requireRole('morador', 'admin')
     sig,
   });
 
+  const tokenCurto = gerarTokenCurtoVisita(moradorId, tipo, exp);
+  const caminhoCurto = tokenCurto ? `/c/${tokenCurto}` : `/cadastro-visita.html?${params.toString()}`;
+
   res.json({
-    caminho: `/cadastro-visita.html?${params.toString()}`,
+    caminho: caminhoCurto,
+    caminhoLongo: `/cadastro-visita.html?${params.toString()}`,
     exp,
     validade_minutos: Math.round(LINK_VISITA_VALIDADE_MS / 60000),
   });
@@ -1314,30 +1379,34 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
   let query = req.supabase
     .from('registros_portaria')
     .select('*')
-    .order('entrada', { ascending: false });
+    .order('id', { ascending: false });
 
-  if (req.query.de) query = query.gte('entrada', req.query.de);
-  if (req.query.ate) query = query.lte('entrada', req.query.ate);
+  if (req.query.de) {
+    query = query.or(`entrada.gte.${req.query.de},saida.gte.${req.query.de}`);
+  }
+  if (req.query.ate) {
+    query = query.or(`entrada.lte.${req.query.ate},saida.lte.${req.query.ate}`);
+  }
   if (req.query.cpf) query = query.ilike('documento', `%${likeSafe(req.query.cpf)}%`);
   if (req.query.lote) query = query.ilike('destino_bloco', `%${likeSafe(req.query.lote)}%`);
 
-  query = query.limit(40);
+  query = query.limit(200);
 
   const { data, error } = await query;
   if (error) return res.status(400).json({ error: error.message });
 
-  // Avisos que nao compareceram, no mesmo intervalo de data (por data_prevista).
+  // Avisos que nao compareceram, no mesmo intervalo de data (por data_prevista ou criado_em).
   let qAvisos = req.supabase
     .from('avisos_visitas')
     .select('*, morador:perfis!avisos_visitas_morador_id_fkey!inner(bloco, apartamento)')
     .eq('status', 'Nao compareceu');
 
-  if (req.query.de) qAvisos = qAvisos.gte('data_prevista', req.query.de);
-  if (req.query.ate) qAvisos = qAvisos.lte('data_prevista', req.query.ate);
+  if (req.query.de) qAvisos = qAvisos.or(`data_prevista.gte.${req.query.de},criado_em.gte.${req.query.de}`);
+  if (req.query.ate) qAvisos = qAvisos.or(`data_prevista.lte.${req.query.ate},criado_em.lte.${req.query.ate}`);
   if (req.query.cpf) qAvisos = qAvisos.ilike('documento_visitante', `%${likeSafe(req.query.cpf)}%`);
   if (req.query.lote) qAvisos = qAvisos.ilike('perfis.bloco', `%${likeSafe(req.query.lote)}%`);
 
-  qAvisos = qAvisos.limit(40);
+  qAvisos = qAvisos.limit(50);
 
   const { data: avisos, error: errAv } = await qAvisos;
   if (errAv) return res.status(400).json({ error: errAv.message });
@@ -1353,6 +1422,7 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
       destino_bloco: m.bloco || null,
       destino_apto: m.apartamento || null,
       entrada: a.data_prevista || a.criado_em,
+      data_acao_real: a.criado_em,
       saida: null,
       status: 'Nao compareceu',
       porteiro_nao_veio: nomesNaoVeio[a.nao_veio_por] || null,
@@ -1375,9 +1445,28 @@ app.get('/api/portaria/historico', requireAuth, requireRole('porteiro', 'admin')
     };
   });
 
-  const registros = [...registrosNormalizados, ...naoCompareceu].sort(
-    (x, y) => new Date(y.entrada) - new Date(x.entrada)
-  ).slice(0, 40);
+  // Determina o timestamp da última ação para ordenar sequencialmente:
+  // Se já registrou saída, a última ação sequencial é o horário de SAÍDA.
+  // Se ainda não saiu, a entrada é a última ação.
+  // Para "Não compareceu", utiliza o momento real (criado_em / agora) sem avançar para datas futuras.
+  const timestampUltimaAcao = (r) => {
+    if (r.saida) {
+      const tSaida = new Date(r.saida).getTime();
+      if (!Number.isNaN(tSaida)) return tSaida;
+    }
+    if (r.status === 'Nao compareceu') {
+      const tReal = r.data_acao_real ? new Date(r.data_acao_real).getTime() : Date.now();
+      const tEntrada = new Date(r.entrada || 0).getTime();
+      return Math.min(tEntrada, tReal || Date.now());
+    }
+    return new Date(r.entrada || 0).getTime();
+  };
+
+  const registros = [...registrosNormalizados, ...naoCompareceu].sort((x, y) => {
+    const diff = timestampUltimaAcao(y) - timestampUltimaAcao(x);
+    if (diff !== 0) return diff;
+    return (Number(y.id) || 0) - (Number(x.id) || 0);
+  }).slice(0, 100);
 
   res.json({ registros });
 });

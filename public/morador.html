@@ -34,24 +34,24 @@
         <div class="grid grid-2">
           <div>
             <label for="cad_bloco">Lote</label>
-            <input type="text" id="cad_bloco" readonly
-              style="background:#f1f5f9; cursor:not-allowed;" />
+            <input type="text" id="cad_bloco" readonly style="background:#f1f5f9; cursor:not-allowed;" />
           </div>
           <div>
             <label for="cad_email">E-mail</label>
-            <input type="text" id="cad_email" readonly
-              style="background:#f1f5f9; cursor:not-allowed;" />
+            <input type="text" id="cad_email" readonly style="background:#f1f5f9; cursor:not-allowed;" />
           </div>
         </div>
 
         <h3 style="margin:18px 0 4px;">Endereço</h3>
-        <p class="text-muted" style="margin:0 0 10px; font-size:13px;"></p>Digite o CEP para preencher automaticamente.Importante atualizar o endereço com o cep e numero da casa, assim atualiza os dados na portaria automatico o Lote  
+        <p class="text-muted" style="margin:0 0 10px; font-size:13px;"></p>Digite o CEP para preencher
+        automaticamente.Importante atualizar o endereço com o cep e numero da casa, assim atualiza os dados na portaria
+        automatico o Lote
         <div class="grid grid-2">
           <div>
             <label for="cad_cep">CEP</label>
             <div class="row-inline" style="align-items:center;">
-              <input type="text" id="cad_cep" placeholder="00000-000" maxlength="9"
-                autocomplete="off" style="flex:1; min-width:120px;" />
+              <input type="text" id="cad_cep" placeholder="00000-000" maxlength="9" autocomplete="off"
+                style="flex:1; min-width:120px;" />
               <button type="button" class="mini" id="btn-cad-cep" onclick="buscarCepCadastro()">Buscar</button>
             </div>
             <span id="msg-cad-cep" class="text-muted" style="font-size:12px;"></span>
@@ -100,13 +100,22 @@
           style="padding: 14px; font-size: 1.05em; margin: 0; width: 100%; box-sizing: border-box;"
           onclick="abrirFrequentes()">&#128101; Visitas frequentes</button>
 
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; width: 100%; box-sizing: border-box;">
+          <button type="button" class="block"
+            style="padding: 14px 10px; font-size: 0.98em; margin: 0; background-color: var(--verde); color: white; width: 100%; box-sizing: border-box;"
+            onclick="mostrarForm()">+ Cadastrar Visitante</button>
+          <button type="button" class="block"
+            style="padding: 14px 10px; font-size: 0.98em; margin: 0; background-color: #2b6cb0; border-color: #2b6cb0; color: white; width: 100%; box-sizing: border-box;"
+            onclick="mostrarFormPrestador()">+ Cadastrar Prestador</button>
+        </div>
+
         <button id="btn-compartilhar-visita" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Visitante')">&#128242; Convidar Visitante</button>
+          onclick="compartilharVisita('Visitante')">&#128242; Convidar via WhatsApp seu Visitante</button>
 
         <button id="btn-compartilhar-prestador" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Prestador')">&#128242; Convidar Prestador de serviço</button>
+          onclick="compartilharVisita('Prestador')">&#128242; Convidar via WhatsApp seu Prestador de serviço</button>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; word-break: break-word;">
@@ -130,9 +139,11 @@
         <label for="nome_visitante">Nome do visitante *</label>
         <input type="text" id="nome_visitante" required />
 
-        <label for="tipo_label">Tipo</label>
-        <input type="text" id="tipo_label" disabled />
-        <input type="hidden" id="tipo" value="Visitante" />
+        <label for="tipo">Tipo</label>
+        <select id="tipo" onchange="alternarTipoForm(this.value)">
+          <option value="Visitante">Visitante</option>
+          <option value="Prestador">Prestador de serviço</option>
+        </select>
 
         <label for="documento_visitante">Documento (RG/CPF)</label>
         <input type="text" id="documento_visitante" />
@@ -191,7 +202,8 @@
       <!-- Abas -->
       <div class="tabs" id="tabs-visitas">
         <button class="ativo" data-aba="minhas" onclick="trocarAbaVisitas('minhas')">Minhas visitas</button>
-        <button data-aba="lote" id="tab-lote" class="hidden" onclick="trocarAbaVisitas('lote')">Visitas gerais do lote</button>
+        <button data-aba="lote" id="tab-lote" class="hidden" onclick="trocarAbaVisitas('lote')">Visitas gerais do
+          lote</button>
       </div>
 
       <!-- Aba: Minhas visitas -->
@@ -208,22 +220,28 @@
         <!-- Lista de moradores do lote -->
         <div id="area-lote-moradores">
           <p class="text-muted" style="font-size:13px; margin:0 0 14px;">
-            Moradores do seu lote. Clique em "Visualizar" para ver as visitas de cada um, ou use "Liberar"/"Bloquear" para administrar o acesso deles ao sistema.
+            Moradores do seu lote. Clique em "Visualizar" para ver as visitas de cada um, ou use "Liberar"/"Bloquear"
+            para administrar o acesso deles ao sistema.
           </p>
           <button type="button" class="block" style="margin:0 0 16px; background:var(--verde);"
             onclick="abrirCadastroMoradorLote()">&#128100;&#10133; Cadastrar morador do lote</button>
-          <div id="lista-lote-moradores"><p class="vazio">Carregando...</p></div>
+          <div id="lista-lote-moradores">
+            <p class="vazio">Carregando...</p>
+          </div>
         </div>
 
         <!-- Visualização das visitas de um morador do lote -->
         <div id="area-lote-visitas" class="hidden">
           <div class="row-inline" style="justify-content:space-between; align-items:center; margin-bottom:12px;">
-            <h3 style="margin:0;">Visitas de <span id="lote-morador-nome" style="color:var(--verde-escuro);"></span></h3>
+            <h3 style="margin:0;">Visitas de <span id="lote-morador-nome" style="color:var(--verde-escuro);"></span>
+            </h3>
             <button type="button" class="secundario mini" onclick="voltarListaLote()">&#8592; Voltar</button>
           </div>
           <input type="text" id="busca-lote-visitas" placeholder="Buscar por nome, tipo ou status..."
             style="margin-bottom:16px;" oninput="renderizarVisitasLote()" />
-          <div id="lista-lote-visitas"><p class="vazio">Carregando...</p></div>
+          <div id="lista-lote-visitas">
+            <p class="vazio">Carregando...</p>
+          </div>
         </div>
       </div>
     </div>
@@ -232,10 +250,26 @@
   <!-- Area de Visitas Frequentes -->
   <div class="container hidden" id="area-frequentes">
     <div class="card" style="margin-top: 30px;">
-      <h2>Visitas Frequentes</h2>
-      <p class="text-muted" style="margin-bottom: 20px; font-size: 14px;">
-        Pessoas que já visitaram o seu lote. Clique em "Agendar de novo" para recadastrar rapidamente.
-      </p>
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 14px; margin-bottom: 20px;">
+        <div>
+          <h2 style="margin: 0 0 4px 0;">Visitas Frequentes</h2>
+          <p class="text-muted" style="margin: 0; font-size: 14px;">
+            Pessoas que já visitaram o seu lote. Clique em "Agendar de novo" para recadastrar rapidamente.
+          </p>
+        </div>
+        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+          <button type="button" class="mini"
+            style="padding: 10px 18px; font-size: 14px; font-weight: 600; background-color: var(--verde); color: #fff; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;"
+            onclick="cadastrarDeFrequentes('Visitante')">
+            + Cadastrar Visitante
+          </button>
+          <button type="button" class="mini"
+            style="padding: 10px 18px; font-size: 14px; font-weight: 600; background-color: #2b6cb0; border-color: #2b6cb0; color: #fff; border-radius: 6px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px;"
+            onclick="cadastrarDeFrequentes('Prestador')">
+            + Cadastrar Prestador
+          </button>
+        </div>
+      </div>
 
       <input type="text" id="busca-frequentes" placeholder="Buscar por nome..." style="margin-bottom: 20px;"
         oninput="filtrarFrequentes()" />
@@ -273,15 +307,18 @@
     <div class="card" style="width:100%; max-width:440px; margin:20px;">
       <h3 style="margin-top:0;">Cadastrar morador do lote</h3>
       <p class="text-muted" style="margin:0 0 14px; font-size:13px;">
-        O novo morador entrará no <strong id="cadml-lote" style="color:var(--verde-escuro);"></strong>, já com acesso liberado.
+        O novo morador entrará no <strong id="cadml-lote" style="color:var(--verde-escuro);"></strong>, já com acesso
+        liberado.
       </p>
       <form id="form-cadastro-morador-lote">
         <label for="cadml_nome">Nome completo *</label>
         <input type="text" id="cadml_nome" autocomplete="off" required />
 
         <label for="cadml_cpf">CPF</label>
-        <input type="text" id="cadml_cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14" autocomplete="off" />
-        <span id="cadml-msg-cpf" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
+        <input type="text" id="cadml_cpf" inputmode="numeric" placeholder="000.000.000-00" maxlength="14"
+          autocomplete="off" />
+        <span id="cadml-msg-cpf" class="hidden"
+          style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
         <label for="cadml_telefone">Telefone / WhatsApp</label>
         <input type="tel" id="cadml_telefone" placeholder="(11) 90000-0000" autocomplete="off" />
@@ -290,7 +327,8 @@
         <input type="email" id="cadml_email" placeholder="email@exemplo.com" autocomplete="off" required />
 
         <label for="cadml_password">Senha *</label>
-        <input type="password" id="cadml_password" placeholder="Mínimo 6 caracteres" minlength="6" autocomplete="new-password" required />
+        <input type="password" id="cadml_password" placeholder="Mínimo 6 caracteres" minlength="6"
+          autocomplete="new-password" required />
 
         <div id="cadml-msg" class="msg hidden" style="margin-top:12px;"></div>
 
@@ -314,7 +352,8 @@
       </p>
 
       <label for="bloqueio-motivo">Motivo do bloqueio *</label>
-      <textarea id="bloqueio-motivo" placeholder="Ex: comportamento inadequado, não autorizado a entrar, etc." style="min-height:90px;"></textarea>
+      <textarea id="bloqueio-motivo" placeholder="Ex: comportamento inadequado, não autorizado a entrar, etc."
+        style="min-height:90px;"></textarea>
 
       <div id="msg-bloqueio" class="msg hidden" style="margin-top:12px;"></div>
 
@@ -339,10 +378,12 @@
 
       <div id="msg-frequencia" class="msg hidden" style="margin-top:12px;"></div>
 
-      <button type="button" class="block" id="btn-salvar-frequencia" style="margin-top:16px; background:var(--verde);" onclick="salvarFrequencia()">
+      <button type="button" class="block" id="btn-salvar-frequencia" style="margin-top:16px; background:var(--verde);"
+        onclick="salvarFrequencia()">
         Salvar frequência
       </button>
-      <button type="button" class="perigo block hidden" id="btn-remover-frequencia" style="margin-top:10px;" onclick="removerFrequencia()">
+      <button type="button" class="perigo block hidden" id="btn-remover-frequencia" style="margin-top:10px;"
+        onclick="removerFrequencia()">
         Remover frequência
       </button>
       <button type="button" class="secundario block" style="margin-top:10px;" onclick="fecharFrequencia()">
@@ -692,37 +733,57 @@
       Outro: 'Outro',
     };
 
-    // Abre o formulario com o tipo fixo definido pelo botao.
-    function abrirForm(tipo) {
-      document.getElementById('botoes-iniciais').classList.add('hidden');
-      form.classList.remove('hidden');
-      msg.classList.add('hidden');
-      document.getElementById('tipo').value = tipo;
-      document.getElementById('tipo_label').value = ROTULO_TIPO[tipo] || tipo;
+    let veioDeFrequentes = false;
 
+    function alternarTipoForm(tipo) {
       const areaEndereco = document.getElementById('area-endereco');
       if (tipo === 'Prestador') {
         areaEndereco.classList.remove('hidden');
       } else {
         areaEndereco.classList.add('hidden');
       }
+    }
 
+    // Abre o formulario com o tipo fixo definido pelo botao.
+    function abrirForm(tipo) {
+      document.getElementById('botoes-iniciais').classList.add('hidden');
+      form.classList.remove('hidden');
+      msg.classList.add('hidden');
+      const campoTipo = document.getElementById('tipo');
+      if (campoTipo) campoTipo.value = tipo;
+
+      alternarTipoForm(tipo);
       document.getElementById('nome_visitante').focus();
     }
 
-    function mostrarForm() { abrirForm('Visitante'); }
-    function mostrarFormPrestador() { abrirForm('Prestador'); }
+    function mostrarForm() {
+      veioDeFrequentes = false;
+      abrirForm('Visitante');
+    }
+    function mostrarFormPrestador() {
+      veioDeFrequentes = false;
+      abrirForm('Prestador');
+    }
+
+    function cadastrarDeFrequentes(tipo) {
+      veioDeFrequentes = true;
+      document.getElementById('area-frequentes').classList.add('hidden');
+      document.getElementById('area-visitas').classList.remove('hidden');
+      abrirForm(tipo);
+    }
 
     async function compartilharVisita(tipo) {
       if (!perfil || !perfil.id) return;
 
-      // Abre a aba já (evita bloqueio de pop-up) e redireciona quando o link estiver pronto.
-      const janela = window.open('', '_blank');
+      const isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
+      // No Desktop abre a aba prévia para contornar bloqueador de pop-ups.
+      // No Mobile redireciona na mesma aba para não deixar aba em branco no Safari/Chrome.
+      const janela = !isMobile ? window.open('', '_blank') : null;
 
       try {
         const { caminho } = await api('/api/morador/link-visita?tipo=' + encodeURIComponent(tipo));
         const link = window.location.origin + caminho;
-        const texto = `Olá! Por favor, preencha seus dados neste link para liberar sua entrada na portaria do Park Place: ${link}\n\n⏳ Atenção: este link é válido por 2 horas. Após esse prazo, será necessário solicitar um novo.`;
+        const texto = `Olá! Por favor, preencha seus dados para liberar sua entrada na portaria do Park Place:\n\n${link}\n\n⏳ Atenção: este link é válido por 2 horas. Após esse prazo, será necessário solicitar um novo.`;
         const urlWhats = 'https://wa.me/?text=' + encodeURIComponent(texto);
         if (janela) {
           janela.location.href = urlWhats;
@@ -735,12 +796,17 @@
       }
     }
 
-    // Volta para a tela com os botoes de cadastro, sem enviar.
+    // Volta para a tela anterior, sem enviar.
     function voltarCadastros() {
       form.reset();
       form.classList.add('hidden');
-      document.getElementById('botoes-iniciais').classList.remove('hidden');
       msg.classList.add('hidden');
+      if (veioDeFrequentes) {
+        veioDeFrequentes = false;
+        abrirFrequentes();
+      } else {
+        document.getElementById('botoes-iniciais').classList.remove('hidden');
+      }
     }
 
     // ---------- Meu cadastro ----------
@@ -893,7 +959,12 @@
         msg.className = 'msg ok';
 
         form.classList.add('hidden');
-        document.getElementById('botoes-iniciais').classList.remove('hidden');
+        if (veioDeFrequentes) {
+          veioDeFrequentes = false;
+          abrirFrequentes();
+        } else {
+          document.getElementById('botoes-iniciais').classList.remove('hidden');
+        }
 
         carregarAvisos();
       } catch (err) {
@@ -1472,10 +1543,14 @@
   <!-- Overlay de notificação (trava a tela até o morador confirmar o recebimento) -->
   <div id="overlay-notificacao" class="hidden"
     style="position:fixed; inset:0; background:rgba(15,23,42,0.75); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
-    <div style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 26px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center;">
+    <div
+      style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 26px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center;">
       <div style="font-size:44px; line-height:1;">&#128276;</div>
-      <h2 id="notif-bloq-titulo" style="margin:12px 0 10px; font-size:20px; color:var(--verde-escuro); word-break:break-word;"></h2>
-      <p id="notif-bloq-texto" style="margin:0 0 20px; font-size:15px; color:var(--texto); white-space:pre-wrap; word-break:break-word; text-align:left;"></p>
+      <h2 id="notif-bloq-titulo"
+        style="margin:12px 0 10px; font-size:20px; color:var(--verde-escuro); word-break:break-word;"></h2>
+      <p id="notif-bloq-texto"
+        style="margin:0 0 20px; font-size:15px; color:var(--texto); white-space:pre-wrap; word-break:break-word; text-align:left;">
+      </p>
       <button type="button" class="block" id="btn-recebi-notificacao" style="margin:0; background:var(--verde);">
         &#9989; Recebi a notificação
       </button>
@@ -1488,10 +1563,12 @@
   <!-- Modal: histórico completo de notificações -->
   <div id="modal-hist-notif" class="hidden"
     style="position:fixed; inset:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
-    <div style="background:#fff; border-radius:12px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 40px rgba(0,0,0,0.25); padding:22px 24px;">
+    <div
+      style="background:#fff; border-radius:12px; width:100%; max-width:520px; max-height:90vh; overflow-y:auto; box-shadow:0 20px 40px rgba(0,0,0,0.25); padding:22px 24px;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
         <h2 style="margin:0; font-size:18px;">&#128276; Histórico de notificações</h2>
-        <button type="button" class="secundario mini" onclick="fecharHistoricoNotificacoes()" style="border:none; font-size:20px; line-height:1; padding:4px 10px;">&times;</button>
+        <button type="button" class="secundario mini" onclick="fecharHistoricoNotificacoes()"
+          style="border:none; font-size:20px; line-height:1; padding:4px 10px;">&times;</button>
       </div>
       <div id="hist-notif-lista" style="display:flex; flex-direction:column; gap:10px;">
         <p class="vazio">Carregando...</p>

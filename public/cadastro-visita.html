@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Cadastro de Visita - Park Place Residencial</title>
   <meta name="description" content="Cadastro de visita do Park Place Residencial. Preencha seus dados para liberar sua entrada." />
+  <meta property="og:title" content="Cadastro de Visita - Park Place Residencial" />
+  <meta property="og:description" content="Preencha seus dados para liberar sua entrada na portaria do Park Place." />
+  <meta property="og:type" content="website" />
   <link rel="stylesheet" href="/css/style.css" />
 </head>
 <body>
@@ -234,9 +237,10 @@
     }
 
     // O link precisa ter expiração/assinatura e não pode estar vencido (prazo de 2h).
-    const linkExpirado = !linkExp || !linkSig || Date.now() > Number(linkExp);
+    const linkErro = urlParams.get('erro');
+    const linkExpirado = linkErro === 'expirado' || !linkExp || !linkSig || Date.now() > Number(linkExp);
 
-    if (!morador_id) {
+    if (linkErro === 'invalido' || (!linkErro && !morador_id)) {
       mostrarErroLink('Este link não é válido. Peça ao morador um novo link para solicitar o acesso ao condomínio.');
     } else if (linkExpirado) {
       mostrarErroLink('Este link expirou. Peça ao morador um novo link para solicitar o acesso ao condomínio.');
