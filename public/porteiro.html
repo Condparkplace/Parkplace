@@ -9,16 +9,6 @@
 </head>
 
 <body>
-  <div class="topbar">
-    <div class="brand">
-      &#128682; Park Place <span class="sub">&middot; Portaria</span>
-    </div>
-    <div class="user-area">
-      <span id="nome-usuario"></span>
-      <button class="secundario mini" onclick="logout()">Sair</button>
-    </div>
-  </div>
-
   <div class="container">
     <div class="tabs">
       <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">Registrar entrada</button>
@@ -59,18 +49,38 @@
           onclick="abrirModalEncomenda()">Recebimento de Encomenda</button>
       </div>
 
-      <!-- Busca rapida por documento -->
-      <div id="area-busca-cpf"
-        style="background:var(--verde-claro); border-radius:8px; padding:14px; margin:0 0 18px;">
-        <label for="busca-doc" style="margin-top:0;">Buscar por CPF/documento (preenche automático se já tiver
-          cadastro)</label>
-        <div class="row-inline" style="align-items:center;">
-          <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14" style="flex:1; min-width:200px;" />
-          <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
-          <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
+      <!-- Linha com as duas buscas lado a lado -->
+      <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin:0 0 18px;">
+        <!-- Busca rapida por documento (metade da largura) -->
+        <div id="area-busca-cpf"
+          style="background:var(--verde-claro); border-radius:8px; padding:14px; flex:1 1 320px; min-width:280px;">
+          <label for="busca-doc" style="margin-top:0;">Buscar/Cadastrar Visitas por CPF
+            cadastro)</label>
+          <div class="row-inline" style="align-items:center;">
+            <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14" style="flex:1; min-width:140px;" />
+            <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
+            <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
+          </div>
+          <span id="aviso-cpf-busca" class="hidden" style="display:block; margin-top:6px; font-size:13px; font-weight:600;"></span>
+          <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
         </div>
-        <span id="aviso-cpf-busca" class="hidden" style="display:block; margin-top:6px; font-size:13px; font-weight:600;"></span>
-        <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
+
+        <!-- Busca na lista de visitas avisadas (metade da largura) -->
+        <div id="area-busca-previstas"
+          style="background:#eef2f7; border-radius:8px; padding:14px; flex:1 1 320px; min-width:280px;">
+          <label for="busca-morador-previstas" style="margin-top:0;">Buscar nas visitas AGENDADAS</label>
+          <div class="row-inline" style="align-items:center;">
+            <input type="search" id="busca-morador-previstas" placeholder="Buscar por visitante, morador ou documento..."
+              name="campo-sem-autofill-pp" autocomplete="off" autocorrect="off" autocapitalize="off"
+              spellcheck="false" data-form-type="other" data-lpignore="true" readonly
+              onfocus="this.removeAttribute('readonly')"
+              oninput="carregarPrevistas(null, true)" style="flex:1; min-width:140px; margin:0;" />
+            <button type="button" id="btn-atualizar-previstas" onclick="atualizarGradeVisitantes()"
+              style="padding:9px 14px; font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:6px; background-color:#2b6cb0; color:white; border:none; border-radius:6px; cursor:pointer; height:38px; white-space:nowrap;">
+              &#128259; ATUALIZAR
+            </button>
+          </div>
+        </div>
       </div>
 
       <!-- Faixa amarela de alerta quando o CPF buscado for de um MORADOR -->
@@ -142,7 +152,9 @@
           <div>
             <label for="destino_bloco">Lote de destino *</label>
             <input type="text" id="destino_bloco" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..."
-              autocomplete="off" required />
+              autocomplete="off" required
+              onkeydown="if(event.key==='Enter'){event.preventDefault(); normalizarLoteDestino(this);}"
+              onchange="normalizarLoteDestino(this)" />
             <datalist id="lotes-list">
               <option value="Lote 01"></option>
               <option value="Lote 02"></option>
@@ -220,17 +232,8 @@
 
       <!-- Lista de visitas previstas (sempre visivel) -->
       <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
-        <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
-        <div style="margin-bottom:12px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
-          <input type="search" id="busca-morador-previstas" placeholder="Buscar por visitante, morador ou documento..."
-            name="campo-sem-autofill-pp" autocomplete="off" autocorrect="off" autocapitalize="off"
-            spellcheck="false" data-form-type="other" data-lpignore="true" readonly
-            onfocus="this.removeAttribute('readonly')"
-            oninput="carregarPrevistas(null, true)" style="max-width:300px; width:100%; margin:0;" />
-          <button type="button" id="btn-atualizar-previstas" onclick="atualizarGradeVisitantes()"
-            style="padding:9px 18px; font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:6px; background-color:#2b6cb0; color:white; border:none; border-radius:6px; cursor:pointer; height:38px;">
-            &#128259; ATUALIZAR
-          </button>
+        <div id="cabecalho-previstas">
+          <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
         </div>
         <div id="lista-previstas">
           <p class="vazio">Carregando...</p>
@@ -333,8 +336,6 @@
     (async () => {
       perfil = await protegerPagina('porteiro');
       if (!perfil) return;
-      navAdmin(perfil, 'porteiro');
-      document.getElementById('nome-usuario').textContent = perfil.nome;
       document.getElementById('porteiro-plantao').textContent = perfil.nome;
       if (perfil.tipo === 'admin') {
         document.getElementById('btn-exportar').classList.remove('hidden');
@@ -488,6 +489,17 @@
         onclick="event.stopPropagation();">&#128172; ${escapeHtml(bruto)}</a>`;
     }
 
+    // Normaliza o campo "Lote de destino": se o porteiro digitar só o número
+    // (ex: "10") e apertar Enter, converte para "Lote 10".
+    function normalizarLoteDestino(el) {
+      if (!el) return;
+      const bruto = (el.value || '').trim();
+      const num = bruto.replace(/\D/g, '');
+      if (num && /^\d+$/.test(bruto.replace(/\s|lote/gi, ''))) {
+        el.value = 'Lote ' + String(parseInt(num, 10)).padStart(2, '0');
+      }
+    }
+
     // ---------- Visitas previstas ----------
     let avisosHoje = []; // cache dos avisos previstos para hoje
     let listaPrevistasRender = []; // lista exata que está renderizada na tabela (usada pelos botões via índice)
@@ -534,6 +546,10 @@
     // Renderiza a lista. Se docEmDestaque for informado, filtra para exibir SOMENTE o item buscado.
     async function carregarPrevistas(docEmDestaque = null, pularFetch = false) {
       const alvo = document.getElementById('lista-previstas');
+      // Quando há um documento em destaque (busca por CPF na barra de cima),
+      // oculta o cabeçalho do painel (título + busca + ATUALIZAR) para focar na linha encontrada.
+      const cabecalho = document.getElementById('cabecalho-previstas');
+      if (cabecalho) cabecalho.classList.toggle('hidden', !!(docEmDestaque && docEmDestaque.trim()));
       try {
         if (!pularFetch) {
           const { avisos } = await api('/api/portaria/avisos');
@@ -2395,6 +2411,12 @@
       setTimeout(() => document.getElementById('turno-login').focus(), 50);
     }
 
+    // Encerra a sessão do porteiro atual e volta para a tela de login.
+    async function sairTrocaTurno() {
+      try { await api('/api/logout', { method: 'POST' }); } catch {}
+      window.location.href = '/login.html';
+    }
+
     function cancelarTrocaTurno() {
       const overlay = document.getElementById('overlay-troca-turno');
       overlay.classList.add('hidden');
@@ -2455,7 +2477,6 @@
         // Atualiza o plantão sem recarregar a página.
         perfil = novoPerfil;
         document.getElementById('porteiro-plantao').textContent = novoPerfil.nome;
-        document.getElementById('nome-usuario').textContent = novoPerfil.nome;
         document.getElementById('btn-exportar').classList.toggle('hidden', novoPerfil.tipo !== 'admin');
 
         cancelarTrocaTurno();
@@ -2499,6 +2520,13 @@
 
       <button type="button" class="block" id="btn-confirmar-turno" onclick="confirmarTrocaTurno()" style="margin-top:18px;">
         Assumir plantão
+      </button>
+      <button type="button" class="block secundario" onclick="sairTrocaTurno()" style="margin-top:10px;">
+        &#128682; Apenas sair (encerrar sessão)
+      </button>
+      <button type="button" class="block" onclick="cancelarTrocaTurno()"
+        style="margin-top:10px; background:transparent; color:var(--texto-suave); box-shadow:none;">
+        Voltar
       </button>
     </div>
   </div>

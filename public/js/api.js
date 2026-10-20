@@ -86,7 +86,8 @@ async function navAdminAuto(atual) {
 }
 
 function redirecionarPorTipo(tipo) {
-  if (tipo === 'admin') window.location.href = '/admin.html';
+  // Admin inicia na Área do morador; porteiro na Portaria; morador na sua área.
+  if (tipo === 'admin') window.location.href = '/morador.html';
   else if (tipo === 'porteiro') window.location.href = '/porteiro.html';
   else window.location.href = '/morador.html';
 }
