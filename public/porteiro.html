@@ -742,8 +742,9 @@
     }
 
     async function registrarDeAviso(aviso) {
-      if (aviso.nome_visitante === 'Entregador iFood') {
-        registrarEntradaRapida(aviso);
+      // Quando for aviso de iFood vindo de morador ou entregador sem placa, solicita nome e placa ao porteiro
+      if (aviso.nome_visitante === 'Entregador iFood' || (aviso.tipo === 'Entregador' && !aviso.veiculo_placa)) {
+        abrirModalIfoodDeAviso(aviso);
         return;
       }
 
@@ -2054,17 +2055,46 @@
 
   <!-- Modal iFood -->
   <div id="modal-ifood" class="hidden"
-    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);">
     <div
-      style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:80vh; overflow-y:auto;">
-      <h3 style="margin-top:0;">Entregador iFood</h3>
-      <p class="text-muted" style="margin-top:0; margin-bottom:14px; font-size:14px;">Selecione o lote para ver os
-        moradores e registrar a entrega.</p>
+      style="background:#fff; padding:24px; border-radius:12px; width:92%; max-width:480px; box-shadow:0 8px 30px rgba(0,0,0,0.25); max-height:88vh; overflow-y:auto; border-top:6px solid #ea1d2c;">
+      
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
+        <div>
+          <h3 style="margin:0; font-size:22px; color:#b91c1c; display:flex; align-items:center; gap:8px;">
+            🏍️ Entregador iFood
+          </h3>
+          <p id="ifood-modal-subtitulo" class="text-muted" style="margin:4px 0 0; font-size:14px;">
+            Informe o nome do entregador e a placa do veículo
+          </p>
+        </div>
+        <button type="button" onclick="fecharModalIfood()" style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:#64748b; padding:0 4px;">&times;</button>
+      </div>
 
-      <div>
-        <label for="ifood-lote">Lote de destino</label>
+      <!-- Campos ocultos de controle -->
+      <input type="hidden" id="ifood-aviso-id" value="" />
+      <input type="hidden" id="ifood-lote-selecionado" value="" />
+      <input type="hidden" id="ifood-morador-id" value="" />
+      <input type="hidden" id="ifood-morador-nome" value="" />
+
+      <!-- Resumo do Destino Selecionado / Vindo de Aviso -->
+      <div id="ifood-destino-resumo" class="hidden"
+        style="background:#fef2f2; border:1.5px solid #fca5a5; border-radius:10px; padding:12px 14px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="font-size:11px; font-weight:800; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px;">Destino da Entrega</div>
+          <div id="ifood-destino-texto" style="font-size:16px; font-weight:700; color:#7f1d1d; margin-top:2px;">-</div>
+          <div id="ifood-destino-badge" style="font-size:12px; color:#b91c1c; margin-top:2px;">-</div>
+        </div>
+        <button type="button" id="btn-trocar-morador-ifood" class="mini secundario" onclick="trocarMoradorIfood()" style="font-size:12px; padding:6px 10px;">Alterar</button>
+      </div>
+
+      <!-- Area de Busca de Lote (quando aberto direto da portaria sem aviso) -->
+      <div id="ifood-area-busca-lote">
+        <label for="ifood-lote" style="font-weight:600; font-size:14px;">Lote de destino *</label>
         <input type="text" id="ifood-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
-          onchange="buscarMoradoresIfood()" style="width:100%;" />
+          onchange="buscarMoradoresIfood()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarMoradoresIfood();}"
+          style="width:100%; font-size:16px; padding:10px 12px;" />
         <datalist id="ifood-lotes-list">
           <option value="Lote 01"></option>
           <option value="Lote 02"></option>
@@ -2095,17 +2125,55 @@
           <option value="Lote 27"></option>
           <option value="Lote 28"></option>
         </datalist>
+
+        <div id="ifood-moradores-container" class="hidden" style="margin-top: 14px;">
+          <label style="font-weight:600; font-size:13px; color:#475569;">Selecione o morador solicitante:</label>
+          <div id="ifood-lista-moradores" style="display:flex; flex-direction:column; gap:8px; margin-top:6px;"></div>
+        </div>
       </div>
 
-      <div id="ifood-moradores-container" class="hidden" style="margin-top: 14px;">
-        <label>Moradores do lote</label>
-        <div id="ifood-lista-moradores" style="display:flex; flex-direction:column; gap:8px;"></div>
+      <!-- Area dos Dados do Entregador (Nome + Placa) -->
+      <div id="ifood-dados-entregador" class="hidden" style="margin-top:14px;">
+        <div style="margin-bottom:12px;">
+          <label for="ifood-nome" style="font-weight:600; font-size:14px;">Nome do entregador *</label>
+          <input type="text" id="ifood-nome" placeholder="Ex: Carlos Silva" autocomplete="off"
+            onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('ifood-placa').focus();}"
+            style="width:100%; font-size:16px; padding:10px 12px;" />
+        </div>
+
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div id="wrap-ifood-tipo-acesso">
+            <label for="ifood-acesso-tipo" style="font-weight:600; font-size:13px;">Tipo de acesso *</label>
+            <select id="ifood-acesso-tipo" onchange="togglePlacaIfood()" style="width:100%; font-size:15px; padding:10px;">
+              <option value="moto" selected>🏍️ Moto</option>
+              <option value="carro">🚗 Carro</option>
+              <option value="pe">🚶 A pé / Bike</option>
+            </select>
+          </div>
+
+          <div id="wrap-ifood-placa">
+            <label for="ifood-placa" id="lbl-ifood-placa" style="font-weight:600; font-size:13px;">Placa do veículo *</label>
+            <input type="text" id="ifood-placa" placeholder="Ex: ABC1D23" maxlength="8"
+              style="width:100%; text-transform:uppercase; font-size:16px; font-weight:700; letter-spacing:1px; padding:10px 12px;"
+              onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarEntradaIfood();}" />
+          </div>
+        </div>
+
+        <div id="ifood-placa-ape-aviso" class="hidden"
+          style="margin-top:10px; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px; color:#64748b; font-size:13px; background:#f8fafc; text-align:center;">
+          🚶 Entrada sem veículo motorizado (A pé / Bicicleta)
+        </div>
       </div>
 
-      <div id="msg-ifood" class="msg hidden" style="margin-top: 10px;"></div>
+      <div id="msg-ifood" class="msg hidden" style="margin-top:14px;"></div>
 
-      <div class="row-inline" style="justify-content: flex-end; margin-top: 20px;">
-        <button class="secundario" onclick="fecharModalIfood()">Cancelar</button>
+      <div class="row-inline" style="justify-content: flex-end; gap:10px; margin-top:22px;">
+        <button type="button" class="secundario" onclick="fecharModalIfood()" style="padding:11px 18px; font-size:15px;">Cancelar</button>
+        <button type="button" id="btn-confirmar-ifood" class="hidden"
+          style="background-color:#ea1d2c; color:white; font-weight:700; padding:11px 22px; font-size:15px; border-radius:8px; border:none; cursor:pointer;"
+          onclick="confirmarEntradaIfood()">
+          ✅ Registrar Entrada
+        </button>
       </div>
     </div>
   </div>
@@ -2428,10 +2496,67 @@
     }
 
     function abrirModalIfood() {
-      document.getElementById('modal-ifood').classList.remove('hidden');
+      const modal = document.getElementById('modal-ifood');
+      document.getElementById('ifood-aviso-id').value = '';
+      document.getElementById('ifood-lote-selecionado').value = '';
+      document.getElementById('ifood-morador-id').value = '';
+      document.getElementById('ifood-morador-nome').value = '';
+
       document.getElementById('ifood-lote').value = '';
+      document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
       document.getElementById('ifood-moradores-container').classList.add('hidden');
+      document.getElementById('ifood-lista-moradores').innerHTML = '';
+      document.getElementById('ifood-destino-resumo').classList.add('hidden');
+      document.getElementById('ifood-dados-entregador').classList.add('hidden');
+      document.getElementById('btn-confirmar-ifood').classList.add('hidden');
+
+      document.getElementById('ifood-nome').value = '';
+      document.getElementById('ifood-placa').value = '';
+      document.getElementById('ifood-acesso-tipo').value = 'moto';
+      togglePlacaIfood();
+
       document.getElementById('msg-ifood').classList.add('hidden');
+      modal.classList.remove('hidden');
+      setTimeout(() => document.getElementById('ifood-lote').focus(), 80);
+    }
+
+    function abrirModalIfoodDeAviso(aviso) {
+      const modal = document.getElementById('modal-ifood');
+      const m = aviso.morador || {};
+      const lote = m.bloco || aviso.destino_bloco || '';
+      const moradorNome = m.nome || '';
+      const moradorId = aviso.morador_id || m.id || '';
+
+      document.getElementById('ifood-aviso-id').value = aviso.id || '';
+      document.getElementById('ifood-lote-selecionado').value = lote;
+      document.getElementById('ifood-morador-id').value = moradorId;
+      document.getElementById('ifood-morador-nome').value = moradorNome;
+
+      // Atualiza o resumo visual de destino
+      const destinoTexto = document.getElementById('ifood-destino-texto');
+      const destinoBadge = document.getElementById('ifood-destino-badge');
+      const btnTrocar = document.getElementById('btn-trocar-morador-ifood');
+
+      destinoTexto.textContent = `${lote || 'Lote não especificado'}${moradorNome ? ' — ' + moradorNome : ''}`;
+      destinoBadge.textContent = '🛎️ Aviso agendado pelo morador';
+      btnTrocar.style.display = 'none'; // Veio direto do aviso do morador, destino fixo
+      document.getElementById('ifood-destino-resumo').classList.remove('hidden');
+
+      // Oculta a busca de lote e exibe os campos do entregador
+      document.getElementById('ifood-area-busca-lote').classList.add('hidden');
+      document.getElementById('ifood-moradores-container').classList.add('hidden');
+      document.getElementById('ifood-dados-entregador').classList.remove('hidden');
+      document.getElementById('btn-confirmar-ifood').classList.remove('hidden');
+
+      // Limpa os dados do entregador
+      document.getElementById('ifood-nome').value = '';
+      document.getElementById('ifood-placa').value = '';
+      document.getElementById('ifood-acesso-tipo').value = 'moto';
+      togglePlacaIfood();
+
+      document.getElementById('msg-ifood').classList.add('hidden');
+      modal.classList.remove('hidden');
+      setTimeout(() => document.getElementById('ifood-nome').focus(), 80);
     }
 
     function fecharModalIfood() {
@@ -2450,7 +2575,7 @@
         return;
       }
 
-      lista.innerHTML = '<p class="text-muted">Carregando...</p>';
+      lista.innerHTML = '<p class="text-muted" style="font-size:14px;">Buscando moradores do lote...</p>';
       cont.classList.remove('hidden');
 
       try {
@@ -2460,42 +2585,160 @@
           return;
         }
 
+        // Se houver apenas 1 morador no lote, auto-seleciona para agilizar a portaria
+        if (moradores.length === 1) {
+          selecionarMoradorIfood(lote, moradores[0].nome, moradores[0].id);
+          return;
+        }
+
         lista.innerHTML = moradores.map(m => `
-          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px; border-radius:6px; border:1px solid var(--cinza-borda);">
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px 12px; border-radius:8px; border:1px solid var(--cinza-borda);">
             <div>
-              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
+              <strong style="display:block; font-size:15px;">${escapeHtml(m.nome)}</strong>
               <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
-            <button class="mini" style="background-color: #ea1d2c; color: white;" onclick="registrarIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Selecionar</button>
+            <button type="button" class="mini" style="background-color: #ea1d2c; color: white; padding:6px 14px; font-weight:700;" onclick="selecionarMoradorIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Selecionar</button>
           </div>
         `).join('');
 
       } catch (err) {
         msg.textContent = err.message;
         msg.className = 'msg erro';
+        msg.classList.remove('hidden');
         lista.innerHTML = '';
       }
     }
 
-    async function registrarIfood(lote, nomeMorador, moradorId) {
+    function selecionarMoradorIfood(lote, nomeMorador, moradorId) {
+      document.getElementById('ifood-lote-selecionado').value = lote;
+      document.getElementById('ifood-morador-id').value = moradorId || '';
+      document.getElementById('ifood-morador-nome').value = nomeMorador || '';
+
+      const destinoTexto = document.getElementById('ifood-destino-texto');
+      const destinoBadge = document.getElementById('ifood-destino-badge');
+      const btnTrocar = document.getElementById('btn-trocar-morador-ifood');
+
+      destinoTexto.textContent = `${lote} — ${nomeMorador}`;
+      destinoBadge.textContent = 'Destino selecionado pela portaria';
+      btnTrocar.style.display = 'inline-block';
+      document.getElementById('ifood-destino-resumo').classList.remove('hidden');
+
+      document.getElementById('ifood-area-busca-lote').classList.add('hidden');
+      document.getElementById('ifood-moradores-container').classList.add('hidden');
+      document.getElementById('ifood-dados-entregador').classList.remove('hidden');
+      document.getElementById('btn-confirmar-ifood').classList.remove('hidden');
+
+      setTimeout(() => document.getElementById('ifood-nome').focus(), 80);
+    }
+
+    function trocarMoradorIfood() {
+      document.getElementById('ifood-destino-resumo').classList.add('hidden');
+      document.getElementById('ifood-dados-entregador').classList.add('hidden');
+      document.getElementById('btn-confirmar-ifood').classList.add('hidden');
+      document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
+      document.getElementById('ifood-moradores-container').classList.remove('hidden');
+      document.getElementById('ifood-lote').focus();
+    }
+
+    function togglePlacaIfood() {
+      const tipo = document.getElementById('ifood-acesso-tipo').value;
+      const wrapPlaca = document.getElementById('wrap-ifood-placa');
+      const avisoApe = document.getElementById('ifood-placa-ape-aviso');
+      const inputPlaca = document.getElementById('ifood-placa');
+
+      if (tipo === 'pe') {
+        wrapPlaca.classList.add('hidden');
+        avisoApe.classList.remove('hidden');
+        inputPlaca.value = '';
+      } else {
+        wrapPlaca.classList.remove('hidden');
+        avisoApe.classList.add('hidden');
+        if (inputPlaca.value === 'Sem veículo' || inputPlaca.value === 'A pé') {
+          inputPlaca.value = '';
+        }
+      }
+    }
+
+    async function confirmarEntradaIfood() {
       const msg = document.getElementById('msg-ifood');
       msg.classList.add('hidden');
+
+      const avisoId = document.getElementById('ifood-aviso-id').value;
+      const lote = document.getElementById('ifood-lote-selecionado').value;
+      const moradorId = document.getElementById('ifood-morador-id').value;
+      const nomeMorador = document.getElementById('ifood-morador-nome').value;
+
+      const nomeEntregador = (document.getElementById('ifood-nome').value || '').trim();
+      const acessoTipo = document.getElementById('ifood-acesso-tipo').value;
+      let placa = (document.getElementById('ifood-placa').value || '').trim().toUpperCase();
+
+      if (!lote) {
+        msg.textContent = 'Por favor, selecione o lote de destino.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      if (!nomeEntregador) {
+        msg.textContent = 'Por favor, informe o nome do entregador.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('ifood-nome').focus();
+        return;
+      }
+
+      if (acessoTipo === 'pe') {
+        placa = 'Sem veículo';
+      } else if (!placa) {
+        msg.textContent = 'Por favor, informe a placa do veículo (ou selecione "A pé / Bike").';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('ifood-placa').focus();
+        return;
+      }
+
+      const btnConfirmar = document.getElementById('btn-confirmar-ifood');
+      if (btnConfirmar) {
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = 'Registrando...';
+      }
+
       try {
+        const nomePessoaFinal = `Entregador iFood - ${nomeEntregador}`;
+        const obsFinal = (avisoId ? 'Aviso morador. ' : '') + `Entrega de aplicativo (iFood) - Destino: ${nomeMorador || lote}`;
+
         await api('/api/portaria/entrada', {
           method: 'POST',
           body: JSON.stringify({
-            nome_pessoa: 'Entregador iFood',
+            aviso_id: avisoId ? (Number(avisoId) || avisoId) : null,
+            nome_pessoa: nomePessoaFinal,
             tipo: 'Entregador',
+            veiculo_placa: placa,
             destino_bloco: lote,
             destino_morador: moradorId || null,
-            observacao: 'Solicitado por: ' + nomeMorador
+            observacao: obsFinal
           }),
         });
+
         fecharModalIfood();
-        trocarAba('presentes');
+        await carregarPrevistas();
+        await carregarPresentes();
+
+        const msgEntrada = document.getElementById('msg-entrada');
+        if (msgEntrada) {
+          msgEntrada.textContent = `Entrada de ${nomePessoaFinal} (Placa: ${placa}) registrada com sucesso.`;
+          msgEntrada.className = 'msg ok';
+          msgEntrada.classList.remove('hidden');
+        }
       } catch (err) {
-        msg.textContent = err.message;
+        msg.textContent = 'Erro ao registrar entrada: ' + err.message;
         msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        if (btnConfirmar) {
+          btnConfirmar.disabled = false;
+          btnConfirmar.textContent = '✅ Registrar Entrada';
+        }
       }
     }
 
