@@ -208,7 +208,7 @@
         <!-- Lista de moradores do lote -->
         <div id="area-lote-moradores">
           <p class="text-muted" style="font-size:13px; margin:0 0 14px;">
-            Moradores do seu lote. Clique em "Visualizar" para ver as visitas de cada um.
+            Moradores do seu lote. Clique em "Visualizar" para ver as visitas de cada um, ou use "Liberar"/"Bloquear" para administrar o acesso deles ao sistema.
           </p>
           <div id="lista-lote-moradores"><p class="vazio">Carregando...</p></div>
         </div>
@@ -375,18 +375,51 @@
           alvo.innerHTML = '<p class="vazio">Nenhum outro morador cadastrado no seu lote.</p>';
           return;
         }
-        alvo.innerHTML = moradoresLote.map((m) => `
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--fundo-cor, #f7faf8); border:1px solid var(--cinza-borda); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
-            <div style="min-width:0;">
-              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
-              <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
+        alvo.innerHTML = moradoresLote.map((m) => {
+          const bloqueado = m.ativo === false;
+          const statusBadge = bloqueado
+            ? '<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:600;">Acesso bloqueado</span>'
+            : '<span class="badge" style="background:#dcfce7; color:#166534; font-weight:600;">Acesso liberado</span>';
+          const nomeEsc = escapeHtml(m.nome).replace(/'/g, "\\'");
+          // Mostra "Liberar" se estiver bloqueado; "Bloquear" se estiver liberado.
+          const btnAcesso = bloqueado
+            ? `<button class="mini" style="background:#16a34a; color:#fff; flex-shrink:0;"
+                 onclick="alterarAcessoMoradorLote('${escapeHtml(m.id)}', '${nomeEsc}', true)">&#9989; Liberar</button>`
+            : `<button class="mini perigo" style="flex-shrink:0;"
+                 onclick="alterarAcessoMoradorLote('${escapeHtml(m.id)}', '${nomeEsc}', false)">&#128683; Bloquear</button>`;
+          return `
+          <div style="background:var(--fundo-cor, #f7faf8); border:1px solid var(--cinza-borda); border-radius:8px; padding:10px 12px; margin-bottom:8px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; gap:10px; flex-wrap:wrap;">
+              <div style="min-width:0;">
+                <strong style="display:block;">${escapeHtml(m.nome)}</strong>
+                <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
+                <div style="margin-top:4px;">${statusBadge}</div>
+              </div>
+              <div class="row-inline" style="gap:8px; flex-shrink:0; flex-wrap:wrap; justify-content:flex-end;">
+                <button class="mini" style="background:#2b6cb0; color:#fff;"
+                  onclick="visualizarMoradorLote('${escapeHtml(m.id)}', '${nomeEsc}')">&#128065; Visualizar</button>
+                ${btnAcesso}
+              </div>
             </div>
-            <button class="mini" style="background:#2b6cb0; color:#fff; flex-shrink:0;"
-              onclick="visualizarMoradorLote('${escapeHtml(m.id)}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}')">&#128065; Visualizar</button>
-          </div>
-        `).join('');
+          </div>`;
+        }).join('');
       } catch (err) {
         alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    // Libera ou bloqueia o acesso de um morador do lote ao sistema.
+    async function alterarAcessoMoradorLote(moradorId, nome, liberar) {
+      const acao = liberar ? 'LIBERAR o acesso' : 'BLOQUEAR o acesso';
+      if (!confirm(`Deseja ${acao} de ${nome} ao sistema?`)) return;
+      try {
+        await api(`/api/morador/lote/moradores/${encodeURIComponent(moradorId)}/acesso`, {
+          method: 'POST',
+          body: JSON.stringify({ liberar }),
+        });
+        await carregarMoradoresLote();
+      } catch (err) {
+        alert('Não foi possível alterar o acesso: ' + err.message);
       }
     }
 

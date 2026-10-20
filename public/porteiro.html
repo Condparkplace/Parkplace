@@ -153,7 +153,7 @@
             <label for="destino_bloco">Lote de destino *</label>
             <input type="text" id="destino_bloco" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..."
               autocomplete="off" required
-              onkeydown="if(event.key==='Enter'){event.preventDefault(); normalizarLoteDestino(this);}"
+              onkeydown="if(event.key==='Enter'){event.preventDefault(); normalizarLoteDestino(this); confirmarEntradaPeloLote();}"
               onchange="normalizarLoteDestino(this)" />
             <datalist id="lotes-list">
               <option value="Lote 01"></option>
@@ -336,6 +336,8 @@
     (async () => {
       perfil = await protegerPagina('porteiro');
       if (!perfil) return;
+      // Admin: mostra a barra verde de navegação no topo (porteiro não vê nada disso).
+      navAdminAuto('porteiro');
       document.getElementById('porteiro-plantao').textContent = perfil.nome;
       if (perfil.tipo === 'admin') {
         document.getElementById('btn-exportar').classList.remove('hidden');
@@ -348,7 +350,40 @@
       if (campoBuscaMorador) campoBuscaMorador.value = '';
       carregarPrevistas();
       carregarNotificacoesPorteiro();
+      iniciarAutoRefreshPrevistas();
     })();
+
+    // ---------- Auto-refresh da lista de visitas avisadas ----------
+    // A cada 5 minutos recarrega a lista, MAS só quando for seguro, para não
+    // atrapalhar o porteiro no meio de uma busca ou de um cadastro de entrada.
+    const INTERVALO_REFRESH_PREVISTAS = 5 * 60 * 1000; // 5 minutos
+
+    function podeAtualizarPrevistas() {
+      // 1) Só na aba "Registrar entrada".
+      const tabEntrada = document.getElementById('tab-entrada');
+      if (!tabEntrada || tabEntrada.classList.contains('hidden')) return false;
+      // 2) Não atualizar se o formulário de entrada estiver aberto (cadastro em andamento).
+      if (formEntrada && !formEntrada.classList.contains('hidden')) return false;
+      // 3) Não atualizar se houver busca por CPF/documento em andamento.
+      const buscaDoc = document.getElementById('busca-doc');
+      if (buscaDoc && buscaDoc.value.trim()) return false;
+      // 4) Não atualizar se houver texto na busca da própria lista.
+      const buscaLista = document.getElementById('busca-morador-previstas');
+      if (buscaLista && buscaLista.value.trim()) return false;
+      // 5) Não atualizar se o foco estiver em algum campo de texto (digitando).
+      const ativo = document.activeElement;
+      if (ativo && (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA' || ativo.tagName === 'SELECT')) return false;
+      return true;
+    }
+
+    function iniciarAutoRefreshPrevistas() {
+      setInterval(() => {
+        if (podeAtualizarPrevistas()) {
+          // Recarrega só a lista (busca nova no servidor), sem destaque e sem mexer no formulário.
+          carregarPrevistas();
+        }
+      }, INTERVALO_REFRESH_PREVISTAS);
+    }
 
     // ---------- Notificações do porteiro ----------
     // Pendentes travam a tela até confirmar; ativas aparecem como faixa de aviso.
@@ -498,6 +533,15 @@
       if (num && /^\d+$/.test(bruto.replace(/\s|lote/gi, ''))) {
         el.value = 'Lote ' + String(parseInt(num, 10)).padStart(2, '0');
       }
+    }
+
+    // Ao dar Enter no lote: dispara o fluxo de confirmação da entrada, que valida
+    // os campos e abre o pop-up de escolha de morador. Só age se o form estiver visível.
+    function confirmarEntradaPeloLote() {
+      const form = document.getElementById('form-entrada');
+      if (!form || form.classList.contains('hidden')) return;
+      if (typeof form.requestSubmit === 'function') form.requestSubmit();
+      else form.dispatchEvent(new Event('submit', { cancelable: true }));
     }
 
     // ---------- Visitas previstas ----------
@@ -1799,7 +1843,29 @@
     ];
 
     let loteDestacadoMapa = null;
-    let casasMapa = {}; // lote (número) -> número da casa (apenas moradores com ver_lote)
+    let casasMapa = {}; // lote (número) -> { numero, enderecoCompleto } dos moradores com ver_lote
+
+    // Quebra um texto em várias linhas com no máximo "max" caracteres cada,
+    // respeitando os limites de palavra sempre que possível.
+    function quebrarTexto(texto, max) {
+      const t = (texto || '').trim();
+      if (!t) return [];
+      const palavras = t.split(/\s+/);
+      const linhas = [];
+      let atual = '';
+      for (const palavra of palavras) {
+        if (!atual) {
+          atual = palavra;
+        } else if ((atual + ' ' + palavra).length <= max) {
+          atual += ' ' + palavra;
+        } else {
+          linhas.push(atual);
+          atual = palavra;
+        }
+      }
+      if (atual) linhas.push(atual);
+      return linhas;
+    }
 
     async function renderMapaCondominio() {
       const cont = document.getElementById('mapa-container');
@@ -1830,14 +1896,31 @@
         const label = 'Lote ' + String(l.n).padStart(2, '0');
         const cx = l.x + l.w / 2;
         const cy = l.y + l.h / 2;
-        // Número da casa, só para lotes cujo morador liberou "ver_lote".
-        const numCasa = casasMapa[String(l.n)];
-        // Se há casa, sobe o rótulo do lote e mostra a linha "Casa (número)" embaixo.
-        const yLote = numCasa ? cy - 9 : cy;
-        const linhaCasa = numCasa ? `
-            <text class="mapa-casa" x="${cx}" y="${cy + 11}" text-anchor="middle" dominant-baseline="central"
-              font-size="12" font-weight="600" fill="#475569"
-              style="pointer-events:none;">Casa Nº ${escapeHtml(numCasa)}</text>` : '';
+        // Dados do morador que liberou "ver_lote" neste lote (pode ter endereço completo).
+        const info = casasMapa[String(l.n)];
+        // Texto do endereço completo (ou só "Casa Nº X" se não houver endereço montado).
+        let enderecoTxt = '';
+        if (info) {
+          if (typeof info === 'string') enderecoTxt = 'Casa Nº ' + info; // compat. formato antigo
+          else if (info.enderecoCompleto) enderecoTxt = info.enderecoCompleto;
+          else if (info.numero) enderecoTxt = 'Casa Nº ' + info.numero;
+        }
+
+        // Quebra o endereço em linhas curtas para caber dentro do quadrado do lote.
+        const maxChars = Math.max(10, Math.floor(l.w / 6)); // ~6px por caractere
+        const linhasEndereco = quebrarTexto(enderecoTxt, maxChars);
+        const temEndereco = linhasEndereco.length > 0;
+
+        // Com endereço: sobe o rótulo e empilha as linhas abaixo.
+        const yLote = temEndereco ? (cy - 6 - linhasEndereco.length * 6) : cy;
+        let blocoEndereco = '';
+        if (temEndereco) {
+          const yInicio = yLote + 16;
+          blocoEndereco = linhasEndereco.map((linha, i) => `
+            <text class="mapa-casa" x="${cx}" y="${yInicio + i * 13}" text-anchor="middle" dominant-baseline="central"
+              font-size="10" font-weight="600" fill="#475569"
+              style="pointer-events:none;">${escapeHtml(linha)}</text>`).join('');
+        }
         return `
           <g class="mapa-lote" data-lote="${l.n}" style="cursor:pointer;"
              onclick="destacarLoteMapa('${l.n}')">
@@ -1845,7 +1928,7 @@
               fill="#ffffff" stroke="#334155" stroke-width="2"></rect>
             <text class="mapa-rotulo" x="${cx}" y="${yLote}" text-anchor="middle" dominant-baseline="central"
               font-size="15" font-weight="600" fill="#1e293b"
-              style="pointer-events:none;">${label}</text>${linhaCasa}
+              style="pointer-events:none;">${label}</text>${blocoEndereco}
           </g>`;
       }).join('');
 
@@ -1896,11 +1979,10 @@
           r.setAttribute('stroke', '#334155');
           r.setAttribute('stroke-width', '2');
         }
-        // Restaura as cores originais do rótulo do lote e da linha "Casa".
+        // Restaura as cores originais do rótulo do lote e das linhas de endereço.
         const rotulo = g.querySelector('.mapa-rotulo');
         if (rotulo) rotulo.setAttribute('fill', '#1e293b');
-        const casa = g.querySelector('.mapa-casa');
-        if (casa) casa.setAttribute('fill', '#475569');
+        g.querySelectorAll('.mapa-casa').forEach((casa) => casa.setAttribute('fill', '#475569'));
       });
       if (!numero) return;
       const num = parseInt(String(numero).replace(/\D/g, ''), 10);

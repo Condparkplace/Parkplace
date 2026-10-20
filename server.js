@@ -523,13 +523,59 @@ app.get('/api/morador/lote/moradores', requireAuth, requireRole('morador', 'admi
 
     const { data, error } = await supabaseAdmin
       .from('perfis')
-      .select('id, nome, bloco, telefone')
+      .select('id, nome, bloco, telefone, ativo, aprovado')
       .eq('bloco', bloco)
       .eq('tipo', 'morador')
       .neq('id', req.user.id) // exclui o próprio
       .order('nome', { ascending: true });
     if (error) throw error;
     res.json({ moradores: data || [] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// O "admin do lote" (morador com ver_lote) libera ou bloqueia o acesso de outro
+// morador DO MESMO LOTE ao sistema. body: { liberar: true|false }.
+app.post('/api/morador/lote/moradores/:moradorId/acesso', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const souAdmin = req.perfil?.tipo === 'admin';
+    if (!souAdmin && !req.perfil?.ver_lote) {
+      return res.status(403).json({ error: 'Você não tem permissão para administrar os moradores do lote.' });
+    }
+
+    const { moradorId } = req.params;
+    const liberar = !!(req.body && req.body.liberar);
+
+    if (moradorId === req.user.id) {
+      return res.status(400).json({ error: 'Você não pode alterar o seu próprio acesso.' });
+    }
+
+    // Confirma que o alvo é um morador do MESMO lote.
+    const { data: alvo, error: erroAlvo } = await supabaseAdmin
+      .from('perfis')
+      .select('id, bloco, tipo')
+      .eq('id', moradorId)
+      .single();
+    if (erroAlvo || !alvo) return res.status(404).json({ error: 'Morador não encontrado.' });
+
+    if (!souAdmin) {
+      if (alvo.bloco !== req.perfil?.bloco) {
+        return res.status(403).json({ error: 'Este morador não pertence ao seu lote.' });
+      }
+      if (alvo.tipo !== 'morador') {
+        return res.status(403).json({ error: 'Só é possível administrar moradores.' });
+      }
+    }
+
+    // Liberar = ativo e aprovado; Bloquear = inativo (sem acesso).
+    const { error: erroUpd } = await supabaseAdmin
+      .from('perfis')
+      .update({ ativo: liberar, aprovado: liberar ? true : alvo.aprovado })
+      .eq('id', moradorId);
+    if (erroUpd) throw erroUpd;
+
+    res.json({ sucesso: true, ativo: liberar });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -1461,13 +1507,20 @@ async function obterTodasObservacoesVisitantes() {
 
 async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
   const todas = await obterTodasObservacoesVisitantes();
+  // Se um documento (CPF) foi informado, a identificação é feita SOMENTE pelo
+  // documento. O match por nome só vale quando NÃO há documento — caso contrário
+  // dois visitantes diferentes com o mesmo nome (ex.: "Teste") se confundiriam,
+  // fazendo um CPF novo herdar o bloqueio de outro.
+  const docPuro = (docLimpo || '').replace(/\D/g, '');
+  const chavePura = (chave || '').replace(/\D/g, '');
+  const temDocumento = !!(docPuro || chavePura);
+
   let item = null;
-  if (chave && todas.has(chave)) item = todas.get(chave);
-  else if (docLimpo && todas.has(docLimpo)) item = todas.get(docLimpo);
-  else if (nomeNorm && todas.has('nome:' + nomeNorm)) item = todas.get('nome:' + nomeNorm);
+  if (chave && !chavePura && todas.has(chave)) item = todas.get(chave); // chave não-numérica (ex.: 'nome:...')
+  else if (docPuro && todas.has(docPuro)) item = todas.get(docPuro);
+  else if (chavePura && todas.has(chavePura)) item = todas.get(chavePura);
+  else if (!temDocumento && nomeNorm && todas.has('nome:' + nomeNorm)) item = todas.get('nome:' + nomeNorm);
   else {
-    const docPuro = (docLimpo || '').replace(/\D/g, '');
-    const chavePura = (chave || '').replace(/\D/g, '');
     for (const cad of todas.values()) {
       const itemDoc = (cad.documento || '').replace(/\D/g, '');
       const itemChave = (cad.chave || '').replace(/\D/g, '');
@@ -1475,10 +1528,13 @@ async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
         item = cad;
         break;
       }
-      const itemNome = (cad.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-      if (nomeNorm && itemNome && itemNome === nomeNorm) {
-        item = cad;
-        break;
+      // Fallback por nome só quando NÃO há documento informado.
+      if (!temDocumento) {
+        const itemNome = (cad.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNorm && itemNome && itemNome === nomeNorm) {
+          item = cad;
+          break;
+        }
       }
     }
   }
@@ -2145,24 +2201,46 @@ app.get('/api/portaria/condominio/moradores', requireAuth, requireRole('porteiro
 // Mapa do condomínio: retorna, por lote, o número da casa dos moradores que
 // habilitaram a permissão "ver_lote". Usado para exibir "Casa (número)" no mapa.
 app.get('/api/portaria/mapa/casas', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  // Ordena por data de cadastro: o endereço exibido é o do PRIMEIRO morador
+  // com permissão "ver_lote" cadastrado em cada lote.
   const { data, error } = await supabaseAdmin
     .from('perfis')
-    .select('bloco, endereco_numero, ver_lote, tipo')
+    .select('bloco, ver_lote, tipo, endereco_numero, endereco_logradouro, endereco_bairro, endereco_cidade, endereco_uf, cep, criado_em')
     .in('tipo', ['morador', 'admin'])
     .eq('ver_lote', true)
-    .not('endereco_numero', 'is', null);
+    .order('criado_em', { ascending: true });
 
   if (error) return res.status(400).json({ error: error.message });
 
-  // Monta um mapa: número do lote -> número da casa.
-  // Se houver mais de um morador com ver_lote no mesmo lote, usa o primeiro número encontrado.
+  // Monta um mapa: número do lote -> { numero, enderecoCompleto }.
+  // Usa SEMPRE o primeiro morador com ver_lote de cada lote (o primeiro cadastrado).
+  const lotesDefinidos = new Set(); // lotes já "reservados" pelo primeiro morador com ver_lote
   const casas = {};
   (data || []).forEach((p) => {
     const numLote = (p.bloco || '').replace(/\D/g, '');
-    const numCasa = (p.endereco_numero || '').trim();
-    if (!numLote || !numCasa) return;
+    if (!numLote) return;
     const chave = String(parseInt(numLote, 10));
-    if (!casas[chave]) casas[chave] = numCasa;
+    // O primeiro morador com ver_lote (por data de cadastro) "reserva" o lote;
+    // os demais do mesmo lote são ignorados, mesmo que ele não tenha endereço.
+    if (lotesDefinidos.has(chave)) return;
+    lotesDefinidos.add(chave);
+
+    const numero = (p.endereco_numero || '').trim();
+    const logradouro = (p.endereco_logradouro || '').trim();
+    const bairro = (p.endereco_bairro || '').trim();
+    const cidade = (p.endereco_cidade || '').trim();
+    const uf = (p.endereco_uf || '').trim();
+
+    // Sem número nem logradouro: o lote fica sem endereço exibido.
+    if (!numero && !logradouro) return;
+
+    // Monta "Rua X, 33 - Bairro - Cidade/UF" ignorando partes vazias.
+    const linha1 = [logradouro, numero].filter(Boolean).join(', ');
+    const localidade = cidade && uf ? `${cidade}/${uf}` : (cidade || uf);
+    const partes = [linha1, bairro, localidade].filter(Boolean);
+    const enderecoCompleto = partes.join(' - ');
+
+    casas[chave] = { numero, enderecoCompleto };
   });
 
   res.json({ casas });
