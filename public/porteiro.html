@@ -206,6 +206,54 @@
       </form>
       <div id="msg-entrada" class="msg hidden"></div>
 
+      <!-- Linha direta para visitante já cadastrado encontrado na busca por CPF (acima de Visitas avisadas pelos moradores) -->
+      <div id="area-visitante-encontrado" class="hidden" style="margin-top:16px; margin-bottom:18px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+          <h3 style="margin:0; font-size:18px; color:#166534; display:flex; align-items:center; gap:8px;">
+            <span>👤</span> Visitante cadastrado encontrado
+          </h3>
+          <span style="font-size:12px; background:#dcfce7; color:#15803d; font-weight:700; padding:4px 12px; border-radius:12px; border:1px solid #86efac;">
+            ✓ Cadastro no sistema
+          </span>
+        </div>
+        <div style="overflow-x:auto; border:2px solid #86efac; border-radius:10px; background:#fff; box-shadow:0 4px 14px rgba(22,101,52,0.08);">
+          <table style="width:100%; margin:0; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f0fdf4; border-bottom:2px solid #bbf7d0;">
+                <th style="padding:10px 14px; text-align:left; color:#166534;">VISITANTE</th>
+                <th style="padding:10px 14px; text-align:left; color:#166534;">DOCUMENTO</th>
+                <th style="padding:10px 14px; text-align:left; color:#166534;">TIPO</th>
+                <th style="padding:10px 14px; text-align:left; color:#166534;">HISTÓRICO</th>
+                <th style="padding:10px 14px; text-align:right; color:#166534;">AÇÃO</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:12px 14px;" data-label="Visitante">
+                  <strong id="vis-encontrado-nome" style="font-size:15px; color:#0f172a;"></strong>
+                  <span id="vis-encontrado-placa-sub" class="text-muted" style="display:block; font-size:12px;"></span>
+                </td>
+                <td style="padding:12px 14px;" data-label="Documento">
+                  <span id="vis-encontrado-doc" style="font-weight:600; color:#334155;"></span>
+                </td>
+                <td style="padding:12px 14px;" data-label="Tipo">
+                  <span id="vis-encontrado-tipo" class="badge"></span>
+                </td>
+                <td style="padding:12px 14px;" data-label="Histórico">
+                  <span id="vis-encontrado-fonte" style="font-size:13px; color:#475569;"></span>
+                </td>
+                <td style="padding:12px 14px; text-align:right;" data-label="Ação">
+                  <button type="button" class="mini" onclick="abrirModalEntradaVisitanteEncontrado()"
+                    style="background:var(--verde); color:#fff; font-weight:700; padding:8px 16px; border-radius:6px; cursor:pointer;">
+                    Registrar entrada
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
       <!-- Lista de visitas previstas (sempre visivel) -->
       <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
         <div id="cabecalho-previstas"
@@ -355,12 +403,14 @@
 
       // 3) Não atualizar se algum modal estiver aberto (iFood, Encomenda, Seleção de Morador, etc.).
       const modaisAbertos = document.querySelectorAll(
-        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-retirada-encomenda:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
+        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-retirada-encomenda:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #modal-entrada-visitante-encontrado:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
       );
       if (modaisAbertos.length > 0) return false;
 
-      // 4) Não atualizar se o formulário de entrada estiver aberto (cadastro em andamento).
+      // 4) Não atualizar se o formulário de entrada ou visitante encontrado estiverem visíveis.
       if (formEntrada && !formEntrada.classList.contains('hidden')) return false;
+      const areaVis = document.getElementById('area-visitante-encontrado');
+      if (areaVis && !areaVis.classList.contains('hidden')) return false;
 
       // 5) Não atualizar se houver busca ou digitação por CPF/documento em andamento.
       const buscaDoc = document.getElementById('busca-doc');
@@ -1117,59 +1167,66 @@
           return;
         }
 
-        // VISITANTE / PRESTADOR com cadastro: abre o formulário para confirmar.
+        // VISITANTE / PRESTADOR com cadastro:
+        // Cancela a abertura dos inputs na página e cria a visita direto acima de "Visitas avisadas pelos moradores",
+        // ocultando a lista de moradores abaixo.
         esconderBotaoEntradaMorador();
-        mostrarFormEntrada();
-        {
-          const fonte = r.origem === 'aviso' ? 'aviso de visita do morador' : 'visita anterior';
-          msg.textContent = 'Cadastro encontrado (' + fonte + '). Confira os dados e confirme a entrada.';
-          msg.className = 'msg ok';
-        }
+        formEntrada.classList.add('hidden');
 
-        document.getElementById('nome_pessoa').value = p.nome_pessoa || '';
-        const selectTipo = document.getElementById('tipo');
-        selectTipo.value = p.tipo || '';
-        if (!selectTipo.value) selectTipo.value = 'Visitante';
-        toggleEndereco();
-        document.getElementById('documento').value = p.documento ? (formatarCpf(p.documento) || p.documento) : doc;
-        document.getElementById('veiculo_placa').value = ''; // Sempre zerada para nova entrada, pois cada entrada pode ter veículo diferente
-        document.getElementById('acesso_tipo_entrada').value = 'carro'; // começa em carro; porteiro troca p/ a pé se precisar
-        togglePlacaEntrada();
+        visitanteEncontradoAtual = {
+          nome: p.nome_pessoa || '',
+          documento: p.documento ? (formatarCpf(p.documento) || p.documento) : doc,
+          tipo: p.tipo || 'Visitante',
+          veiculo_placa: p.veiculo_placa || '',
+          cep_visitante: p.cep_visitante || '',
+          endereco_visitante: p.endereco_visitante || '',
+          observacao_cadastro: (p.observacao_cadastro || r.observacao_cadastro || '').trim(),
+          bloqueado: !!r.bloqueado,
+          origem: r.origem
+        };
 
-        // Cadastro encontrado: Nome e Documento não podem ser alterados.
-        bloquearNomeDocumento();
+        const fonte = r.origem === 'aviso' ? 'Aviso anterior' : 'Visita anterior';
+        msg.textContent = 'Cadastro encontrado (' + fonte + '). Clique em "Registrar entrada" na linha abaixo.';
+        msg.className = 'msg ok';
+        msg.classList.remove('hidden');
 
-        // O LOTE DE DESTINO NUNCA É PRÉ-PREENCHIDO: o prestador/visitante pode
-        // estar indo a outro lote. O porteiro sempre escolhe o lote da vez.
-        document.getElementById('destino_bloco').value = '';
+        // Preenche a linha de visitante encontrado acima de "Visitas avisadas pelos moradores"
+        document.getElementById('vis-encontrado-nome').textContent = visitanteEncontradoAtual.nome;
+        document.getElementById('vis-encontrado-placa-sub').textContent = visitanteEncontradoAtual.veiculo_placa
+          ? ('Placa: ' + visitanteEncontradoAtual.veiculo_placa)
+          : '';
+        document.getElementById('vis-encontrado-doc').textContent = formatarCpf(visitanteEncontradoAtual.documento) || visitanteEncontradoAtual.documento;
+        const badgeTipo = document.getElementById('vis-encontrado-tipo');
+        badgeTipo.textContent = visitanteEncontradoAtual.tipo;
+        badgeTipo.className = 'badge ' + (visitanteEncontradoAtual.tipo || '').toLowerCase();
+        document.getElementById('vis-encontrado-fonte').textContent = fonte;
 
-        // Para prestador com cadastro anterior, preenche o endereço completo:
-        // usa o CEP salvo + ViaCEP (logradouro/bairro/cidade/UF) e tenta extrair
-        // o número da string de endereço anterior.
-        if (p.cep_visitante) {
-          document.getElementById('cep').value = p.cep_visitante;
-          preencherEnderecoDoCadastroAnterior(p.cep_visitante, p.endereco_visitante || '');
-        } else if (p.endereco_visitante) {
-          document.getElementById('msg-cep').textContent = 'Endereço do cadastro anterior: ' + p.endereco_visitante;
-          document.getElementById('msg-cep').style.color = 'var(--verde-escuro)';
-        }
+        // Exibe a área do visitante encontrado
+        const areaVis = document.getElementById('area-visitante-encontrado');
+        if (areaVis) areaVis.classList.remove('hidden');
+
+        // Oculta a lista de visitas avisadas pelos moradores enquanto este visitante estiver em destaque
+        const painelPrev = document.getElementById('painel-previstas');
+        if (painelPrev) painelPrev.classList.add('hidden');
 
         // Exibe observação cadastral fixa se existir
         const alertaObs = document.getElementById('alerta-obs-visitante');
         const alertaObsTexto = document.getElementById('alerta-obs-visitante-texto');
-        const obsTexto = (p.observacao_cadastro || r.observacao_cadastro || '').trim();
-        if (obsTexto) {
-          if (alertaObsTexto) alertaObsTexto.textContent = obsTexto;
+        if (visitanteEncontradoAtual.observacao_cadastro) {
+          if (alertaObsTexto) alertaObsTexto.textContent = visitanteEncontradoAtual.observacao_cadastro;
           if (alertaObs) alertaObs.classList.remove('hidden');
-        } else {
-          if (alertaObs) alertaObs.classList.add('hidden');
+        } else if (alertaObs) {
+          alertaObs.classList.add('hidden');
         }
 
-        // Se o visitante está BLOQUEADO, impede a entrada: esconde o botão Confirmar.
-        aplicarBloqueioEntrada(!!r.bloqueado);
+        // Se o visitante está BLOQUEADO, avisa na tela
+        if (visitanteEncontradoAtual.bloqueado) {
+          mostrarAlertaSistema('Visitante bloqueado pela administração. Entrada não permitida.', 'Visitante Bloqueado');
+        }
       } catch (err) {
         msg.textContent = err.message;
         msg.className = 'msg erro';
+        msg.classList.remove('hidden');
       } finally {
         btn.disabled = false;
         btn.textContent = 'Buscar';
@@ -1200,8 +1257,152 @@
       document.getElementById('acesso_tipo_entrada').value = 'carro';
       togglePlacaEntrada();
       formEntrada.classList.add('hidden');
+
+      // Limpa área de visitante encontrado e restaura lista de avisos de moradores
+      const areaVis = document.getElementById('area-visitante-encontrado');
+      if (areaVis) areaVis.classList.add('hidden');
+      const painelPrev = document.getElementById('painel-previstas');
+      if (painelPrev) painelPrev.classList.remove('hidden');
+      visitanteEncontradoAtual = null;
+
       carregarPrevistas(); // volta a lista completa de hoje
       document.getElementById('busca-doc').focus();
+    }
+
+    let visitanteEncontradoAtual = null;
+
+    function abrirModalEntradaVisitanteEncontrado() {
+      if (!visitanteEncontradoAtual) return;
+      if (visitanteEncontradoAtual.bloqueado) {
+        mostrarAlertaSistema('Visitante bloqueado pela administração. Entrada não permitida.', 'Visitante Bloqueado');
+        return;
+      }
+
+      document.getElementById('popup-vis-nome').textContent = visitanteEncontradoAtual.nome;
+      document.getElementById('popup-vis-doc').textContent = 'Documento: ' + (formatarCpf(visitanteEncontradoAtual.documento) || visitanteEncontradoAtual.documento);
+      document.getElementById('popup-vis-tipo').value = visitanteEncontradoAtual.tipo || 'Visitante';
+
+      const placaSalva = (visitanteEncontradoAtual.veiculo_placa || '').trim();
+      document.getElementById('popup-vis-placa').value = placaSalva;
+      document.getElementById('popup-vis-acesso').value = placaSalva ? 'carro' : 'carro';
+      togglePopupPlaca();
+      togglePopupEndereco();
+
+      document.getElementById('popup-vis-destino').value = '';
+      if (visitanteEncontradoAtual.cep_visitante) {
+        document.getElementById('popup-vis-cep').value = visitanteEncontradoAtual.cep_visitante;
+      }
+      if (visitanteEncontradoAtual.endereco_visitante) {
+        document.getElementById('popup-vis-endereco').value = visitanteEncontradoAtual.endereco_visitante;
+      }
+
+      const msg = document.getElementById('msg-popup-vis');
+      if (msg) msg.classList.add('hidden');
+
+      const modal = document.getElementById('modal-entrada-visitante-encontrado');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('popup-vis-destino').focus(), 100);
+    }
+
+    function fecharModalEntradaVisitanteEncontrado() {
+      const modal = document.getElementById('modal-entrada-visitante-encontrado');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
+    }
+
+    function togglePopupPlaca() {
+      const acesso = document.getElementById('popup-vis-acesso').value;
+      const wrapPlaca = document.getElementById('popup-wrap-placa');
+      if (wrapPlaca) {
+        wrapPlaca.classList.toggle('hidden', acesso === 'pe');
+      }
+    }
+
+    function togglePopupEndereco() {
+      const tipo = document.getElementById('popup-vis-tipo').value;
+      const areaEnd = document.getElementById('popup-area-endereco');
+      if (areaEnd) {
+        areaEnd.classList.toggle('hidden', tipo !== 'Prestador');
+      }
+    }
+
+    async function buscarCepPopup() {
+      const cep = (document.getElementById('popup-vis-cep').value || '').replace(/\D/g, '');
+      if (cep.length !== 8) {
+        alert('Digite um CEP válido com 8 números.');
+        return;
+      }
+      try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const data = await res.json();
+        if (data.erro) {
+          alert('CEP não encontrado.');
+          return;
+        }
+        document.getElementById('popup-vis-endereco').value = `${data.logradouro || ''}, , ${data.bairro || ''}, ${data.localidade || ''}/${data.uf || ''}`;
+      } catch (e) {
+        alert('Erro ao buscar CEP.');
+      }
+    }
+
+    async function confirmarEntradaPopupVisitante(ev) {
+      if (ev) ev.preventDefault();
+      if (!visitanteEncontradoAtual) return;
+
+      const destino = document.getElementById('popup-vis-destino').value.trim();
+      if (!destino) {
+        alert('Informe o lote de destino.');
+        document.getElementById('popup-vis-destino').focus();
+        return;
+      }
+
+      const acesso = document.getElementById('popup-vis-acesso').value;
+      const placa = acesso === 'carro' ? document.getElementById('popup-vis-placa').value.trim().toUpperCase() : null;
+      if (acesso === 'carro' && !placa) {
+        alert('Por favor, informe a placa do veículo.');
+        document.getElementById('popup-vis-placa').focus();
+        return;
+      }
+
+      const tipo = document.getElementById('popup-vis-tipo').value;
+      const cep = tipo === 'Prestador' ? document.getElementById('popup-vis-cep').value.trim() : null;
+      const endereco = tipo === 'Prestador' ? document.getElementById('popup-vis-endereco').value.trim() : null;
+
+      const btn = document.getElementById('btn-confirmar-popup-vis');
+      const originalTexto = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Registrando...';
+
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            aviso_id: null,
+            nome_pessoa: visitanteEncontradoAtual.nome,
+            tipo: tipo || 'Visitante',
+            documento: visitanteEncontradoAtual.documento || '',
+            veiculo_placa: placa,
+            destino_bloco: destino,
+            endereco_visitante: endereco,
+            cep_visitante: cep,
+            observacao: visitanteEncontradoAtual.observacao_cadastro || null,
+          }),
+        });
+
+        fecharModalEntradaVisitanteEncontrado();
+        limparFormEntrada(); // Limpa e restaura a lista de moradores
+        msgEntrada.textContent = `Entrada de ${visitanteEncontradoAtual.nome} (Destino: ${destino}) registrada com sucesso.`;
+        msgEntrada.className = 'msg ok';
+        msgEntrada.classList.remove('hidden');
+      } catch (err) {
+        mostrarAlertaSistema(err.message, 'Erro ao Registrar');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalTexto;
+      }
     }
 
     // ---------- Bloqueio de Nome/Documento e seletor de acesso ----------
@@ -2314,6 +2515,82 @@
           ✅ Confirmar Entrada
         </button>
       </div>
+    </div>
+  </div>
+
+  <!-- Modal Entrada de Visitante Cadastrado Encontrado por CPF -->
+  <div id="modal-entrada-visitante-encontrado" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div
+      style="background:#fff; border-radius:14px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; padding:24px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.25); border-top:6px solid var(--verde);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="margin:0; font-size:18px; color:var(--verde-escuro); display:flex; align-items:center; gap:8px;">
+          <span>👤</span> Confirmar Entrada de Visitante
+        </h3>
+        <button type="button" onclick="fecharModalEntradaVisitanteEncontrado()"
+          style="background:none; border:none; font-size:24px; line-height:1; padding:0 4px; cursor:pointer; color:#64748b;">&times;</button>
+      </div>
+
+      <!-- Cabeçalho com dados fixos do visitante -->
+      <div style="background:#f1f5f9; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+        <div style="font-size:16px; font-weight:700; color:#0f172a;" id="popup-vis-nome">-</div>
+        <div style="font-size:13px; color:#475569; margin-top:2px;" id="popup-vis-doc">-</div>
+      </div>
+
+      <form id="form-popup-visitante-encontrado" onsubmit="confirmarEntradaPopupVisitante(event)">
+        <!-- Tipo e Acesso -->
+        <div class="grid grid-2" style="margin-bottom:12px;">
+          <div>
+            <label for="popup-vis-tipo" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Tipo *</label>
+            <select id="popup-vis-tipo" required onchange="togglePopupEndereco()">
+              <option value="Visitante">Visitante</option>
+              <option value="Prestador">Prestador de serviço</option>
+            </select>
+          </div>
+          <div>
+            <label for="popup-vis-acesso" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Acesso *</label>
+            <select id="popup-vis-acesso" onchange="togglePopupPlaca()">
+              <option value="carro">🚗 Entrada de carro</option>
+              <option value="pe">🚶 Entrada a pé</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Placa do veículo (visível se acesso === carro) -->
+        <div id="popup-wrap-placa" style="margin-bottom:12px;">
+          <label for="popup-vis-placa" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Placa do veículo *</label>
+          <input type="text" id="popup-vis-placa" placeholder="Ex: ABC1D23" maxlength="8"
+            style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:14px; padding:10px; border:2px solid #cbd5e1; border-radius:8px;" />
+        </div>
+
+        <!-- Lote de destino -->
+        <div style="margin-bottom:14px;">
+          <label for="popup-vis-destino" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Lote de destino *</label>
+          <input type="text" id="popup-vis-destino" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..." required
+            autocomplete="off" onchange="normalizarLoteDestino(this)"
+            style="width:100%; box-sizing:border-box; font-size:15px; font-weight:600; padding:10px; border:2px solid #3b82f6; border-radius:8px;" />
+        </div>
+
+        <!-- Endereço do Prestador (se prestador selecionado) -->
+        <div id="popup-area-endereco" class="hidden" style="margin-bottom:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
+          <h4 style="margin:0 0 8px; font-size:13px; color:#1e293b;">Endereço do Prestador</h4>
+          <div style="display:flex; gap:6px; margin-bottom:8px;">
+            <input type="text" id="popup-vis-cep" placeholder="CEP (00000-000)" maxlength="9" style="flex:1;" />
+            <button type="button" class="mini" onclick="buscarCepPopup()">Buscar</button>
+          </div>
+          <input type="text" id="popup-vis-endereco" placeholder="Rua, Número, Bairro, Cidade/UF" style="width:100%; box-sizing:border-box; font-size:13px;" />
+        </div>
+
+        <div id="msg-popup-vis" class="msg hidden" style="margin-bottom:14px;"></div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="secundario" onclick="fecharModalEntradaVisitanteEncontrado()">Cancelar</button>
+          <button type="submit" id="btn-confirmar-popup-vis"
+            style="background:var(--verde); color:#fff; font-weight:700; padding:10px 18px; border-radius:8px; border:none; cursor:pointer;">
+            Confirmar entrada
+          </button>
+        </div>
+      </form>
     </div>
   </div>
 
