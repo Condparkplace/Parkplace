@@ -332,6 +332,22 @@ function formatarDocumento(doc) {
   return String(doc).trim();
 }
 
+// Valores sentinela de nome_pessoa comparados com === em várias partes do código.
+// NUNCA podem virar maiúsculas, senão quebram as comparações.
+const SENTINELAS_NOME = ['Encomenda', 'Troca de turno'];
+
+// Coloca um texto de CONTEÚDO em MAIÚSCULAS (nome, observação, endereço, placa, etc.).
+// Preserva null/vazio e os valores sentinela. Não use em e-mail, senha, cpf, telefone, cep ou enums.
+function maiuscula(valor) {
+  if (valor === null || valor === undefined) return valor;
+  const s = String(valor).trim();
+  if (!s) return s;
+  // Preserva sentinelas exatos e nomes de entregador de app (ex.: "Entregador iFood - ...").
+  if (SENTINELAS_NOME.includes(s)) return s;
+  if (s.startsWith('Entregador iFood')) return s;
+  return s.toUpperCase();
+}
+
 app.post('/api/public/cadastro', limitePublico, async (req, res) => {
   const { nome, bloco, telefone, email, password } = req.body || {};
   const cpf = (req.body?.cpf || '').replace(/\D/g, '');
@@ -855,11 +871,11 @@ app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', '
       idsMoradores.push(req.user.id);
     }
 
-    // Busca moradores do condomínio para não listar moradores nem funcionários como visitantes do lote
+    // Busca moradores/admins do condomínio para não listar nenhum deles como "visitante" do lote.
     const { data: todosMoradores } = await supabaseAdmin
       .from('perfis')
       .select('nome, cpf')
-      .eq('tipo', 'morador');
+      .in('tipo', ['morador', 'admin']);
     const nomesMoradores = new Set((todosMoradores || []).map(m => (m.nome || '').trim().toLowerCase()));
     const cpfsMoradores = new Set((todosMoradores || []).map(m => (m.cpf || '').replace(/\D/g, '')).filter(Boolean));
 
@@ -1033,14 +1049,14 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), as
     .from('avisos_visitas')
     .insert({
       morador_id: req.user.id,
-      nome_visitante,
+      nome_visitante: maiuscula(nome_visitante),
       documento_visitante: docFormatado || null,
-      veiculo_placa: veiculo_placa || null,
+      veiculo_placa: maiuscula(veiculo_placa) || null,
       tipo: tipo || 'Visitante',
       data_prevista: data_prevista || null,
-      endereco_visitante: endereco_visitante || null,
+      endereco_visitante: maiuscula(endereco_visitante) || null,
       cep_visitante: cep_visitante || null,
-      observacao: observacao || null,
+      observacao: maiuscula(observacao) || null,
       status: 'Pendente',
     })
     .select()
@@ -1102,14 +1118,14 @@ app.post('/api/public/avisos', limitePublico, async (req, res) => {
     .from('avisos_visitas')
     .insert({
       morador_id,
-      nome_visitante,
+      nome_visitante: maiuscula(nome_visitante),
       documento_visitante: docFormatado || null,
-      veiculo_placa: veiculo_placa || null,
+      veiculo_placa: maiuscula(veiculo_placa) || null,
       tipo: tipo || 'Visitante',
       data_prevista: data_prevista || null,
-      endereco_visitante: endereco_visitante || null,
+      endereco_visitante: maiuscula(endereco_visitante) || null,
       cep_visitante: cep_visitante || null,
-      observacao: observacao || null,
+      observacao: maiuscula(observacao) || null,
       status: 'Pendente',
     })
     .select()
@@ -1757,7 +1773,7 @@ async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, e
   const agora = new Date().toISOString();
   const docLimpo = (documento || '').replace(/\D/g, '');
   const docFormatado = formatarDocumento(documento);
-  const nomeLimpo = (nome || '').trim();
+  const nomeLimpo = maiuscula((nome || '').trim()) || '';
   const nomeNorm = nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   const finalChave = (chave || '').trim() || docLimpo || ('nome:' + nomeNorm);
 
@@ -1791,7 +1807,7 @@ async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, e
     data: agora,
     autor_id: userId || null,
     autor_nome: autorNome,
-    texto: (texto || '').trim(),
+    texto: maiuscula((texto || '').trim()) || '',
     exibir_alerta: Boolean(exibir_alerta),
     origem: origem,
   };
@@ -2100,16 +2116,16 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
 
   const insertPayload = {
     aviso_id: avisoIdValido,
-    nome_pessoa,
+    nome_pessoa: maiuscula(nome_pessoa),
     documento: docFormatado || null,
     tipo: tipoFinal,
-    destino_bloco: destino_bloco || null,
+    destino_bloco: maiuscula(destino_bloco) || null,
     destino_apto: destino_apto || null,
     destino_morador: destino_morador || null,
-    veiculo_placa: veiculo_placa || null,
-    endereco_visitante: endereco_visitante || null,
+    veiculo_placa: maiuscula(veiculo_placa) || null,
+    endereco_visitante: maiuscula(endereco_visitante) || null,
     cep_visitante: cep_visitante || null,
-    observacao: observacao || null,
+    observacao: maiuscula(observacao) || null,
     registrado_por: req.user.id,
     entrada: entradaFinal,
     saida: isMorador ? agora : null,
@@ -2196,7 +2212,7 @@ app.post('/api/portaria/saida/:id', requireAuth, requireRole('porteiro', 'admin'
 
   const agora = new Date().toISOString();
   let novaObsAcesso = (regAtual.observacao || '').trim();
-  const obsSaidaTexto = (observacao_saida || '').trim();
+  const obsSaidaTexto = maiuscula((observacao_saida || '').trim()) || '';
 
   if (obsSaidaTexto) {
     novaObsAcesso = (novaObsAcesso ? novaObsAcesso + ' | ' : '') + `[Saída: ${obsSaidaTexto}]`;
@@ -2279,7 +2295,7 @@ app.post('/api/portaria/encomendas/:id/retirada', requireAuth, requireRole('port
   let novaObs = observacaoAtual || '';
   if (novaObs.startsWith('[ENCOMENDA] Para: ')) {
     const nomeDestino = novaObs.replace('[ENCOMENDA] Para: ', '').trim();
-    novaObs = `[ENCOMENDA] de : ${nomeDestino} retirado por ${retiradoPor || 'Morador'}`;
+    novaObs = `[ENCOMENDA] de : ${nomeDestino} retirado por ${maiuscula(retiradoPor) || 'MORADOR'}`;
   }
 
   const { data, error } = await req.supabase
@@ -2313,7 +2329,7 @@ app.post('/api/portaria/entrada/:id/cancelar', requireAuth, requireRole('porteir
 
   // Marca o registro como finalizado e insere a observacao de cancelamento
   const ts = new Date().toLocaleString('pt-BR');
-  const msgCancelamento = `[Cancelado]: ${motivo || 'Sem motivo'}`;
+  const msgCancelamento = `[Cancelado]: ${maiuscula(motivo) || 'SEM MOTIVO'}`;
 
   const { error: errUpd } = await req.supabase
     .from('registros_portaria')
