@@ -46,17 +46,18 @@
       <!-- Busca rapida por documento -->
       <div id="area-busca-cpf"
         style="background:var(--verde-claro); border-radius:12px; padding:14px 18px; margin:0 0 8px;">
-        <label for="busca-doc"
-          style="margin-top:0; margin-bottom:6px; font-weight:700; color:#1e293b; font-size:14px; display:block;">Buscar
-          / Cadastrar Visitas por CPF</label>
+        <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap;">
+          <label for="busca-doc"
+            style="margin:0; font-weight:700; color:#1e293b; font-size:14px;">Buscar / Cadastrar Visitas por CPF</label>
+          <span id="aviso-cpf-busca" class="hidden"
+            style="font-size:13px; font-weight:600; line-height:1;"></span>
+        </div>
         <div class="row-inline" style="align-items:center; gap:8px;">
           <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14"
             style="flex:1; min-width:180px; margin:0;" />
           <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
           <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
         </div>
-        <span id="aviso-cpf-busca" class="hidden"
-          style="display:block; margin-top:6px; font-size:13px; font-weight:600;"></span>
         <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
       </div>
 
@@ -97,18 +98,19 @@
             <input type="text" id="nome_pessoa" required />
           </div>
           <div>
+            <label for="documento">Documento</label>
+            <input type="text" id="documento" inputmode="numeric" maxlength="14" readonly tabindex="-1"
+              style="background:#f1f5f9; cursor:not-allowed;" title="Definido na busca por CPF acima" />
+            <span id="aviso-cpf-documento" class="hidden"
+              style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
+          </div>
+          <div>
             <label for="tipo">Tipo *</label>
             <select id="tipo" required onchange="toggleEndereco()">
               <option value="" disabled selected>Selecionar</option>
               <option value="Visitante">Visitante</option>
               <option value="Prestador">Prestador de serviço</option>
             </select>
-          </div>
-          <div>
-            <label for="documento">Documento</label>
-            <input type="text" id="documento" inputmode="numeric" maxlength="14" />
-            <span id="aviso-cpf-documento" class="hidden"
-              style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
           </div>
           <div>
             <label for="acesso_tipo_entrada">Acesso *</label>
@@ -880,11 +882,11 @@
           document.getElementById('aviso_id').value = '';
           document.getElementById('msg-cep').textContent = '';
           mostrarFormEntrada();
-          desbloquearNomeDocumento(); // cadastro novo: pode editar nome e documento
+          desbloquearNomeDocumento(); // cadastro novo: nome editavel, documento bloqueado
           togglePlacaEntrada();        // garante o estado do campo de placa
           msg.textContent = '';
           msg.className = 'msg hidden';
-          document.getElementById('documento').value = doc;
+          document.getElementById('documento').value = formatarCpf(doc) || doc;
           document.getElementById('nome_pessoa').focus();
           return;
         }
@@ -1016,10 +1018,10 @@
       });
     }
     function desbloquearNomeDocumento() {
-      ['nome_pessoa', 'documento'].forEach((id) => {
-        const el = document.getElementById(id);
-        if (el) { el.readOnly = false; el.style.background = ''; el.style.cursor = ''; }
-      });
+      const elNome = document.getElementById('nome_pessoa');
+      if (elNome) { elNome.readOnly = false; elNome.style.background = ''; elNome.style.cursor = ''; }
+      const elDoc = document.getElementById('documento');
+      if (elDoc) { elDoc.readOnly = true; elDoc.style.background = '#f1f5f9'; elDoc.style.cursor = 'not-allowed'; elDoc.tabIndex = -1; }
     }
 
     // ---------- Entrada direta de morador ----------

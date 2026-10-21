@@ -198,6 +198,10 @@ body.tela-porteiro .btn-acao-compacto {
   border-radius: 8px !important;
   min-height: 42px !important;
   height: 42px !important;
+  width: 260px !important;
+  min-width: 260px !important;
+  max-width: 100% !important;
+  box-sizing: border-box !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center !important;
