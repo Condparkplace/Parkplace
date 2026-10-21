@@ -734,16 +734,32 @@ app.get('/api/morador/lote/visitas/:moradorId', requireAuth, requireRole('morado
 
 // ---------- Visitas recorrentes (frequência semanal) ----------
 
-// Lista as recorrências do próprio morador.
+// Lista as recorrências do lote vinculado (compartilhado entre moradores do mesmo lote).
 app.get('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
-  const { data, error } = await supabaseAdmin
-    .from('visitas_recorrentes')
-    .select('*')
-    .eq('morador_id', req.user.id)
-    .eq('ativo', true)
-    .order('criado_em', { ascending: false });
-  if (error) return res.status(400).json({ error: error.message });
-  res.json({ recorrencias: data || [] });
+  try {
+    const bloco = req.query.lote || req.perfil?.bloco;
+    let idsMoradores = [req.user.id];
+    if (bloco) {
+      const { data: moradoresDoLote } = await supabaseAdmin
+        .from('perfis')
+        .select('id')
+        .eq('bloco', bloco);
+      if (moradoresDoLote && moradoresDoLote.length) {
+        idsMoradores = moradoresDoLote.map((m) => m.id);
+        if (!idsMoradores.includes(req.user.id)) idsMoradores.push(req.user.id);
+      }
+    }
+    const { data, error } = await supabaseAdmin
+      .from('visitas_recorrentes')
+      .select('*')
+      .in('morador_id', idsMoradores)
+      .eq('ativo', true)
+      .order('criado_em', { ascending: false });
+    if (error) return res.status(400).json({ error: error.message });
+    res.json({ recorrencias: data || [] });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Cria/atualiza a recorrência de um visitante (define os dias da semana).
@@ -815,44 +831,96 @@ app.delete('/api/morador/recorrencias/:id', requireAuth, requireRole('morador', 
   res.json({ ok: true });
 });
 
-// Busca visitas frequentes agregadas por nome/documento de TODOS os lotes (compartilhado entre moradores)
+// Busca visitas frequentes agregadas por nome/documento SOMENTE do lote vinculado (compartilhado entre moradores do mesmo lote)
 app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   try {
-    // Usa supabaseAdmin para buscar avisos e registros de todos os lotes
-    const [qAvisos, qRegistros] = await Promise.all([
+    const bloco = req.query.lote || req.perfil?.bloco;
+    if (!bloco) {
+      return res.json({ frequentes: [] });
+    }
+
+    const num = bloco.replace(/\D/g, '');
+    const numPadded = num ? String(parseInt(num, 10)).padStart(2, '0') : '';
+    const numUnpadded = num ? String(parseInt(num, 10)) : '';
+    const lotesPermitidos = [...new Set([bloco, 'Lote ' + numPadded, 'Lote ' + numUnpadded, numPadded, numUnpadded].filter(Boolean))];
+
+    // Busca todos os moradores deste lote
+    const { data: moradoresDoLote } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, cpf')
+      .eq('bloco', bloco);
+
+    const idsMoradores = (moradoresDoLote || []).map(m => m.id);
+    if (req.user?.id && !idsMoradores.includes(req.user.id)) {
+      idsMoradores.push(req.user.id);
+    }
+
+    // Busca moradores do condomínio para não listar moradores nem funcionários como visitantes do lote
+    const { data: todosMoradores } = await supabaseAdmin
+      .from('perfis')
+      .select('nome, cpf')
+      .eq('tipo', 'morador');
+    const nomesMoradores = new Set((todosMoradores || []).map(m => (m.nome || '').trim().toLowerCase()));
+    const cpfsMoradores = new Set((todosMoradores || []).map(m => (m.cpf || '').replace(/\D/g, '')).filter(Boolean));
+
+    // Busca avisos deste lote e registros da portaria direcionados a este lote/moradores
+    const [qAvisos, qRegistrosBloco, qRegistrosMorador] = await Promise.all([
       supabaseAdmin
         .from('avisos_visitas')
         .select('*')
+        .in('morador_id', idsMoradores)
         .order('criado_em', { ascending: false })
         .limit(3000),
       supabaseAdmin
         .from('registros_portaria')
         .select('*')
         .is('aviso_id', null)
+        .in('destino_bloco', lotesPermitidos)
         .order('entrada', { ascending: false })
-        .limit(3000)
+        .limit(3000),
+      idsMoradores.length > 0
+        ? supabaseAdmin
+            .from('registros_portaria')
+            .select('*')
+            .is('aviso_id', null)
+            .in('destino_morador', idsMoradores)
+            .order('entrada', { ascending: false })
+            .limit(3000)
+        : Promise.resolve({ data: [] })
     ]);
 
     const avisosData = qAvisos.data || [];
-    const regData = qRegistros.data || [];
+    const mapRegs = new Map();
+    (qRegistrosBloco.data || []).forEach(r => mapRegs.set(r.id, r));
+    (qRegistrosMorador.data || []).forEach(r => mapRegs.set(r.id, r));
 
     // Agrupar por chave (documento limpo ou nome normalizado)
     const map = {};
 
-    (avisosData || []).forEach(a => {
+    avisosData.forEach(a => {
       const nomeLimpo = (a.nome_visitante || '').trim();
       if (!nomeLimpo || nomeLimpo === 'Entregador iFood' || nomeLimpo === 'Encomenda') return;
-      const chave = (a.documento_visitante || '').replace(/\D/g, '') || nomeLimpo.toLowerCase();
+      if (a.tipo === 'Morador' || a.tipo === 'Outro' || a.tipo === 'Entregador') return;
+      const docLimpo = (a.documento_visitante || '').replace(/\D/g, '');
+      if (docLimpo && cpfsMoradores.has(docLimpo)) return;
+      if (nomesMoradores.has(nomeLimpo.toLowerCase())) return;
+
+      const chave = docLimpo || nomeLimpo.toLowerCase();
       if (!map[chave]) {
         map[chave] = { count: 0, ultimo: a };
       }
       map[chave].count++;
     });
 
-    (regData || []).forEach(r => {
+    Array.from(mapRegs.values()).forEach(r => {
       const nomeLimpo = (r.nome_pessoa || '').trim();
       if (!nomeLimpo || nomeLimpo === 'Entregador iFood' || nomeLimpo === 'Encomenda') return;
-      const chave = (r.documento || '').replace(/\D/g, '') || nomeLimpo.toLowerCase();
+      if (r.tipo === 'Morador' || r.tipo === 'Outro' || r.tipo === 'Entregador') return;
+      const docLimpo = (r.documento || '').replace(/\D/g, '');
+      if (docLimpo && cpfsMoradores.has(docLimpo)) return;
+      if (nomesMoradores.has(nomeLimpo.toLowerCase())) return;
+
+      const chave = docLimpo || nomeLimpo.toLowerCase();
       if (!map[chave]) {
         map[chave] = {
           count: 0,
@@ -872,7 +940,7 @@ app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', '
     const frequentes = Object.values(map)
       .sort((a, b) => b.count - a.count)
       .map(x => ({ ...x.ultimo, count: x.count }))
-      .filter(x => x.tipo !== 'Entregador' && x.nome_visitante !== 'Encomenda');
+      .filter(x => x.tipo !== 'Entregador' && x.tipo !== 'Morador' && x.tipo !== 'Outro' && x.nome_visitante !== 'Encomenda');
 
     res.json({ frequentes });
   } catch (error) {
