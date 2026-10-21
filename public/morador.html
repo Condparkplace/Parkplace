@@ -122,12 +122,12 @@
         <!-- Convidar Visitante -->
         <button id="btn-compartilhar-visita" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Visitante')">&#128242; Convidar via WhatsApp seu Visitante (Compartilhe ele mesmo realiza o cadastro)</button>
+          onclick="compartilharVisita('Visitante')">&#128242; Convidar via WhatsApp seu Visitante </br> (Compartilhe direto para ele realizar o cadastro)</button>
 
         <!-- Convidar Prestador de serviço -->
         <button id="btn-compartilhar-prestador" class="block"
           style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Prestador')">&#128242; Convidar via WhatsApp seu Prestador de serviço (Compartilhe ele mesmo realiza o cadastro)</button>
+          onclick="compartilharVisita('Prestador')">&#128242; Convidar via WhatsApp seu Prestador de serviço (Compartilhe direto para ele realizar o cadastro)</button>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; word-break: break-word;">
@@ -157,8 +157,8 @@
           <option value="Prestador">Prestador de serviço</option>
         </select>
 
-        <label for="documento_visitante">Documento (CPF)</label>
-        <input type="text" id="documento_visitante" />
+        <label for="documento_visitante">CPF *</label>
+        <input type="text" id="documento_visitante" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" required />
         <span id="aviso-cpf-visitante" class="hidden"
           style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
@@ -367,8 +367,8 @@
         <label for="efreq-nome">Nome *</label>
         <input type="text" id="efreq-nome" required />
 
-        <label for="efreq-doc">Documento (RG/CPF)</label>
-        <input type="text" id="efreq-doc" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" />
+        <label for="efreq-doc">CPF *</label>
+        <input type="text" id="efreq-doc" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" required />
 
         <label for="efreq-tipo">Tipo</label>
         <select id="efreq-tipo">
@@ -1018,14 +1018,21 @@
     const avisoDocVis = document.getElementById('aviso-cpf-visitante');
     if (inpDocVis) vincularValidadorCpf(inpDocVis, avisoDocVis);
 
+    // Máscara/validador de CPF no modal de editar visitante.
+    (function () {
+      const efd = document.getElementById('efreq-doc');
+      if (efd && typeof vincularValidadorCpf === 'function') vincularValidadorCpf(efd, null);
+    })();
+
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
       msg.classList.add('hidden');
 
       const docVis = document.getElementById('documento_visitante').value.trim();
       const docVisLimpo = docVis.replace(/\D/g, '');
-      if (docVisLimpo.length === 11 && !validarCpf(docVisLimpo)) {
-        msg.textContent = 'O CPF informado para o visitante é inválido! Confira os 11 dígitos.';
+      // CPF obrigatório e válido (11 dígitos).
+      if (docVisLimpo.length !== 11 || !validarCpf(docVisLimpo)) {
+        msg.textContent = 'Informe um CPF válido (11 dígitos) para o visitante.';
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
         document.getElementById('documento_visitante').focus();
@@ -1426,6 +1433,15 @@
         msg.textContent = 'Informe o nome do visitante.';
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
+        return;
+      }
+      // CPF obrigatório e válido.
+      const docEfreq = document.getElementById('efreq-doc').value.replace(/\D/g, '');
+      if (docEfreq.length !== 11 || !validarCpf(docEfreq)) {
+        msg.textContent = 'Informe um CPF válido (11 dígitos).';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('efreq-doc').focus();
         return;
       }
       btn.disabled = true;

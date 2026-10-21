@@ -92,8 +92,8 @@
             <label for="nome_visitante">Seu nome completo *</label>
             <input type="text" id="nome_visitante" required />
 
-            <label for="documento_visitante">Documento CPF *</label>
-            <input type="text" id="documento_visitante" required />
+            <label for="documento_visitante">CPF *</label>
+            <input type="text" id="documento_visitante" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" required />
             <span id="aviso-cpf-externo" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
 
             <label for="acesso_tipo">Como vai acessar? *</label>
@@ -539,28 +539,9 @@
         return;
       }
 
-      if (!docExtLimpo) {
-        msg.textContent = 'Por favor, informe o documento.';
-        msg.className = 'msg erro';
-        msg.classList.remove('hidden');
-        document.getElementById('documento_visitante').focus();
-        return;
-      }
-
-      // Se o documento é só números, tratamos como CPF: exige 11 dígitos válidos.
-      // (Documentos com letras — CPF com "X", etc. — são aceitos como estão.)
-      const docSoNumeros = /^\d+$/.test(docExt.replace(/[.\-\s]/g, ''));
-      if (docSoNumeros && docExtLimpo.length !== 11) {
-        msg.textContent = 'CPF incompleto. Digite os 11 dígitos ou informe outro documento (CPF).';
-        msg.className = 'msg erro';
-        msg.classList.remove('hidden');
-        document.getElementById('documento_visitante').focus();
-        document.getElementById('documento_visitante').style.borderColor = 'var(--vermelho, #dc2626)';
-        return;
-      }
-
-      if (docExtLimpo.length === 11 && !validarCpf(docExtLimpo)) {
-        msg.textContent = 'O CPF informado é inválido! Confira os 11 dígitos.';
+      // CPF obrigatório e válido (11 dígitos) — somente CPF é aceito.
+      if (docExtLimpo.length !== 11 || !validarCpf(docExtLimpo)) {
+        msg.textContent = 'Informe um CPF válido (11 dígitos).';
         msg.className = 'msg erro';
         msg.classList.remove('hidden');
         document.getElementById('documento_visitante').focus();
