@@ -3,6 +3,11 @@
 async function api(path, options = {}) {
   const opts = { ...options };
   const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+  // Modo "ver como morador" (impersonação só-admin): injeta o id do morador alvo.
+  try {
+    const impersonar = sessionStorage.getItem('impersonarMorador');
+    if (impersonar) headers['x-impersonar-morador'] = impersonar;
+  } catch (e) { /* sessionStorage indisponível: ignora */ }
   if (opts.body && typeof opts.body === 'object' && !(opts.body instanceof FormData)) {
     opts.body = JSON.stringify(opts.body);
   }

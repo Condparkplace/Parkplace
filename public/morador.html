@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Painel do Morador - Park Place</title>
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/style.css?v=3" />
   <style>
     @media (max-width: 520px) {
       .grupo-convite {
@@ -451,6 +451,12 @@
       navAdmin(perfil, 'morador');
       document.getElementById('nome-usuario').textContent =
         perfil.nome + (perfil.bloco ? ` (${perfil.bloco})` : '');
+
+      // Modo "ver como morador": mostra a faixa de impersonação no topo.
+      if (perfil.impersonando) {
+        mostrarFaixaImpersonacao(perfil.nome, perfil.admin_real);
+      }
+
       // Libera a aba de supervisão do lote se o admin tiver permitido.
       if (perfil.ver_lote || perfil.tipo === 'admin') {
         document.getElementById('tab-lote').classList.remove('hidden');
@@ -458,6 +464,9 @@
       carregarAvisos();
       carregarMinhasEncomendas();
       carregarNotificacoes();
+
+      // Durante a impersonação (só-leitura) não força o cadastro de endereço.
+      if (perfil.impersonando) return;
 
       // Primeiro acesso / endereço ainda não cadastrado: abre "Meu cadastro"
       // e pede para o morador informar o endereço.
@@ -474,6 +483,29 @@
         }
       }
     })();
+
+    // ---------- Modo "ver como morador" (impersonação só-leitura) ----------
+    function mostrarFaixaImpersonacao(nomeMorador, adminReal) {
+      if (document.getElementById('faixa-impersonacao')) return;
+      const faixa = document.createElement('div');
+      faixa.id = 'faixa-impersonacao';
+      faixa.style.cssText = 'position:sticky; top:0; z-index:9998; background:#7c3aed; color:#fff; padding:10px 16px; display:flex; align-items:center; justify-content:center; gap:14px; flex-wrap:wrap; font-size:14px; box-shadow:0 2px 8px rgba(0,0,0,0.2);';
+      faixa.innerHTML = `
+        <span>👁️ Você (<strong>${escapeHtml(adminReal || 'Admin')}</strong>) está vendo como <strong>${escapeHtml(nomeMorador || 'morador')}</strong> — somente leitura.</span>
+        <button type="button" onclick="sairImpersonacao()"
+          style="background:#fff; color:#7c3aed; border:none; border-radius:6px; padding:6px 14px; font-weight:700; cursor:pointer; white-space:nowrap;">
+          ← Voltar a ser admin
+        </button>`;
+      document.body.prepend(faixa);
+    }
+
+    function sairImpersonacao() {
+      try {
+        sessionStorage.removeItem('impersonarMorador');
+        sessionStorage.removeItem('impersonarNome');
+      } catch (e) {}
+      window.location.href = '/admin.html';
+    }
 
     // ---------- Abas de visitas (Minhas / Lote) ----------
     function trocarAbaVisitas(aba) {

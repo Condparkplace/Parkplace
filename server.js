@@ -397,7 +397,15 @@ app.post('/api/public/cadastro', limitePublico, async (req, res) => {
 // Dados do usuario logado
 app.get('/api/me', requireAuth, (req, res) => {
   // Anexa o e-mail (vive no Auth) ao perfil, só para exibição.
-  res.json({ perfil: { ...req.perfil, email: req.user?.email || null } });
+  // Em impersonação, sinaliza o estado para a UI do morador mostrar a faixa.
+  res.json({
+    perfil: {
+      ...req.perfil,
+      email: req.user?.email || null,
+      impersonando: !!req.impersonando,
+      admin_real: req.impersonando ? (req.adminReal?.nome || 'Administrador') : null,
+    },
+  });
 });
 
 // Atualiza o proprio cadastro (campos que o usuario pode editar)

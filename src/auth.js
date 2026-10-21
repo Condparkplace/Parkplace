@@ -100,6 +100,31 @@ async function requireAuth(req, res, next) {
   req.user = userData.user;
   req.perfil = perfil;
   req.supabase = client;
+
+  // Impersonação ("ver como morador"): só o ADMIN pode, via header
+  // x-impersonar-morador = id do morador alvo. Troca a identidade efetiva
+  // (req.user/req.perfil) pelo alvo, mantendo o admin real em req.adminReal.
+  // É só-leitura: a escrita é bloqueada no server.js quando req.impersonando = true.
+  const alvoImpersonar = req.headers['x-impersonar-morador'];
+  if (alvoImpersonar && perfil.tipo === 'admin' && alvoImpersonar !== userData.user.id) {
+    const { data: perfilAlvo } = await supabaseAdmin
+      .from('perfis')
+      .select('*')
+      .eq('id', alvoImpersonar)
+      .single();
+    if (perfilAlvo) {
+      req.adminReal = perfil;                 // quem realmente está logado
+      req.impersonando = true;
+      req.perfil = perfilAlvo;                // identidade efetiva = morador alvo
+      req.user = { ...userData.user, id: perfilAlvo.id }; // id efetivo = alvo
+
+      // Impersonação é SOMENTE LEITURA: bloqueia qualquer método que altere dados.
+      if (req.method !== 'GET' && req.method !== 'HEAD' && req.method !== 'OPTIONS') {
+        return res.status(403).json({ error: 'Modo "ver como morador" é somente leitura. Volte a ser admin para alterar dados.' });
+      }
+    }
+  }
+
   next();
 }
 

@@ -165,23 +165,38 @@ body {
 label { display: block; font-size: 13px; margin: 10px 0 4px; color: var(--texto-suave); }
 input, select, textarea, button {
   font-family: inherit;
-  font-size: 14px;
+  font-size: 16px;
+}
+/* Rótulos maiores e escuros para melhorar a leitura. */
+label {
+  font-size: 15px;
+  font-weight: 600;
+  color: #111;
 }
 input, select, textarea {
   width: 100%;
-  padding: 10px 12px;
-  border: 2px solid var(--cinza-borda);
+  padding: 13px 14px;
+  border: 2px solid #000;
   border-radius: 8px;
   background: #fff;
-  transition: border-color .15s;
+  color: #111;
+  font-size: 16px;
+  line-height: 1.3;
+  transition: border-color .15s, box-shadow .15s;
 }
 input:hover, select:hover, textarea:hover {
-  border-color: #9aa7b2;
+  border-color: #000;
 }
+/* Foco bem evidente: borda verde grossa + halo, ajuda quem enxerga pouco. */
 input:focus, select:focus, textarea:focus {
   outline: none;
   border-color: var(--verde);
-  box-shadow: 0 0 0 3px var(--verde-claro);
+  box-shadow: 0 0 0 4px var(--verde-claro), 0 0 0 2px var(--verde);
+}
+/* Placeholder mais escuro (o padrão cinza-claro some para quem tem baixa visão). */
+input::placeholder, textarea::placeholder {
+  color: #64748b;
+  opacity: 1;
 }
 textarea { resize: vertical; min-height: 60px; }
 

@@ -242,21 +242,29 @@ body.tela-porteiro label {
 body.tela-porteiro input,
 body.tela-porteiro select,
 body.tela-porteiro textarea {
-  font-size: 16.5px !important;
-  padding: 12px 16px !important;
+  font-size: 18px !important;
+  padding: 14px 16px !important;
   border-radius: 9px !important;
-  border: 2px solid #cbd5e1 !important;
+  border: 2.5px solid #000 !important;   /* borda preta forte p/ baixa visão */
   background-color: #ffffff !important;
-  color: #0f172a !important;
-  min-height: 48px;
+  color: #000 !important;
+  font-weight: 600 !important;
+  min-height: 52px;
   box-sizing: border-box;
+}
+
+/* Placeholder mais escuro (o cinza-claro padrão some para quem enxerga pouco). */
+body.tela-porteiro input::placeholder,
+body.tela-porteiro textarea::placeholder {
+  color: #475569 !important;
+  opacity: 1 !important;
 }
 
 body.tela-porteiro input:focus,
 body.tela-porteiro select:focus,
 body.tela-porteiro textarea:focus {
   border-color: #16a34a !important;
-  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.18) !important;
+  box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.30) !important;
   outline: none !important;
 }
 
@@ -271,20 +279,22 @@ body.tela-porteiro #form-entrada .grid {
 }
 
 body.tela-porteiro #form-entrada label {
-  font-size: 14px !important;
+  font-size: 16px !important;
   font-weight: 700 !important;
-  color: #1e293b !important;
-  margin: 0 0 3px 0 !important;
+  color: #000 !important;
+  margin: 0 0 4px 0 !important;
 }
 
 body.tela-porteiro #form-entrada input,
 body.tela-porteiro #form-entrada select {
-  font-size: 15.5px !important;
-  padding: 8px 12px !important;
+  font-size: 18px !important;
+  padding: 12px 14px !important;
   border-radius: 8px !important;
-  border: 1.5px solid #cbd5e1 !important;
-  min-height: 42px !important;
-  height: 42px !important;
+  border: 2.5px solid #000 !important;   /* borda preta forte */
+  color: #000 !important;
+  font-weight: 600 !important;
+  min-height: 52px !important;
+  height: 52px !important;
   margin: 0 !important;
 }
 

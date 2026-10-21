@@ -5,7 +5,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Administração - Park Place</title>
-  <link rel="stylesheet" href="/css/style.css" />
+  <link rel="stylesheet" href="/css/style.css?v=3" />
 </head>
 
 <body>
@@ -264,7 +264,7 @@
         <span id="total-usuarios-cadastrados" class="text-muted" style="font-size:13px;"></span>
       </div>
       <div class="row-inline" style="margin-bottom:16px;">
-        <input type="text" id="busca-usuario" placeholder="Buscar por nome, lote, CPF, e-mail..."
+        <input type="text" id="busca-usuario" placeholder="Buscar por nome ou lote..."
           style="flex:1; min-width:220px;" oninput="filtrarUsuarios()" />
         <button type="button" class="secundario mini" onclick="limparBuscaUsuario()">Limpar</button>
       </div>
@@ -887,22 +887,15 @@
 
       let filtrados = todosUsuarios;
       if (busca) {
+        // Busca somente por NOME ou LOTE.
         filtrados = todosUsuarios.filter(u => {
           const nomeNorm = (u.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
           const blocoNorm = (u.bloco || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-          const emailNorm = (u.email || '').toLowerCase();
-          const tipoNorm = (u.tipo || '').toLowerCase();
-          const cpfLimpo = (u.cpf || '').replace(/\D/g, '');
-          const telLimpo = (u.telefone || '').replace(/\D/g, '');
 
           const matchNome = nomeNorm.includes(buscaNorm);
           const matchBloco = blocoNorm.includes(buscaNorm) || (buscaDigitos && blocoNorm.includes(buscaDigitos));
-          const matchEmail = emailNorm.includes(buscaNorm);
-          const matchTipo = tipoNorm.includes(buscaNorm);
-          const matchCpf = (buscaDigitos && cpfLimpo.includes(buscaDigitos)) || (u.cpf && u.cpf.toLowerCase().includes(busca));
-          const matchTel = (buscaDigitos && telLimpo.includes(buscaDigitos)) || (u.telefone && u.telefone.toLowerCase().includes(busca));
 
-          return matchNome || matchBloco || matchEmail || matchTipo || matchCpf || matchTel;
+          return matchNome || matchBloco;
         });
       }
 
@@ -962,6 +955,11 @@
               : `<button class="secundario mini" title="Clique para permitir ver as visitas de todo o lote" onclick="toggleVerLote('${u.id}', true)">&#128065; Ver lote</button>`)
           : '';
 
+        // Botão "Ver como morador" (impersonação só-leitura para teste). Só morador aprovado.
+        const btnVerComo = (u.tipo === 'morador' && !isPend)
+          ? `<button class="mini" style="background-color:#7c3aed; color:#fff;" title="Abrir a área deste morador como se fosse ele (somente leitura)" onclick="verComoMorador('${u.id}', '${escapeHtml(u.nome).replace(/'/g, "\\'")}')">&#128065; Ver como morador</button>`
+          : '';
+
         const cpfFormatado = u.cpf ? formatarDocumento(u.cpf) : '';
         const subPartes = [];
         if (cpfFormatado) subPartes.push(`CPF: ${escapeHtml(cpfFormatado)}`);
@@ -984,6 +982,7 @@
               ${btnStatus}
               ${btnNotificar}
               ${btnVerLote}
+              ${btnVerComo}
               ${'' /* Botão "Remover" ocultado a pedido. Para reativar, inserir aqui:
                  <button class="perigo mini" onclick="removerUsuario('${u.id}')">Remover</button> */}
             </td>
@@ -1035,6 +1034,15 @@
       } catch (err) {
         alert(err.message);
       }
+    }
+
+    // Abre a área do morador "como" ele (impersonação só-leitura) para teste.
+    function verComoMorador(id, nome) {
+      try {
+        sessionStorage.setItem('impersonarMorador', id);
+        sessionStorage.setItem('impersonarNome', nome || '');
+      } catch (e) {}
+      window.location.href = '/morador.html';
     }
 
     // Liga/desliga a permissão de ver as visitas do lote direto na linha.
