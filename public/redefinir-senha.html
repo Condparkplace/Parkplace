@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Redefinir senha - Park Place Residencial</title>
+  <link rel="stylesheet" href="/css/style.css?v=3" />
+</head>
+<body>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="logo">
+        <span class="login-badge">&#128274;</span>
+        <h1>Redefinir senha</h1>
+        <p>Park Place Residencial</p>
+      </div>
+
+      <!-- Formulário de nova senha -->
+      <form id="form-redefinir">
+        <label for="nova-senha">Nova senha</label>
+        <div class="password-wrap">
+          <input type="password" id="nova-senha" placeholder="Mínimo 6 caracteres" autocomplete="new-password" minlength="6" required />
+          <button type="button" class="btn-toggle-senha" onclick="toggleSenha('nova-senha', this)" title="Ver senha" aria-label="Mostrar ou ocultar senha">
+            <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+            <svg class="eye-closed hidden" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>
+          </button>
+        </div>
+
+        <label for="nova-senha2">Confirme a nova senha</label>
+        <input type="password" id="nova-senha2" placeholder="Repita a senha" autocomplete="new-password" minlength="6" required />
+
+        <button type="submit" class="block" id="btn-redefinir" style="margin-top:16px;">Salvar nova senha</button>
+      </form>
+
+      <div id="msg" class="msg hidden"></div>
+
+      <p style="text-align:center; margin-top:14px;">
+        <a href="/login.html" class="text-muted" style="text-decoration:none;">&#8592; Voltar ao login</a>
+      </p>
+    </div>
+  </div>
+
+  <script src="/js/api.js"></script>
+  <script>
+    const form = document.getElementById('form-redefinir');
+    const msg = document.getElementById('msg');
+    const btn = document.getElementById('btn-redefinir');
+
+    // O Supabase devolve o token de recuperação no fragmento da URL
+    // (ex.: #access_token=...&type=recovery). Lê de lá.
+    function lerTokenDoFragmento() {
+      const hash = (window.location.hash || '').replace(/^#/, '');
+      const params = new URLSearchParams(hash);
+      return {
+        access_token: params.get('access_token'),
+        type: params.get('type'),
+        error_description: params.get('error_description'),
+      };
+    }
+
+    const info = lerTokenDoFragmento();
+
+    // Sem token válido: avisa e esconde o formulário.
+    if (!info.access_token) {
+      form.classList.add('hidden');
+      msg.textContent = info.error_description
+        ? decodeURIComponent(info.error_description)
+        : 'Link inválido ou expirado. Volte ao login e solicite um novo e-mail de recuperação.';
+      msg.className = 'msg erro';
+      msg.classList.remove('hidden');
+    }
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      msg.classList.add('hidden');
+      const s1 = document.getElementById('nova-senha').value;
+      const s2 = document.getElementById('nova-senha2').value;
+      if (s1.length < 6) {
+        msg.textContent = 'A senha deve ter no mínimo 6 caracteres.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+      if (s1 !== s2) {
+        msg.textContent = 'As senhas não conferem.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      try {
+        await api('/api/redefinir-senha', {
+          method: 'POST',
+          body: JSON.stringify({ access_token: info.access_token, password: s1 }),
+        });
+        form.classList.add('hidden');
+        msg.textContent = 'Senha redefinida com sucesso! Redirecionando para o login...';
+        msg.className = 'msg ok';
+        msg.classList.remove('hidden');
+        setTimeout(() => { window.location.href = '/login.html'; }, 2500);
+      } catch (err) {
+        msg.textContent = err.message || 'Não foi possível redefinir a senha.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        btn.disabled = false;
+        btn.textContent = 'Salvar nova senha';
+      }
+    });
+  </script>
+</body>
+</html>

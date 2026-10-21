@@ -45,17 +45,34 @@
       </form>
 
       <div id="msg" class="msg hidden"></div>
-      <p class="text-muted" style="text-align:center; margin-top:18px;">
-        Acesso para administra&ccedil;&atilde;o, portaria e moradores.
-        <br><span style="font-size:12px; color:var(--verde-escuro, #234e32);">&#128110; Porteiros entram usando apenas <strong>Nome</strong> e <strong>senha</strong>.</span>
-      </p>
-      <p style="text-align:center; margin-top:6px;">
-        <a href="/cadastro.html" style="color:var(--verde); font-weight:600; text-decoration:none;">Sou morador e ainda não tenho cadastro</a>
+
+      <p style="text-align:center; margin-top:16px;">
+        <a href="#" id="link-esqueci" style="color:var(--verde); font-weight:600; text-decoration:none;">Esqueci minha senha</a>
       </p>
 
       <p style="text-align:center; margin-top:10px;">
         <a href="/" class="text-muted" style="text-decoration:none;">&#8592; Voltar ao site</a>
       </p>
+    </div>
+  </div>
+
+  <!-- Modal: Esqueci minha senha -->
+  <div id="modal-esqueci" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div class="card" style="width:100%; max-width:420px; margin:20px;">
+      <h3 style="margin-top:0;">Recuperar senha</h3>
+      <p class="text-muted" style="margin:0 0 14px; font-size:14px;">
+        Informe o e-mail do seu cadastro. Enviaremos um link para você criar uma nova senha.
+      </p>
+      <form id="form-esqueci">
+        <label for="esqueci-email">E-mail</label>
+        <input type="email" id="esqueci-email" placeholder="seu@email.com" autocomplete="email" required />
+        <div id="msg-esqueci" class="msg hidden" style="margin-top:12px;"></div>
+        <div class="grid grid-2" style="margin-top:16px;">
+          <button type="button" class="secundario block" onclick="fecharEsqueci()">Cancelar</button>
+          <button type="submit" class="block" id="btn-esqueci">Enviar link</button>
+        </div>
+      </form>
     </div>
   </div>
 
@@ -95,6 +112,53 @@
         msg.className = 'msg erro';
         btn.disabled = false;
         btn.textContent = 'Entrar';
+      }
+    });
+
+    // ---------- Esqueci minha senha ----------
+    const modalEsqueci = document.getElementById('modal-esqueci');
+    document.getElementById('link-esqueci').addEventListener('click', (e) => {
+      e.preventDefault();
+      document.getElementById('esqueci-email').value = document.getElementById('email').value.includes('@')
+        ? document.getElementById('email').value.trim() : '';
+      document.getElementById('msg-esqueci').classList.add('hidden');
+      modalEsqueci.classList.remove('hidden');
+      modalEsqueci.style.display = 'flex';
+      setTimeout(() => document.getElementById('esqueci-email').focus(), 50);
+    });
+
+    function fecharEsqueci() {
+      modalEsqueci.classList.add('hidden');
+      modalEsqueci.style.display = 'none';
+    }
+
+    document.getElementById('form-esqueci').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btnE = document.getElementById('btn-esqueci');
+      const msgE = document.getElementById('msg-esqueci');
+      const email = document.getElementById('esqueci-email').value.trim();
+      msgE.classList.add('hidden');
+      if (!email || !email.includes('@')) {
+        msgE.textContent = 'Informe um e-mail válido.';
+        msgE.className = 'msg erro';
+        msgE.classList.remove('hidden');
+        return;
+      }
+      btnE.disabled = true;
+      btnE.textContent = 'Enviando...';
+      try {
+        await api('/api/esqueci-senha', { method: 'POST', body: JSON.stringify({ email }) });
+        msgE.textContent = 'Se este e-mail tiver cadastro, enviamos um link para redefinir a senha. Verifique sua caixa de entrada e o spam.';
+        msgE.className = 'msg ok';
+        msgE.classList.remove('hidden');
+      } catch (err) {
+        // Mesmo em erro, mantém mensagem genérica (não revela se o e-mail existe).
+        msgE.textContent = 'Se este e-mail tiver cadastro, enviamos um link para redefinir a senha. Verifique sua caixa de entrada e o spam.';
+        msgE.className = 'msg ok';
+        msgE.classList.remove('hidden');
+      } finally {
+        btnE.disabled = false;
+        btnE.textContent = 'Enviar link';
       }
     });
   </script>

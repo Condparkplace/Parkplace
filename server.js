@@ -26,7 +26,7 @@ if (vapidPublicKey && vapidPrivateKey) {
   console.warn('[AVISO] VAPID_PUBLIC_KEY/VAPID_PRIVATE_KEY ausentes. Push desativado.');
 }
 
-const { supabaseAnon, supabaseAdmin } = require('./src/supabase');
+const { supabaseAnon, supabaseAdmin, supabaseForToken } = require('./src/supabase');
 const {
   setSessionCookie,
   clearSessionCookie,
@@ -298,6 +298,57 @@ app.post('/api/login', limiteLogin, async (req, res) => {
   res.json({ perfil: perfilValido });
 });
 
+
+// Esqueci minha senha: dispara o e-mail de recuperação do Supabase.
+// Resposta sempre genérica (não revela se o e-mail existe).
+app.post('/api/esqueci-senha', limiteLogin, async (req, res) => {
+  const email = (req.body?.email || '').trim().toLowerCase();
+  if (!email || !email.includes('@')) {
+    return res.status(400).json({ error: 'Informe um e-mail válido.' });
+  }
+
+  // Monta a URL de retorno (página onde o usuário define a nova senha).
+  const proto = (req.headers['x-forwarded-proto'] || req.protocol || 'https').split(',')[0];
+  const host = req.headers['x-forwarded-host'] || req.get('host');
+  const redirectTo = `${proto}://${host}/redefinir-senha.html`;
+
+  try {
+    await supabaseAnon.auth.resetPasswordForEmail(email, { redirectTo });
+  } catch (e) {
+    console.warn('[Esqueci senha] Falha ao enviar e-mail:', e.message);
+  }
+  // Sempre ok (evita enumeração de e-mails).
+  res.json({ ok: true });
+});
+
+// Redefinir senha: recebe o access_token (do link de recuperação) + nova senha.
+// Valida o token identificando o usuário e troca a senha via service role.
+app.post('/api/redefinir-senha', limiteLogin, async (req, res) => {
+  const { access_token, password } = req.body || {};
+  if (!access_token) {
+    return res.status(400).json({ error: 'Link inválido ou expirado. Solicite um novo e-mail de recuperação.' });
+  }
+  if (!password || String(password).length < 6) {
+    return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
+  }
+
+  try {
+    // Identifica o usuário a partir do token de recuperação.
+    const client = supabaseForToken(access_token);
+    const { data: userData, error } = await client.auth.getUser();
+    if (error || !userData?.user) {
+      return res.status(400).json({ error: 'Link inválido ou expirado. Solicite um novo e-mail de recuperação.' });
+    }
+    // Troca a senha com permissão administrativa.
+    const { error: errUpd } = await supabaseAdmin.auth.admin.updateUserById(userData.user.id, {
+      password: String(password),
+    });
+    if (errUpd) return res.status(400).json({ error: errUpd.message });
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(400).json({ error: 'Não foi possível redefinir a senha. Solicite um novo e-mail de recuperação.' });
+  }
+});
 
 // Logout
 app.post('/api/logout', (req, res) => {
