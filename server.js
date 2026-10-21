@@ -815,40 +815,46 @@ app.delete('/api/morador/recorrencias/:id', requireAuth, requireRole('morador', 
   res.json({ ok: true });
 });
 
-// Busca visitas frequentes agregadas por nome/documento para o morador
+// Busca visitas frequentes agregadas por nome/documento de TODOS os lotes (compartilhado entre moradores)
 app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   try {
-    const { data: avisosData } = await req.supabase
-      .from('avisos_visitas')
-      .select('*')
-      .order('criado_em', { ascending: false });
-
-    let regData = [];
-    if (req.perfil && req.perfil.bloco) {
-      const { data } = await supabaseAdmin
+    // Usa supabaseAdmin para buscar avisos e registros de todos os lotes
+    const [qAvisos, qRegistros] = await Promise.all([
+      supabaseAdmin
+        .from('avisos_visitas')
+        .select('*')
+        .order('criado_em', { ascending: false })
+        .limit(3000),
+      supabaseAdmin
         .from('registros_portaria')
         .select('*')
-        .eq('destino_bloco', req.perfil.bloco)
         .is('aviso_id', null)
-        .order('entrada', { ascending: false });
-      regData = data || [];
-    }
+        .order('entrada', { ascending: false })
+        .limit(3000)
+    ]);
 
-    // Agrupar por nome (ou documento)
+    const avisosData = qAvisos.data || [];
+    const regData = qRegistros.data || [];
+
+    // Agrupar por chave (documento limpo ou nome normalizado)
     const map = {};
 
     (avisosData || []).forEach(a => {
-      const nome = a.nome_visitante.trim().toLowerCase();
-      if (!map[nome]) {
-        map[nome] = { count: 0, ultimo: a };
+      const nomeLimpo = (a.nome_visitante || '').trim();
+      if (!nomeLimpo || nomeLimpo === 'Entregador iFood' || nomeLimpo === 'Encomenda') return;
+      const chave = (a.documento_visitante || '').replace(/\D/g, '') || nomeLimpo.toLowerCase();
+      if (!map[chave]) {
+        map[chave] = { count: 0, ultimo: a };
       }
-      map[nome].count++;
+      map[chave].count++;
     });
 
-    regData.forEach(r => {
-      const nome = r.nome_pessoa.trim().toLowerCase();
-      if (!map[nome]) {
-        map[nome] = {
+    (regData || []).forEach(r => {
+      const nomeLimpo = (r.nome_pessoa || '').trim();
+      if (!nomeLimpo || nomeLimpo === 'Entregador iFood' || nomeLimpo === 'Encomenda') return;
+      const chave = (r.documento || '').replace(/\D/g, '') || nomeLimpo.toLowerCase();
+      if (!map[chave]) {
+        map[chave] = {
           count: 0,
           ultimo: {
             nome_visitante: r.nome_pessoa,
@@ -860,13 +866,13 @@ app.get('/api/morador/visitas-frequentes', requireAuth, requireRole('morador', '
           }
         };
       }
-      map[nome].count++;
+      map[chave].count++;
     });
 
     const frequentes = Object.values(map)
       .sort((a, b) => b.count - a.count)
       .map(x => ({ ...x.ultimo, count: x.count }))
-      .filter(x => x.tipo !== 'Entregador');
+      .filter(x => x.tipo !== 'Entregador' && x.nome_visitante !== 'Encomenda');
 
     res.json({ frequentes });
   } catch (error) {
@@ -2508,12 +2514,17 @@ app.get('/api/admin/moradores-busca', requireAuth, requireRole('admin'), async (
 
 // Cria um novo usuario (porteiro, morador ou admin) ou promove morador existente a admin
 app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, res) => {
-  let { email, password, nome, tipo, bloco, telefone, cpf, morador_id } = req.body || {};
+  let {
+    email, password, nome, tipo, bloco, telefone, cpf, morador_id,
+    cep, endereco_logradouro, endereco_numero, endereco_bairro,
+    endereco_cidade, endereco_uf, endereco_complemento
+  } = req.body || {};
 
   nome = (nome || '').trim();
   tipo = (tipo || '').trim();
   email = (email || '').trim().toLowerCase();
   const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
+  const cepLimpo = (cep || '').replace(/\D/g, '') || null;
 
   if (cpfLimpo && !cpfValido(cpfLimpo)) {
     return res.status(400).json({ error: 'CPF inválido.' });
@@ -2530,7 +2541,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
   if (morador_id && tipo === 'admin') {
     const { data: moradorPerfil } = await supabaseAdmin
       .from('perfis')
-      .select('id, nome, bloco, telefone, cpf')
+      .select('id, nome, bloco, telefone, cpf, cep, endereco_logradouro, endereco_numero, endereco_bairro, endereco_cidade, endereco_uf, endereco_complemento')
       .eq('id', morador_id)
       .single();
 
@@ -2541,6 +2552,13 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
         bloco: bloco || moradorPerfil.bloco,
         telefone: telefone || moradorPerfil.telefone,
         cpf: cpfLimpo || moradorPerfil.cpf || null,
+        cep: cepLimpo || moradorPerfil.cep || null,
+        endereco_logradouro: endereco_logradouro !== undefined ? (endereco_logradouro?.trim() || null) : moradorPerfil.endereco_logradouro,
+        endereco_numero: endereco_numero !== undefined ? (endereco_numero?.trim() || null) : moradorPerfil.endereco_numero,
+        endereco_bairro: endereco_bairro !== undefined ? (endereco_bairro?.trim() || null) : moradorPerfil.endereco_bairro,
+        endereco_cidade: endereco_cidade !== undefined ? (endereco_cidade?.trim() || null) : moradorPerfil.endereco_cidade,
+        endereco_uf: endereco_uf !== undefined ? (endereco_uf?.trim().toUpperCase().slice(0, 2) || null) : moradorPerfil.endereco_uf,
+        endereco_complemento: endereco_complemento !== undefined ? (endereco_complemento?.trim() || null) : moradorPerfil.endereco_complemento,
         ativo: true,
         aprovado: true,
       }).eq('id', morador_id);
@@ -2618,6 +2636,13 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
           bloco: bloco || null,
           telefone: telefone || null,
           cpf: cpfLimpo || undefined,
+          cep: cepLimpo || undefined,
+          endereco_logradouro: endereco_logradouro?.trim() || undefined,
+          endereco_numero: endereco_numero?.trim() || undefined,
+          endereco_bairro: endereco_bairro?.trim() || undefined,
+          endereco_cidade: endereco_cidade?.trim() || undefined,
+          endereco_uf: endereco_uf?.trim().toUpperCase().slice(0, 2) || undefined,
+          endereco_complemento: endereco_complemento?.trim() || undefined,
           ativo: true,
           aprovado: true,
         }).eq('id', existenteAuth.id);
@@ -2644,6 +2669,13 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     bloco: bloco || null,
     telefone: telefone || null,
     cpf: cpfLimpo,
+    cep: cepLimpo,
+    endereco_logradouro: endereco_logradouro?.trim() || null,
+    endereco_numero: endereco_numero?.trim() || null,
+    endereco_bairro: endereco_bairro?.trim() || null,
+    endereco_cidade: endereco_cidade?.trim() || null,
+    endereco_uf: endereco_uf?.trim().toUpperCase().slice(0, 2) || null,
+    endereco_complemento: endereco_complemento?.trim() || null,
     ativo: true,
     aprovado: true,
   });
@@ -2654,7 +2686,11 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 // Atualiza usuario existente
 app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
-  const { nome, tipo, bloco, telefone, cpf, password, ver_lote } = req.body || {};
+  const {
+    nome, tipo, bloco, telefone, cpf, password, ver_lote,
+    cep, endereco_logradouro, endereco_numero, endereco_bairro,
+    endereco_cidade, endereco_uf, endereco_complemento
+  } = req.body || {};
 
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
     return res.status(400).json({ error: 'Tipo inválido.' });
@@ -2683,17 +2719,6 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
     }
   }
 
-  // Atualiza metadados no Auth
-  const authUpdates = {
-    user_metadata: { nome: nomeLimpo, tipo, bloco, telefone, ...(cpfLimpo !== undefined ? { cpf: cpfLimpo } : {}) }
-  };
-  // Se informou nova senha, atualiza tambem
-  if (password && password.trim().length >= 6) {
-    authUpdates.password = password.trim();
-  }
-
-  await supabaseAdmin.auth.admin.updateUserById(id, authUpdates);
-
   const updatesPerfil = {
     nome: nomeLimpo,
     tipo,
@@ -2705,6 +2730,51 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
   }
   if (ver_lote !== undefined) {
     updatesPerfil.ver_lote = !!ver_lote;
+  }
+  if (cep !== undefined) {
+    updatesPerfil.cep = String(cep).replace(/\D/g, '') || null;
+  }
+  if (endereco_logradouro !== undefined) {
+    updatesPerfil.endereco_logradouro = (endereco_logradouro || '').trim() || null;
+  }
+  if (endereco_numero !== undefined) {
+    updatesPerfil.endereco_numero = (endereco_numero || '').trim() || null;
+  }
+  if (endereco_bairro !== undefined) {
+    updatesPerfil.endereco_bairro = (endereco_bairro || '').trim() || null;
+  }
+  if (endereco_cidade !== undefined) {
+    updatesPerfil.endereco_cidade = (endereco_cidade || '').trim() || null;
+  }
+  if (endereco_uf !== undefined) {
+    updatesPerfil.endereco_uf = (endereco_uf || '').trim().toUpperCase().slice(0, 2) || null;
+  }
+  if (endereco_complemento !== undefined) {
+    updatesPerfil.endereco_complemento = (endereco_complemento || '').trim() || null;
+  }
+
+  // Atualiza metadados no Auth
+  const authUpdates = {
+    user_metadata: {
+      nome: nomeLimpo,
+      tipo,
+      bloco,
+      telefone,
+      ...(cpfLimpo !== undefined ? { cpf: cpfLimpo } : {}),
+      ...(updatesPerfil.cep !== undefined ? { cep: updatesPerfil.cep } : {}),
+      ...(updatesPerfil.endereco_logradouro !== undefined ? { endereco_logradouro: updatesPerfil.endereco_logradouro } : {}),
+      ...(updatesPerfil.endereco_numero !== undefined ? { endereco_numero: updatesPerfil.endereco_numero } : {})
+    }
+  };
+  // Se informou nova senha, atualiza tambem
+  if (password && password.trim().length >= 6) {
+    authUpdates.password = password.trim();
+  }
+
+  try {
+    await supabaseAdmin.auth.admin.updateUserById(id, authUpdates);
+  } catch (errAuth) {
+    console.warn('[Admin] Aviso ao atualizar Auth:', errAuth.message);
   }
 
   let { data, error } = await supabaseAdmin

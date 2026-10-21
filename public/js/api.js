@@ -161,6 +161,14 @@ function formatarCpf(v) {
     .replace(/\.(\d{3})(\d)/, '.$1-$2');
 }
 
+// Formata CEP no padrao 00000-000
+function formatarCep(v) {
+  if (!v) return '';
+  const d = String(v).replace(/\D/g, '').slice(0, 8);
+  if (d.length <= 5) return d;
+  return d.slice(0, 5) + '-' + d.slice(5);
+}
+
 // Formata documento (CPF ou CNPJ) com máscara padronizada
 function formatarDocumento(v) {
   if (!v) return '';

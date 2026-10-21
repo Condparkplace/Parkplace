@@ -150,6 +150,53 @@
                   <br><span class="text-muted" style="font-size:12px;">Libera a aba "Visitas gerais do lote" para este morador (visão de supervisão).</span>
                 </span>
               </label>
+
+              <!-- Endereço do morador (mesmo de Meu Cadastro) -->
+              <div id="area-endereco-morador" style="margin-top:14px; padding:14px; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <h4 style="margin:0; font-size:14px; color:var(--texto-escuro, #1e293b); display:flex; align-items:center; gap:6px;">
+                    🏠 Endereço do Morador
+                  </h4>
+                  <span class="text-muted" style="font-size:12px;">(Meu Cadastro)</span>
+                </div>
+                <p class="text-muted" style="margin:0 0 10px; font-size:12px; line-height:1.3;">
+                  Endereço atualizado no condomínio. Digite o CEP para autopreencher pelo ViaCEP.
+                </p>
+
+                <div class="grid grid-2">
+                  <div>
+                    <label for="morador_cep">CEP</label>
+                    <div class="row-inline" style="align-items:center;">
+                      <input type="text" id="morador_cep" placeholder="00000-000" maxlength="9" autocomplete="off" style="flex:1; min-width:110px;" />
+                      <button type="button" class="mini" id="btn-morador-cep" onclick="buscarCepMoradorAdmin()">Buscar</button>
+                    </div>
+                    <span id="msg-morador-cep" class="text-muted" style="font-size:12px; display:block; margin-top:3px;"></span>
+                  </div>
+                  <div>
+                    <label for="morador_end_numero">Número da casa</label>
+                    <input type="text" id="morador_end_numero" placeholder="Ex: 123" autocomplete="off" />
+                  </div>
+                  <div>
+                    <label for="morador_end_logradouro">Logradouro (Rua / Alameda)</label>
+                    <input type="text" id="morador_end_logradouro" placeholder="Ex: Alameda das Palmeiras" autocomplete="off" />
+                  </div>
+                  <div>
+                    <label for="morador_end_complemento">Complemento (opcional)</label>
+                    <input type="text" id="morador_end_complemento" placeholder="Ex: Casa, Bloco, etc." autocomplete="off" />
+                  </div>
+                  <div>
+                    <label for="morador_end_bairro">Bairro</label>
+                    <input type="text" id="morador_end_bairro" placeholder="Bairro" autocomplete="off" />
+                  </div>
+                  <div>
+                    <label for="morador_end_cidade">Cidade / UF</label>
+                    <div class="row-inline" style="align-items:center; gap:6px;">
+                      <input type="text" id="morador_end_cidade" placeholder="Cidade" autocomplete="off" style="flex:3;" />
+                      <input type="text" id="morador_end_uf" placeholder="UF" maxlength="2" style="flex:1; min-width:50px; text-transform:uppercase;" autocomplete="off" />
+                    </div>
+                  </div>
+                </div>
+              </div>
             </div>
 
             <label for="telefone">Telefone</label>
@@ -519,6 +566,18 @@
       document.getElementById('telefone').value = u.telefone || '';
       document.getElementById('cpf').value = formatarCpf(u.cpf || '');
       document.getElementById('ver_lote').checked = !!u.ver_lote;
+
+      // Endereço (de Meu Cadastro)
+      document.getElementById('morador_cep').value = formatarCep(u.cep || '');
+      document.getElementById('morador_end_numero').value = u.endereco_numero || '';
+      document.getElementById('morador_end_logradouro').value = u.endereco_logradouro || '';
+      document.getElementById('morador_end_complemento').value = u.endereco_complemento || '';
+      document.getElementById('morador_end_bairro').value = u.endereco_bairro || '';
+      document.getElementById('morador_end_cidade').value = u.endereco_cidade || '';
+      document.getElementById('morador_end_uf').value = u.endereco_uf || '';
+      const msgCepAdmin = document.getElementById('msg-morador-cep');
+      if (msgCepAdmin) msgCepAdmin.textContent = '';
+
       atualizarCamposPorTipo();
 
       // Ao editar, permite redefinir a senha se desejado
@@ -562,6 +621,17 @@
 
       document.getElementById('cpf').value = '';
 
+      // Limpa os campos de endereço
+      document.getElementById('morador_cep').value = '';
+      document.getElementById('morador_end_numero').value = '';
+      document.getElementById('morador_end_logradouro').value = '';
+      document.getElementById('morador_end_complemento').value = '';
+      document.getElementById('morador_end_bairro').value = '';
+      document.getElementById('morador_end_cidade').value = '';
+      document.getElementById('morador_end_uf').value = '';
+      const msgCepAdmin = document.getElementById('msg-morador-cep');
+      if (msgCepAdmin) msgCepAdmin.textContent = '';
+
       const inputPass = document.getElementById('password');
       inputPass.value = '';
       inputPass.type = 'password';
@@ -578,6 +648,50 @@
       document.getElementById('btn-cancelar-edicao').classList.add('hidden');
       msgUsuario.classList.add('hidden');
       atualizarCamposPorTipo();
+    }
+
+    async function buscarCepMoradorAdmin() {
+      const campoCep = document.getElementById('morador_cep');
+      const msg = document.getElementById('msg-morador-cep');
+      const cep = (campoCep.value || '').replace(/\D/g, '');
+      if (cep.length !== 8) {
+        msg.textContent = 'Digite os 8 números do CEP.';
+        msg.style.color = 'var(--vermelho, #dc2626)';
+        return;
+      }
+      msg.textContent = 'Buscando CEP...';
+      msg.style.color = '';
+      try {
+        const resp = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const d = await resp.json();
+        if (d.erro) {
+          msg.textContent = 'CEP não encontrado.';
+          msg.style.color = 'var(--vermelho, #dc2626)';
+          return;
+        }
+        document.getElementById('morador_end_logradouro').value = d.logradouro || '';
+        document.getElementById('morador_end_bairro').value = d.bairro || '';
+        document.getElementById('morador_end_cidade').value = d.localidade || '';
+        document.getElementById('morador_end_uf').value = d.uf || '';
+        msg.textContent = 'Endereço preenchido!';
+        msg.style.color = 'var(--verde-escuro, #15803d)';
+        document.getElementById('morador_end_numero').focus();
+      } catch (e) {
+        msg.textContent = 'Erro ao consultar o CEP.';
+        msg.style.color = 'var(--vermelho, #dc2626)';
+      }
+    }
+
+    const campoCepAdmin = document.getElementById('morador_cep');
+    if (campoCepAdmin) {
+      campoCepAdmin.addEventListener('input', () => {
+        let v = campoCepAdmin.value.replace(/\D/g, '').slice(0, 8);
+        if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+        campoCepAdmin.value = v;
+        if (v.replace(/\D/g, '').length === 8) {
+          buscarCepMoradorAdmin();
+        }
+      });
     }
 
     formUsuario.addEventListener('submit', async (e) => {
@@ -605,6 +719,17 @@
           telefone: document.getElementById('telefone').value.trim(),
           cpf: document.getElementById('cpf').value.replace(/\D/g, ''),
         };
+
+        // Adiciona endereço se for perfil morador ou admin
+        if (dados.tipo === 'morador' || dados.tipo === 'admin') {
+          dados.cep = document.getElementById('morador_cep').value.replace(/\D/g, '');
+          dados.endereco_numero = document.getElementById('morador_end_numero').value.trim();
+          dados.endereco_logradouro = document.getElementById('morador_end_logradouro').value.trim();
+          dados.endereco_complemento = document.getElementById('morador_end_complemento').value.trim();
+          dados.endereco_bairro = document.getElementById('morador_end_bairro').value.trim();
+          dados.endereco_cidade = document.getElementById('morador_end_cidade').value.trim();
+          dados.endereco_uf = document.getElementById('morador_end_uf').value.trim().toUpperCase();
+        }
 
         if (editandoId) {
           const payload = { ...dados };
@@ -771,6 +896,10 @@
 
       const renderLinha = (u) => {
         const local = u.bloco || '-';
+        const endResumo = [u.endereco_logradouro, u.endereco_numero].filter(Boolean).join(', ');
+        const infoEnd = endResumo
+          ? `<div class="text-muted" style="font-size:11px; margin-top:2px;" title="${escapeHtml([endResumo, u.endereco_bairro, [u.endereco_cidade, u.endereco_uf].filter(Boolean).join('/')].filter(Boolean).join(' - '))}">🏠 ${escapeHtml(endResumo)}</div>`
+          : '';
         const isPend = pendente(u);
         const status = isPend
           ? '<span class="badge pendente">Pendente</span>'
@@ -806,7 +935,7 @@
           <tr${isPend ? ' style="background:#fffbea;"' : ''}>
             <td data-label="Nome">${escapeHtml(u.nome)}${infoSub}</td>
             <td data-label="Perfil"><span class="badge ${u.tipo}">${escapeHtml(u.tipo)}</span></td>
-            <td data-label="Local">${escapeHtml(local)}</td>
+            <td data-label="Local"><strong>${escapeHtml(local)}</strong>${infoEnd}</td>
             <td data-label="Status">${status}</td>
             <td class="row-inline" data-label="">
               <button class="mini" onclick='editarUsuario(${JSON.stringify(u).replace(/'/g, "&#39;")})'>Editar</button>

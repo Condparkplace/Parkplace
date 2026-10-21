@@ -12,7 +12,7 @@
 <body class="tela-porteiro">
   <div class="container">
     <div class="tabs">
-      <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">&#128273; Registrar entrada</button>
+      <button class="ativo" data-tab="entrada" onclick="trocarAba('entrada')">&#128273; Entrada</button>
       <button data-tab="presentes" onclick="trocarAba('presentes')">&#128694; No condomínio</button>
       <button data-tab="encomendas" onclick="trocarAba('encomendas')">&#128230; Encomendas</button>
       <button data-tab="condominio" onclick="trocarAba('condominio')">&#127968; Moradores</button>
@@ -23,8 +23,16 @@
     <!-- Registrar entrada (unificada com busca) -->
     <section id="tab-entrada" class="card">
       <div
-        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin:0 0 16px;">
-        <h2 style="margin:0;">Registrar entrada</h2>
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin:0 0 16px;">
+        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+          <h2 style="margin:0; white-space:nowrap;">Registrar entrada</h2>
+          <div class="botoes-topo-acoes" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+            <button type="button" class="btn-acao-destaque btn-ifood btn-acao-compacto"
+              onclick="abrirModalIfood()">&#128757; iFood / Ubber</button>
+            <button type="button" class="btn-acao-destaque btn-encomenda btn-acao-compacto"
+              onclick="abrirModalEncomenda()">&#128230; Recebimento de Encomenda</button>
+          </div>
+        </div>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <span class="badge porteiro">&#128110; Porteiro de plantão: <strong id="porteiro-plantao"></strong></span>
           <button type="button" class="secundario mini" id="btn-trocar-turno" onclick="abrirTrocaTurno()"
@@ -35,55 +43,21 @@
       <!-- Notificações ativas da administração para o porteiro -->
       <div id="area-notif-porteiro"></div>
 
-      <!-- Botoes de acao principais -->
-      <div class="row-inline" style="margin-bottom: 22px; gap: 14px; flex-wrap: wrap;">
-        <button type="button"
-          id="btn-visita-prestadores"
-          class="btn-acao-destaque btn-visitas"
-          style="flex: 1; min-width: 180px;"
-          onclick="alternarBuscaCpf()">&#128100; Visita / Prestadores</button>
-        <button type="button"
-          class="btn-acao-destaque btn-ifood"
-          style="flex: 1; min-width: 180px;"
-          onclick="abrirModalIfood()">&#128757; iFood</button>
-        <button type="button"
-          class="btn-acao-destaque btn-encomenda"
-          style="flex: 1; min-width: 180px;"
-          onclick="abrirModalEncomenda()">&#128230; Recebimento de Encomenda</button>
-      </div>
-
-      <!-- Linha com as duas buscas lado a lado -->
-      <div style="display:flex; gap:14px; align-items:flex-start; flex-wrap:wrap; margin:0 0 18px;">
-        <!-- Busca rapida por documento (metade da largura) -->
-        <div id="area-busca-cpf"
-          style="background:var(--verde-claro); border-radius:8px; padding:14px; flex:1 1 320px; min-width:280px;">
-          <label for="busca-doc" style="margin-top:0;">Buscar/Cadastrar Visitas por CPF
-            cadastro)</label>
-          <div class="row-inline" style="align-items:center;">
-            <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14" style="flex:1; min-width:140px;" />
-            <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
-            <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
-          </div>
-          <span id="aviso-cpf-busca" class="hidden" style="display:block; margin-top:6px; font-size:13px; font-weight:600;"></span>
-          <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
+      <!-- Busca rapida por documento -->
+      <div id="area-busca-cpf"
+        style="background:var(--verde-claro); border-radius:12px; padding:14px 18px; margin:0 0 8px;">
+        <label for="busca-doc"
+          style="margin-top:0; margin-bottom:6px; font-weight:700; color:#1e293b; font-size:14px; display:block;">Buscar
+          / Cadastrar Visitas por CPF</label>
+        <div class="row-inline" style="align-items:center; gap:8px;">
+          <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14"
+            style="flex:1; min-width:180px; margin:0;" />
+          <button type="button" class="mini" id="btn-buscar-doc" onclick="buscarPorDocumento()">Buscar</button>
+          <button type="button" class="secundario mini" onclick="limparFormEntrada()">Limpar</button>
         </div>
-
-        <!-- Busca na lista de visitas avisadas (metade da largura) -->
-        <div id="area-busca-previstas"
-          style="background:#eef2f7; border-radius:8px; padding:14px; flex:1 1 320px; min-width:280px;">
-          <label for="busca-morador-previstas" style="margin-top:0;">Buscar nas visitas AGENDADAS</label>
-          <div class="row-inline" style="align-items:center;">
-            <input type="search" id="busca-morador-previstas" placeholder="Buscar por visitante, morador ou documento..."
-              name="campo-sem-autofill-pp" autocomplete="off" autocorrect="off" autocapitalize="off"
-              spellcheck="false" data-form-type="other" data-lpignore="true" readonly
-              onfocus="this.removeAttribute('readonly')"
-              oninput="carregarPrevistas(null, true)" style="flex:1; min-width:140px; margin:0;" />
-            <button type="button" id="btn-atualizar-previstas" onclick="atualizarGradeVisitantes()"
-              style="padding:9px 14px; font-weight:600; font-size:13px; display:inline-flex; align-items:center; gap:6px; background-color:#2b6cb0; color:white; border:none; border-radius:6px; cursor:pointer; height:38px; white-space:nowrap;">
-              &#128259; ATUALIZAR
-            </button>
-          </div>
-        </div>
+        <span id="aviso-cpf-busca" class="hidden"
+          style="display:block; margin-top:6px; font-size:13px; font-weight:600;"></span>
+        <div id="msg-busca" class="msg hidden" style="margin-top:10px;"></div>
       </div>
 
       <!-- Faixa amarela de alerta quando o CPF buscado for de um MORADOR -->
@@ -111,7 +85,8 @@
           <strong style="color:#854d0e; font-size:15px; display:block; margin-bottom:4px;">
             OBSERVAÇÃO DO CADASTRO:
           </strong>
-          <span id="alerta-obs-visitante-texto" style="color:#713f12; font-size:14px; line-height:1.5; display:block; font-weight:600; white-space:pre-wrap;"></span>
+          <span id="alerta-obs-visitante-texto"
+            style="color:#713f12; font-size:14px; line-height:1.5; display:block; font-weight:600; white-space:pre-wrap;"></span>
         </div>
       </div>
 
@@ -125,17 +100,15 @@
             <label for="tipo">Tipo *</label>
             <select id="tipo" required onchange="toggleEndereco()">
               <option value="" disabled selected>Selecionar</option>
-              <option value="Morador">Morador</option>
               <option value="Visitante">Visitante</option>
               <option value="Prestador">Prestador de serviço</option>
-              <option value="Entregador">Entregador</option>
-              <option value="Outro">Outro</option>
             </select>
           </div>
           <div>
             <label for="documento">Documento</label>
             <input type="text" id="documento" inputmode="numeric" maxlength="14" />
-            <span id="aviso-cpf-documento" class="hidden" style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
+            <span id="aviso-cpf-documento" class="hidden"
+              style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
           </div>
           <div>
             <label for="acesso_tipo_entrada">Acesso *</label>
@@ -148,7 +121,8 @@
             <label for="veiculo_placa">Placa do veículo *</label>
             <input type="text" id="veiculo_placa" placeholder="Ex: ABC1D23" style="text-transform: uppercase;" />
             <!-- Aviso exibido no lugar do input quando o acesso é a pé (mantém a célula fixa no grid) -->
-            <div id="placa-ape-aviso" class="hidden" style="padding:10px 12px; border:1px dashed var(--cinza-borda); border-radius:8px; color:var(--texto-suave); font-size:14px; background:#f8fafc;">
+            <div id="placa-ape-aviso" class="hidden"
+              style="padding:10px 12px; border:1px dashed var(--cinza-borda); border-radius:8px; color:var(--texto-suave); font-size:14px; background:#f8fafc;">
               🚶 Sem veículo (entrada a pé)
             </div>
           </div>
@@ -226,8 +200,6 @@
           </div>
         </div>
 
-        <label for="observacao">Observação</label>
-        <textarea id="observacao"></textarea>
         <input type="hidden" id="aviso_id" />
         <button type="submit" class="block" id="btn-entrada">Confirmar entrada</button>
       </form>
@@ -235,8 +207,9 @@
 
       <!-- Lista de visitas previstas (sempre visivel) -->
       <div id="painel-previstas" style="margin-top:22px; border-top:2px solid var(--cinza-borda); padding-top:16px;">
-        <div id="cabecalho-previstas">
-          <h3 style="margin:0 0 12px;">Visitas avisadas pelos moradores</h3>
+        <div id="cabecalho-previstas"
+          style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin-bottom:12px;">
+          <h3 style="margin:0; font-size:20px; color:#1e293b; white-space:nowrap;">Visitas avisadas pelos moradores</h3>
         </div>
         <div id="lista-previstas">
           <p class="vazio">Carregando...</p>
@@ -255,10 +228,11 @@
 
     <!-- Encomendas -->
     <section id="tab-encomendas" class="card hidden">
-      <div class="row-inline" style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
+      <div class="row-inline"
+        style="justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:12px;">
         <h2 style="margin:0;">Encomendas Pendentes de Retirada</h2>
-        <button type="button"
-          style="background-color: #2b6cb0; color: white; padding: 10px 18px; font-size: 14px; font-weight:600; border:none; border-radius:6px; cursor:pointer;"
+        <button type="button" class="btn-amarelo-encomenda"
+          style="padding: 10px 18px; font-size: 14px; display:inline-flex; align-items:center; gap:6px;"
           onclick="abrirModalEncomenda()">&#128230; Recebimento de Encomenda</button>
       </div>
       <div id="msg-encomenda-tab" class="msg hidden"></div>
@@ -306,9 +280,9 @@
       </p>
       <div class="row-inline" style="margin-bottom:14px; flex-wrap: wrap; gap:10px;">
         <input type="search" id="busca-condominio" placeholder="Digite o lote (ex: 12) ou o nome do morador..."
-          name="busca-condominio-pp" autocomplete="off" autocorrect="off" autocapitalize="off"
-          spellcheck="false" data-form-type="other" data-lpignore="true"
-          oninput="buscarCondominio()" style="flex:1; min-width:260px; margin:0;" />
+          name="busca-condominio-pp" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false"
+          data-form-type="other" data-lpignore="true" oninput="buscarCondominio()"
+          style="flex:1; min-width:260px; margin:0;" />
         <button type="button" class="secundario" onclick="limparBuscaCondominio()">Limpar</button>
       </div>
       <div id="lista-condominio">
@@ -317,18 +291,19 @@
     </section>
 
     <!-- Mapa do condominio -->
-    <section id="tab-mapa" class="card hidden">
-      <h2>Mapa do condomínio</h2>
-      <p class="text-muted" style="margin:0 0 14px; font-size:14px;">
-        Clique em um lote para destacá-lo. Use a busca para localizar rapidamente.
-      </p>
-      <div class="row-inline" style="margin-bottom:14px; flex-wrap: wrap; gap:10px;">
-        <input type="search" id="busca-mapa" placeholder="Destacar lote (ex: 11)..."
-          autocomplete="off" oninput="destacarLoteMapa(this.value)"
-          style="max-width:260px; margin:0;" />
-        <button type="button" class="secundario" onclick="limparDestaqueMapa()">Limpar destaque</button>
+    <section id="tab-mapa" class="card hidden" style="padding: 16px 20px;">
+      <div style="display:flex; align-items:center; flex-wrap:wrap; gap:16px; margin-bottom:8px;">
+        <h2 style="margin:0; white-space:nowrap;">Mapa do condomínio</h2>
+        <div style="display:inline-flex; align-items:center; gap:8px; margin:0; flex-wrap:nowrap;">
+          <input type="search" id="busca-mapa" placeholder="Destacar lote (ex: 11)..." autocomplete="off"
+            oninput="destacarLoteMapa(this.value)" style="width:230px; height:42px; font-size:14.5px; padding:0 12px; margin:0; box-sizing:border-box;" />
+          <button type="button" class="secundario mini" onclick="limparDestaqueMapa()"
+            style="height:42px; padding:0 16px; font-size:13.5px; margin:0; white-space:nowrap; flex-shrink:0;">Limpar destaque</button>
+        </div>
       </div>
-      <div id="mapa-container" style="overflow:auto; border:1px solid var(--cinza-borda); border-radius:10px; background:#eef2f7; padding:10px;"></div>
+      <div id="mapa-container"
+        style="overflow:auto; border:1px solid var(--cinza-borda); border-radius:10px; background:#eef2f7; padding:6px; margin:0;">
+      </div>
     </section>
   </div>
 
@@ -356,33 +331,48 @@
       iniciarAutoRefreshPrevistas();
     })();
 
-    // ---------- Auto-refresh da lista de visitas avisadas ----------
-    // A cada 5 minutos recarrega a lista, MAS só quando for seguro, para não
-    // atrapalhar o porteiro no meio de uma busca ou de um cadastro de entrada.
-    const INTERVALO_REFRESH_PREVISTAS = 5 * 60 * 1000; // 5 minutos
+    // ---------- Auto-refresh inteligente da lista de visitas avisadas ----------
+    // Atualiza automaticamente, MAS só quando NÃO estiver cadastrando nem movimentando a tela.
+    let ultimoMovimentoUsuario = Date.now();
+    ['scroll', 'mousemove', 'keydown', 'touchstart'].forEach(evt => {
+      window.addEventListener(evt, () => {
+        ultimoMovimentoUsuario = Date.now();
+      }, { passive: true });
+    });
+
+    const INTERVALO_REFRESH_PREVISTAS = 15 * 1000; // 15 segundos
 
     function podeAtualizarPrevistas() {
       // 1) Só na aba "Registrar entrada".
       const tabEntrada = document.getElementById('tab-entrada');
       if (!tabEntrada || tabEntrada.classList.contains('hidden')) return false;
-      // 2) Não atualizar se o formulário de entrada estiver aberto (cadastro em andamento).
+
+      // 2) Não atualizar se estiver movimentando a tela (scroll, mouse, toque nos últimos 4 segundos).
+      if (Date.now() - ultimoMovimentoUsuario < 4000) return false;
+
+      // 3) Não atualizar se algum modal estiver aberto (iFood, Encomenda, Seleção de Morador, etc.).
+      const modaisAbertos = document.querySelectorAll(
+        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-retirada-encomenda:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
+      );
+      if (modaisAbertos.length > 0) return false;
+
+      // 4) Não atualizar se o formulário de entrada estiver aberto (cadastro em andamento).
       if (formEntrada && !formEntrada.classList.contains('hidden')) return false;
-      // 3) Não atualizar se houver busca por CPF/documento em andamento.
+
+      // 5) Não atualizar se houver busca ou digitação por CPF/documento em andamento.
       const buscaDoc = document.getElementById('busca-doc');
       if (buscaDoc && buscaDoc.value.trim()) return false;
-      // 4) Não atualizar se houver texto na busca da própria lista.
-      const buscaLista = document.getElementById('busca-morador-previstas');
-      if (buscaLista && buscaLista.value.trim()) return false;
-      // 5) Não atualizar se o foco estiver em algum campo de texto (digitando).
+
+      // 6) Não atualizar se o foco estiver em qualquer campo de digitação/seleção.
       const ativo = document.activeElement;
       if (ativo && (ativo.tagName === 'INPUT' || ativo.tagName === 'TEXTAREA' || ativo.tagName === 'SELECT')) return false;
+
       return true;
     }
 
     function iniciarAutoRefreshPrevistas() {
       setInterval(() => {
         if (podeAtualizarPrevistas()) {
-          // Recarrega só a lista (busca nova no servidor), sem destaque e sem mexer no formulário.
           carregarPrevistas();
         }
       }, INTERVALO_REFRESH_PREVISTAS);
@@ -693,7 +683,8 @@
     // Limpa a busca rapida de previstas
     function limparFiltroPrevistas(ev) {
       if (ev) ev.preventDefault();
-      document.getElementById('busca-morador-previstas').value = '';
+      const el = document.getElementById('busca-morador-previstas');
+      if (el) el.value = '';
       carregarPrevistas();
     }
 
@@ -870,7 +861,7 @@
             } else {
               if (alertaObs) alertaObs.classList.add('hidden');
             }
-          } catch (_) {}
+          } catch (_) { }
 
           // Destaca a linha deste documento e NAO abre o formulario.
           formEntrada.classList.add('hidden');
@@ -891,8 +882,8 @@
           mostrarFormEntrada();
           desbloquearNomeDocumento(); // cadastro novo: pode editar nome e documento
           togglePlacaEntrada();        // garante o estado do campo de placa
-          msg.textContent = 'Nenhum cadastro encontrado. Preencha os dados para cadastrar o visitante e registrar a entrada.';
-          msg.className = 'msg erro';
+          msg.textContent = '';
+          msg.className = 'msg hidden';
           document.getElementById('documento').value = doc;
           document.getElementById('nome_pessoa').focus();
           return;
@@ -942,7 +933,7 @@
         document.getElementById('nome_pessoa').value = p.nome_pessoa || '';
         const selectTipo = document.getElementById('tipo');
         selectTipo.value = p.tipo || '';
-        if (!selectTipo.value) selectTipo.value = r.eh_morador ? 'Morador' : 'Visitante';
+        if (!selectTipo.value) selectTipo.value = 'Visitante';
         toggleEndereco();
         document.getElementById('documento').value = p.documento ? (formatarCpf(p.documento) || p.documento) : doc;
         document.getElementById('veiculo_placa').value = ''; // Sempre zerada para nova entrada, pois cada entrada pode ter veículo diferente
@@ -1336,7 +1327,7 @@
         destino_bloco: lote,
         endereco_visitante: montarEnderecoVisitante(),
         cep_visitante: document.getElementById('cep').value.trim() || null,
-        observacaoOriginal: document.getElementById('observacao').value.trim(),
+        observacaoOriginal: document.getElementById('observacao')?.value?.trim() || '',
       };
 
       abrirModalSelecionarMorador(lote);
@@ -1833,35 +1824,35 @@
     // (R. João de Favre) corre à direita e a R. Yossef Yatim no miolo.
     const MAPA_LOTES = [
       // id, x, y, largura, altura
-      { n: 1,  x: 325, y: 20,  w: 150, h: 90 },
+      { n: 1, x: 325, y: 20, w: 150, h: 90 },
 
-      { n: 5,  x: 40,  y: 150, w: 90,  h: 120 },
-      { n: 4,  x: 135, y: 150, w: 90,  h: 120 },
-      { n: 3,  x: 230, y: 150, w: 90,  h: 120 },
-      { n: 2,  x: 325, y: 150, w: 90,  h: 120 },
+      { n: 5, x: 40, y: 150, w: 90, h: 120 },
+      { n: 4, x: 135, y: 150, w: 90, h: 120 },
+      { n: 3, x: 230, y: 150, w: 90, h: 120 },
+      { n: 2, x: 325, y: 150, w: 90, h: 120 },
 
-      { n: 6,  x: 40,  y: 300, w: 90,  h: 130 },
-      { n: 7,  x: 135, y: 300, w: 90,  h: 130 },
-      { n: 8,  x: 230, y: 300, w: 90,  h: 130 },
-      { n: 9,  x: 325, y: 300, w: 70,  h: 130 },
-      { n: 10, x: 400, y: 300, w: 90,  h: 60  },
-      { n: 11, x: 400, y: 365, w: 90,  h: 65  },
+      { n: 6, x: 40, y: 300, w: 90, h: 130 },
+      { n: 7, x: 135, y: 300, w: 90, h: 130 },
+      { n: 8, x: 230, y: 300, w: 90, h: 130 },
+      { n: 9, x: 325, y: 300, w: 70, h: 130 },
+      { n: 10, x: 400, y: 300, w: 90, h: 60 },
+      { n: 11, x: 400, y: 365, w: 90, h: 65 },
 
-      { n: 16, x: 40,  y: 445, w: 90,  h: 120 },
-      { n: 15, x: 135, y: 445, w: 90,  h: 120 },
-      { n: 14, x: 230, y: 445, w: 90,  h: 120 },
-      { n: 13, x: 325, y: 445, w: 75,  h: 120 },
-      { n: 12, x: 405, y: 445, w: 95,  h: 120 },
+      { n: 16, x: 40, y: 445, w: 90, h: 120 },
+      { n: 15, x: 135, y: 445, w: 90, h: 120 },
+      { n: 14, x: 230, y: 445, w: 90, h: 120 },
+      { n: 13, x: 325, y: 445, w: 75, h: 120 },
+      { n: 12, x: 405, y: 445, w: 95, h: 120 },
 
-      { n: 17, x: 40,  y: 610, w: 85,  h: 130 },
-      { n: 18, x: 130, y: 610, w: 85,  h: 130 },
-      { n: 19, x: 220, y: 610, w: 85,  h: 130 },
-      { n: 20, x: 310, y: 610, w: 85,  h: 130 },
-      { n: 21, x: 400, y: 610, w: 85,  h: 130 },
-      { n: 22, x: 490, y: 610, w: 85,  h: 130 },
-      { n: 23, x: 580, y: 610, w: 70,  h: 130 },
-      { n: 24, x: 655, y: 610, w: 80,  h: 130 },
-      { n: 25, x: 740, y: 610, w: 80,  h: 130 },
+      { n: 17, x: 40, y: 610, w: 85, h: 130 },
+      { n: 18, x: 130, y: 610, w: 85, h: 130 },
+      { n: 19, x: 220, y: 610, w: 85, h: 130 },
+      { n: 20, x: 310, y: 610, w: 85, h: 130 },
+      { n: 21, x: 400, y: 610, w: 85, h: 130 },
+      { n: 22, x: 490, y: 610, w: 85, h: 130 },
+      { n: 23, x: 580, y: 610, w: 70, h: 130 },
+      { n: 24, x: 655, y: 610, w: 80, h: 130 },
+      { n: 25, x: 740, y: 610, w: 80, h: 130 },
     ];
 
     let loteDestacadoMapa = null;
@@ -2058,17 +2049,18 @@
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);">
     <div
       style="background:#fff; padding:24px; border-radius:12px; width:92%; max-width:480px; box-shadow:0 8px 30px rgba(0,0,0,0.25); max-height:88vh; overflow-y:auto; border-top:6px solid #ea1d2c;">
-      
+
       <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
         <div>
           <h3 style="margin:0; font-size:22px; color:#b91c1c; display:flex; align-items:center; gap:8px;">
-            🏍️ Entregador iFood
+            🏍️ Motorista iFood / Ubber
           </h3>
           <p id="ifood-modal-subtitulo" class="text-muted" style="margin:4px 0 0; font-size:14px;">
-            Informe o nome do entregador e a placa do veículo
+            Informe o nome do motorista, veículo, placa e o lote de destino
           </p>
         </div>
-        <button type="button" onclick="fecharModalIfood()" style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:#64748b; padding:0 4px;">&times;</button>
+        <button type="button" onclick="fecharModalIfood()"
+          style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:#64748b; padding:0 4px;">&times;</button>
       </div>
 
       <!-- Campos ocultos de controle -->
@@ -2081,17 +2073,53 @@
       <div id="ifood-destino-resumo" class="hidden"
         style="background:#fef2f2; border:1.5px solid #fca5a5; border-radius:10px; padding:12px 14px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center;">
         <div>
-          <div style="font-size:11px; font-weight:800; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px;">Destino da Entrega</div>
+          <div style="font-size:11px; font-weight:800; color:#991b1b; text-transform:uppercase; letter-spacing:0.5px;">
+            Destino da Entrega</div>
           <div id="ifood-destino-texto" style="font-size:16px; font-weight:700; color:#7f1d1d; margin-top:2px;">-</div>
           <div id="ifood-destino-badge" style="font-size:12px; color:#b91c1c; margin-top:2px;">-</div>
         </div>
-        <button type="button" id="btn-trocar-morador-ifood" class="mini secundario" onclick="trocarMoradorIfood()" style="font-size:12px; padding:6px 10px;">Alterar</button>
+        <button type="button" id="btn-trocar-morador-ifood" class="mini secundario" onclick="trocarMoradorIfood()"
+          style="font-size:12px; padding:6px 10px;">Alterar</button>
       </div>
 
-      <!-- Area de Busca de Lote (quando aberto direto da portaria sem aviso) -->
+      <!-- 1. Nome do Motorista -->
+      <div style="margin-bottom:12px;">
+        <label for="ifood-nome" style="font-weight:600; font-size:14px; margin-top:0;">Nome do Motorista *</label>
+        <input type="text" id="ifood-nome" placeholder="Ex: Carlos Silva" autocomplete="off"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('ifood-placa').focus();}"
+          style="width:100%; font-size:16px; padding:10px 12px;" />
+      </div>
+
+      <!-- 2. Se é carro moto + 3. Placa -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+        <div id="wrap-ifood-tipo-acesso">
+          <label for="ifood-acesso-tipo" style="font-weight:600; font-size:13px; margin-top:0;">Veículo *</label>
+          <select id="ifood-acesso-tipo" onchange="togglePlacaIfood()"
+            style="width:100%; font-size:15px; padding:10px;">
+            <option value="moto" selected>🏍️ Moto</option>
+            <option value="carro">🚗 Carro</option>
+            <option value="pe">🚶 A pé / Bike</option>
+          </select>
+        </div>
+
+        <div id="wrap-ifood-placa">
+          <label for="ifood-placa" id="lbl-ifood-placa" style="font-weight:600; font-size:13px; margin-top:0;">Placa do veículo *</label>
+          <input type="text" id="ifood-placa" placeholder="Ex: ABC1D23" maxlength="8"
+            style="width:100%; text-transform:uppercase; font-size:16px; font-weight:700; letter-spacing:1px; padding:10px 12px;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('ifood-lote').focus();}" />
+        </div>
+      </div>
+
+      <div id="ifood-placa-ape-aviso" class="hidden"
+        style="margin-bottom:12px; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px; color:#64748b; font-size:13px; background:#f8fafc; text-align:center;">
+        🚶 Entrada sem veículo motorizado (A pé / Bicicleta)
+      </div>
+
+      <!-- 4. Seleção de Lote -->
       <div id="ifood-area-busca-lote">
-        <label for="ifood-lote" style="font-weight:600; font-size:14px;">Lote de destino *</label>
+        <label for="ifood-lote" style="font-weight:600; font-size:14px; margin-top:0;">Seleção de lote *</label>
         <input type="text" id="ifood-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
+          oninput="buscarMoradoresIfoodDebounced()"
           onchange="buscarMoradoresIfood()"
           onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarMoradoresIfood();}"
           style="width:100%; font-size:16px; padding:10px 12px;" />
@@ -2126,50 +2154,19 @@
           <option value="Lote 28"></option>
         </datalist>
 
+        <!-- 5. Aí abre a seleção de moradores do lote -->
         <div id="ifood-moradores-container" class="hidden" style="margin-top: 14px;">
-          <label style="font-weight:600; font-size:13px; color:#475569;">Selecione o morador solicitante:</label>
+          <label style="font-weight:600; font-size:13px; color:#475569;">Selecione o morador para confirmar:</label>
           <div id="ifood-lista-moradores" style="display:flex; flex-direction:column; gap:8px; margin-top:6px;"></div>
-        </div>
-      </div>
-
-      <!-- Area dos Dados do Entregador (Nome + Placa) -->
-      <div id="ifood-dados-entregador" class="hidden" style="margin-top:14px;">
-        <div style="margin-bottom:12px;">
-          <label for="ifood-nome" style="font-weight:600; font-size:14px;">Nome do entregador *</label>
-          <input type="text" id="ifood-nome" placeholder="Ex: Carlos Silva" autocomplete="off"
-            onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('ifood-placa').focus();}"
-            style="width:100%; font-size:16px; padding:10px 12px;" />
-        </div>
-
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
-          <div id="wrap-ifood-tipo-acesso">
-            <label for="ifood-acesso-tipo" style="font-weight:600; font-size:13px;">Tipo de acesso *</label>
-            <select id="ifood-acesso-tipo" onchange="togglePlacaIfood()" style="width:100%; font-size:15px; padding:10px;">
-              <option value="moto" selected>🏍️ Moto</option>
-              <option value="carro">🚗 Carro</option>
-              <option value="pe">🚶 A pé / Bike</option>
-            </select>
-          </div>
-
-          <div id="wrap-ifood-placa">
-            <label for="ifood-placa" id="lbl-ifood-placa" style="font-weight:600; font-size:13px;">Placa do veículo *</label>
-            <input type="text" id="ifood-placa" placeholder="Ex: ABC1D23" maxlength="8"
-              style="width:100%; text-transform:uppercase; font-size:16px; font-weight:700; letter-spacing:1px; padding:10px 12px;"
-              onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarEntradaIfood();}" />
-          </div>
-        </div>
-
-        <div id="ifood-placa-ape-aviso" class="hidden"
-          style="margin-top:10px; padding:10px 12px; border:1px dashed #cbd5e1; border-radius:8px; color:#64748b; font-size:13px; background:#f8fafc; text-align:center;">
-          🚶 Entrada sem veículo motorizado (A pé / Bicicleta)
         </div>
       </div>
 
       <div id="msg-ifood" class="msg hidden" style="margin-top:14px;"></div>
 
       <div class="row-inline" style="justify-content: flex-end; gap:10px; margin-top:22px;">
-        <button type="button" class="secundario" onclick="fecharModalIfood()" style="padding:11px 18px; font-size:15px;">Cancelar</button>
-        <button type="button" id="btn-confirmar-ifood" class="hidden"
+        <button type="button" class="secundario" onclick="fecharModalIfood()"
+          style="padding:11px 18px; font-size:15px;">Cancelar</button>
+        <button type="button" id="btn-confirmar-ifood"
           style="background-color:#ea1d2c; color:white; font-weight:700; padding:11px 22px; font-size:15px; border-radius:8px; border:none; cursor:pointer;"
           onclick="confirmarEntradaIfood()">
           ✅ Registrar Entrada
@@ -2183,7 +2180,7 @@
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
     <div
       style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:80vh; overflow-y:auto;">
-      <h3 style="margin-top:0;">Recebimento de Encomenda</h3>
+      <h3 style="margin-top:0;">Receber Encomenda</h3>
       <p class="text-muted" style="margin-top:0; margin-bottom:14px; font-size:14px;">Informe a quantidade, selecione o
         lote e clique no morador correspondente.</p>
 
@@ -2233,9 +2230,10 @@
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
     <div
       style="background:#fff; padding:22px; border-radius:12px; width:100%; max-width:440px; box-shadow:0 8px 24px rgba(0,0,0,0.2); max-height:85vh; overflow-y:auto; display:flex; flex-direction:column; gap:14px;">
-      
+
       <div style="border-bottom:1px solid var(--cinza-borda); padding-bottom:12px;">
-        <h3 style="margin:0 0 6px; font-size:18px; color:var(--texto-escuro);">&#128100; Com qual morador vai falar?</h3>
+        <h3 style="margin:0 0 6px; font-size:18px; color:var(--texto-escuro);">&#128100; Com qual morador vai falar?
+        </h3>
         <p class="text-muted" style="margin:0; font-size:14px;">
           Lote de destino: <strong id="modal-morador-lote-destaque" style="color:var(--verde-escuro);"></strong>
         </p>
@@ -2243,17 +2241,23 @@
 
       <div id="modal-morador-lista" style="display:flex; flex-direction:column; gap:8px;"></div>
 
-      <div id="modal-morador-outro-container" style="background:var(--fundo-cor); border:1px dashed var(--cinza-borda); border-radius:8px; padding:12px;">
-        <label for="modal-morador-outro-nome" style="font-size:13px; margin:0 0 6px; display:block; font-weight:600;">Outro morador / Não listado:</label>
+      <div id="modal-morador-outro-container"
+        style="background:var(--fundo-cor); border:1px dashed var(--cinza-borda); border-radius:8px; padding:12px;">
+        <label for="modal-morador-outro-nome"
+          style="font-size:13px; margin:0 0 6px; display:block; font-weight:600;">Outro morador / Não listado:</label>
         <div class="row-inline" style="gap:8px;">
-          <input type="text" id="modal-morador-outro-nome" placeholder="Digite o nome do morador..." style="flex:1; padding:8px 10px; font-size:14px;" onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarComOutroMorador();}" />
-          <button type="button" class="mini" style="background-color:var(--verde); color:white; white-space:nowrap;" onclick="confirmarComOutroMorador()">Confirmar</button>
+          <input type="text" id="modal-morador-outro-nome" placeholder="Digite o nome do morador..."
+            style="flex:1; padding:8px 10px; font-size:14px;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarComOutroMorador();}" />
+          <button type="button" class="mini" style="background-color:var(--verde); color:white; white-space:nowrap;"
+            onclick="confirmarComOutroMorador()">Confirmar</button>
         </div>
       </div>
 
       <div id="msg-modal-morador" class="msg hidden"></div>
 
-      <div class="row-inline" style="justify-content:flex-start; align-items:center; margin-top:6px; padding-top:12px; border-top:1px solid var(--cinza-borda);">
+      <div class="row-inline"
+        style="justify-content:flex-start; align-items:center; margin-top:6px; padding-top:12px; border-top:1px solid var(--cinza-borda);">
         <button type="button" class="secundario" onclick="fecharModalSelecionarMorador()">Voltar / Cancelar</button>
       </div>
     </div>
@@ -2264,21 +2268,24 @@
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
     <div
       style="background:#fff; border-radius:12px; width:100%; max-width:540px; box-shadow:0 20px 40px rgba(0,0,0,0.25); overflow:hidden; display:flex; flex-direction:column;">
-      
+
       <!-- Cabeçalho do Modal -->
-      <div style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
+      <div
+        style="padding:16px 20px; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center; background:#f8fafc;">
         <div style="display:flex; align-items:center; gap:10px;">
           <span style="font-size:22px;">🚪</span>
           <h3 style="margin:0; font-size:17px; font-weight:700; color:#0f172a;">Confirmar Saída</h3>
         </div>
         <button type="button" class="secundario mini" onclick="fecharModalConfirmarSaida()"
-          style="border:none; font-size:20px; line-height:1; padding:4px 8px; cursor:pointer;" title="Fechar">&times;</button>
+          style="border:none; font-size:20px; line-height:1; padding:4px 8px; cursor:pointer;"
+          title="Fechar">&times;</button>
       </div>
 
       <!-- Corpo -->
       <div style="padding:20px; display:flex; flex-direction:column; gap:16px;">
         <!-- Card com identificação da pessoa -->
-        <div style="background:#f1f5f9; border-radius:8px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <div
+          style="background:#f1f5f9; border-radius:8px; padding:12px 14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
           <div>
             <div style="font-size:15px; font-weight:700; color:#0f172a;" id="modal-saida-nome">-</div>
             <div style="font-size:13px; color:#64748b; margin-top:2px;">
@@ -2290,18 +2297,22 @@
 
         <!-- Pergunta e Campo de Observação -->
         <div>
-          <label for="modal-saida-obs" style="font-weight:700; color:#92400e; font-size:14px; margin-bottom:6px; display:block;">
+          <label for="modal-saida-obs"
+            style="font-weight:700; color:#92400e; font-size:14px; margin-bottom:6px; display:block;">
             ⚠️ Escreva aqui se o visitante / prestador aprontou algo de errado:
           </label>
           <p style="font-size:12px; color:#64748b; margin:0 0 8px;">
-            Se correu tudo bem, deixe em branco. Se preencher, o sistema salvará o histórico com data e hora para alertar a portaria em futuras entradas.
+            Se correu tudo bem, deixe em branco. Se preencher, o sistema salvará o histórico com data e hora para
+            alertar a portaria em futuras entradas.
           </p>
           <textarea id="modal-saida-obs" rows="3"
             placeholder="Ex: Correu acima da velocidade permitida, desrespeitou morador, estacionou na calçada..."
             style="width:100%; box-sizing:border-box; border:1px solid #cbd5e1; border-radius:6px; padding:10px; font-size:13px;"></textarea>
-          
-          <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#1e293b; margin-top:8px;">
-            <input type="checkbox" id="modal-saida-exibir-alerta" checked style="width:16px; height:16px; cursor:pointer;" />
+
+          <label
+            style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#1e293b; margin-top:8px;">
+            <input type="checkbox" id="modal-saida-exibir-alerta" checked
+              style="width:16px; height:16px; cursor:pointer;" />
             Exibir no aviso da portaria quando esta pessoa voltar
           </label>
         </div>
@@ -2310,9 +2321,12 @@
       </div>
 
       <!-- Rodapé com Botões -->
-      <div style="padding:14px 20px; border-top:1px solid #e2e8f0; background:#f8fafc; display:flex; justify-content:flex-end; gap:10px;">
-        <button type="button" class="secundario" onclick="fecharModalConfirmarSaida()" style="margin:0;">Cancelar</button>
-        <button type="button" class="perigo" id="btn-modal-confirmar-saida" onclick="executarConfirmarSaida()" style="margin:0; background:#dc2626; color:#fff;">
+      <div
+        style="padding:14px 20px; border-top:1px solid #e2e8f0; background:#f8fafc; display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="secundario" onclick="fecharModalConfirmarSaida()"
+          style="margin:0;">Cancelar</button>
+        <button type="button" class="perigo" id="btn-modal-confirmar-saida" onclick="executarConfirmarSaida()"
+          style="margin:0; background:#dc2626; color:#fff;">
           Confirmar Saída
         </button>
       </div>
@@ -2361,7 +2375,7 @@
               <strong style="display:block;">${escapeHtml(m.nome)}</strong>
               <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
-            <button class="mini" style="background-color: #2b6cb0; color: white;" onclick="registrarEncomenda('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Receber</button>
+            <button class="mini btn-amarelo-encomenda" style="padding:6px 14px;" onclick="registrarEncomenda('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Receber</button>
           </div>
         `).join('');
 
@@ -2431,7 +2445,7 @@
                     <td data-label="Recebido Por">${escapeHtml(r.porteiro_entrada || '')}</td>
                     <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
-                        <button class="mini" style="background-color:#d53f8c; color:white;" onclick="abrirModalRetiradaEncomenda(${r.id}, '${escapeHtml(r.destino_bloco || '').replace(/'/g, "\\'")}', '${escapeHtml(r.observacao || '').replace(/'/g, "\\'")}')">Registrar Retirada</button>
+                        <button class="mini btn-retirada-encomenda" onclick="abrirModalRetiradaEncomenda(${r.id}, '${escapeHtml(r.destino_bloco || '').replace(/'/g, "\\'")}', '${escapeHtml(r.observacao || '').replace(/'/g, "\\'")}')">Registrar Retirada</button>
                       </div>
                     </td>
                   </tr>
@@ -2461,7 +2475,7 @@
             <div>
               <strong style="display:block;">${escapeHtml(m.nome)}</strong>
             </div>
-            <button class="mini" style="background-color: #d53f8c; color: white;" onclick="confirmarRetiradaEncomenda(${id}, '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(observacaoAtual).replace(/'/g, "\\'")}')">Selecionar</button>
+            <button class="mini btn-amarelo-encomenda" style="padding:6px 14px;" onclick="confirmarRetiradaEncomenda(${id}, '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(observacaoAtual).replace(/'/g, "\\'")}')">Selecionar</button>
           </div>
         `).join('');
       } catch (err) {
@@ -2495,6 +2509,14 @@
       }
     }
 
+    let debounceTimerIfood = null;
+    function buscarMoradoresIfoodDebounced() {
+      clearTimeout(debounceTimerIfood);
+      debounceTimerIfood = setTimeout(() => {
+        buscarMoradoresIfood();
+      }, 350);
+    }
+
     function abrirModalIfood() {
       const modal = document.getElementById('modal-ifood');
       document.getElementById('ifood-aviso-id').value = '';
@@ -2502,22 +2524,26 @@
       document.getElementById('ifood-morador-id').value = '';
       document.getElementById('ifood-morador-nome').value = '';
 
-      document.getElementById('ifood-lote').value = '';
-      document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
-      document.getElementById('ifood-moradores-container').classList.add('hidden');
-      document.getElementById('ifood-lista-moradores').innerHTML = '';
-      document.getElementById('ifood-destino-resumo').classList.add('hidden');
-      document.getElementById('ifood-dados-entregador').classList.add('hidden');
-      document.getElementById('btn-confirmar-ifood').classList.add('hidden');
-
       document.getElementById('ifood-nome').value = '';
       document.getElementById('ifood-placa').value = '';
       document.getElementById('ifood-acesso-tipo').value = 'moto';
       togglePlacaIfood();
 
+      document.getElementById('ifood-lote').value = '';
+      document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
+      document.getElementById('ifood-moradores-container').classList.add('hidden');
+      document.getElementById('ifood-lista-moradores').innerHTML = '';
+      document.getElementById('ifood-destino-resumo').classList.add('hidden');
+
+      const btnConfirmar = document.getElementById('btn-confirmar-ifood');
+      if (btnConfirmar) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = '✅ Registrar Entrada';
+      }
+
       document.getElementById('msg-ifood').classList.add('hidden');
       modal.classList.remove('hidden');
-      setTimeout(() => document.getElementById('ifood-lote').focus(), 80);
+      setTimeout(() => document.getElementById('ifood-nome').focus(), 80);
     }
 
     function abrirModalIfoodDeAviso(aviso) {
@@ -2542,17 +2568,21 @@
       btnTrocar.style.display = 'none'; // Veio direto do aviso do morador, destino fixo
       document.getElementById('ifood-destino-resumo').classList.remove('hidden');
 
-      // Oculta a busca de lote e exibe os campos do entregador
+      // Oculta a busca de lote pois já veio do aviso
       document.getElementById('ifood-area-busca-lote').classList.add('hidden');
       document.getElementById('ifood-moradores-container').classList.add('hidden');
-      document.getElementById('ifood-dados-entregador').classList.remove('hidden');
-      document.getElementById('btn-confirmar-ifood').classList.remove('hidden');
 
-      // Limpa os dados do entregador
+      // Limpa os dados do motorista
       document.getElementById('ifood-nome').value = '';
       document.getElementById('ifood-placa').value = '';
       document.getElementById('ifood-acesso-tipo').value = 'moto';
       togglePlacaIfood();
+
+      const btnConfirmar = document.getElementById('btn-confirmar-ifood');
+      if (btnConfirmar) {
+        btnConfirmar.disabled = false;
+        btnConfirmar.textContent = '✅ Registrar Entrada';
+      }
 
       document.getElementById('msg-ifood').classList.add('hidden');
       modal.classList.remove('hidden');
@@ -2575,29 +2605,23 @@
         return;
       }
 
-      lista.innerHTML = '<p class="text-muted" style="font-size:14px;">Buscando moradores do lote...</p>';
+      lista.innerHTML = '<p class="text-muted" style="font-size:14px; margin:8px 0;">Buscando moradores do ' + escapeHtml(lote) + '...</p>';
       cont.classList.remove('hidden');
 
       try {
         const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
         if (!moradores || moradores.length === 0) {
-          lista.innerHTML = '<p class="vazio">Nenhum morador encontrado para este lote.</p>';
-          return;
-        }
-
-        // Se houver apenas 1 morador no lote, auto-seleciona para agilizar a portaria
-        if (moradores.length === 1) {
-          selecionarMoradorIfood(lote, moradores[0].nome, moradores[0].id);
+          lista.innerHTML = '<p class="vazio" style="padding:10px 0;">Nenhum morador encontrado para este lote.</p>';
           return;
         }
 
         lista.innerHTML = moradores.map(m => `
-          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px 12px; border-radius:8px; border:1px solid var(--cinza-borda);">
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid #cbd5e1;">
             <div>
-              <strong style="display:block; font-size:15px;">${escapeHtml(m.nome)}</strong>
+              <strong style="display:block; font-size:15px; color:#1e293b;">${escapeHtml(m.nome)}</strong>
               <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
-            <button type="button" class="mini" style="background-color: #ea1d2c; color: white; padding:6px 14px; font-weight:700;" onclick="selecionarMoradorIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Selecionar</button>
+            <button type="button" class="mini" style="background:#ea1d2c; color:white; padding:8px 14px; font-weight:700; border:none; border-radius:6px; cursor:pointer;" onclick="selecionarMoradorIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Selecionar</button>
           </div>
         `).join('');
 
@@ -2625,18 +2649,30 @@
 
       document.getElementById('ifood-area-busca-lote').classList.add('hidden');
       document.getElementById('ifood-moradores-container').classList.add('hidden');
-      document.getElementById('ifood-dados-entregador').classList.remove('hidden');
-      document.getElementById('btn-confirmar-ifood').classList.remove('hidden');
 
-      setTimeout(() => document.getElementById('ifood-nome').focus(), 80);
+      const nomeEntregador = (document.getElementById('ifood-nome').value || '').trim();
+      const acessoTipo = document.getElementById('ifood-acesso-tipo').value;
+      const placa = (document.getElementById('ifood-placa').value || '').trim();
+
+      if (!nomeEntregador) {
+        document.getElementById('ifood-nome').focus();
+      } else if (acessoTipo !== 'pe' && !placa) {
+        document.getElementById('ifood-placa').focus();
+      } else {
+        // Todos os campos preenchidos! Registra imediatamente a entrada
+        confirmarEntradaIfood();
+      }
     }
 
     function trocarMoradorIfood() {
       document.getElementById('ifood-destino-resumo').classList.add('hidden');
-      document.getElementById('ifood-dados-entregador').classList.add('hidden');
-      document.getElementById('btn-confirmar-ifood').classList.add('hidden');
+      document.getElementById('ifood-lote').value = '';
+      document.getElementById('ifood-lote-selecionado').value = '';
+      document.getElementById('ifood-morador-id').value = '';
+      document.getElementById('ifood-morador-nome').value = '';
+      document.getElementById('ifood-moradores-container').classList.add('hidden');
+      document.getElementById('ifood-lista-moradores').innerHTML = '';
       document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
-      document.getElementById('ifood-moradores-container').classList.remove('hidden');
       document.getElementById('ifood-lote').focus();
     }
 
@@ -2759,7 +2795,7 @@
 
     // Encerra a sessão do porteiro atual e volta para a tela de login.
     async function sairTrocaTurno() {
-      try { await api('/api/logout', { method: 'POST' }); } catch {}
+      try { await api('/api/logout', { method: 'POST' }); } catch { }
       window.location.href = '/login.html';
     }
 
@@ -2800,7 +2836,7 @@
         // Só porteiro/admin podem assumir a portaria.
         if (novoPerfil.tipo !== 'porteiro' && novoPerfil.tipo !== 'admin') {
           // Reverte: a sessão agora é de um não-porteiro; derruba por segurança.
-          try { await api('/api/logout', { method: 'POST' }); } catch {}
+          try { await api('/api/logout', { method: 'POST' }); } catch { }
           msg.textContent = 'Este usuário não tem acesso à portaria.';
           msg.className = 'msg erro';
           msg.classList.remove('hidden');
@@ -2844,7 +2880,8 @@
   <!-- Overlay de Troca de Turno (bloqueia o sistema até o próximo porteiro logar) -->
   <div id="overlay-troca-turno" class="hidden"
     style="position:fixed; inset:0; background:linear-gradient(135deg, var(--verde) 0%, var(--verde-escuro) 100%); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
-    <div style="background:#fff; border-radius:14px; width:100%; max-width:380px; padding:28px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
+    <div
+      style="background:#fff; border-radius:14px; width:100%; max-width:380px; padding:28px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.3);">
       <div style="text-align:center; margin-bottom:16px;">
         <div style="font-size:40px; line-height:1;">&#128260;</div>
         <h2 style="margin:10px 0 4px; font-size:20px; color:var(--verde-escuro);">Troca de turno</h2>
@@ -2864,7 +2901,8 @@
 
       <div id="msg-turno" class="msg hidden" style="margin-top:12px;"></div>
 
-      <button type="button" class="block" id="btn-confirmar-turno" onclick="confirmarTrocaTurno()" style="margin-top:18px;">
+      <button type="button" class="block" id="btn-confirmar-turno" onclick="confirmarTrocaTurno()"
+        style="margin-top:18px;">
         Assumir plantão
       </button>
       <button type="button" class="block secundario" onclick="sairTrocaTurno()" style="margin-top:10px;">
@@ -2880,10 +2918,14 @@
   <!-- Overlay de notificação do porteiro (trava a tela até confirmar) -->
   <div id="overlay-notif-porteiro" class="hidden"
     style="position:fixed; inset:0; background:rgba(15,23,42,0.75); backdrop-filter:blur(3px); z-index:10001; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
-    <div style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 26px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center;">
+    <div
+      style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 26px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center;">
       <div style="font-size:44px; line-height:1;">&#128276;</div>
-      <h2 id="notif-port-titulo" style="margin:12px 0 10px; font-size:20px; color:var(--verde-escuro); word-break:break-word;"></h2>
-      <p id="notif-port-texto" style="margin:0 0 20px; font-size:15px; color:var(--texto); white-space:pre-wrap; word-break:break-word; text-align:left;"></p>
+      <h2 id="notif-port-titulo"
+        style="margin:12px 0 10px; font-size:20px; color:var(--verde-escuro); word-break:break-word;"></h2>
+      <p id="notif-port-texto"
+        style="margin:0 0 20px; font-size:15px; color:var(--texto); white-space:pre-wrap; word-break:break-word; text-align:left;">
+      </p>
       <button type="button" class="block" id="btn-recebi-notif-porteiro" style="margin:0; background:var(--verde);">
         &#9989; Recebi a notificação
       </button>

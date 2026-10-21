@@ -13,16 +13,16 @@ body.tela-porteiro {
 /* Container ampliado para aproveitar monitores da portaria */
 body.tela-porteiro .container {
   max-width: 1360px;
-  padding: 0 20px;
-  margin: 20px auto;
+  padding: 0 16px;
+  margin: 0 auto 16px;
 }
 
-/* Cards principais com sombras e relevo aprimorados */
+/* Cards principais com sombras e relevo aprimorados - topo colado nas abas */
 body.tela-porteiro .card {
-  padding: 26px;
-  border-radius: 14px;
+  padding: 24px;
+  border-radius: 0 0 12px 12px;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
-  border: 1px solid #e2e8f0;
+  border: 2px solid #cbd5e1;
 }
 
 body.tela-porteiro .card h2 {
@@ -41,26 +41,27 @@ body.tela-porteiro .card h3 {
 }
 
 /* ============================================================
-   1. ABAS SUPERIORES (MAIORES, DESTACADAS E TÁTEIS)
+   1. ABAS SUPERIORES (COLADAS NO TOPO E NO CARD)
    ============================================================ */
 body.tela-porteiro .tabs {
   display: flex;
-  gap: 12px;
-  margin-bottom: 22px;
+  gap: 4px;
+  margin-top: 0;
+  margin-bottom: 0;
   flex-wrap: wrap;
 }
 
 body.tela-porteiro .tabs button {
   flex: 1;
-  min-width: 140px;
-  padding: 16px 20px;
-  font-size: 17px;
+  min-width: 135px;
+  padding: 13px 18px;
+  font-size: 16.5px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 10px 10px 0 0;
   border: 2px solid #cbd5e1;
   background: #ffffff;
   color: #475569;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.04);
+  box-shadow: none;
   cursor: pointer;
   display: inline-flex;
   align-items: center;
@@ -73,8 +74,6 @@ body.tela-porteiro .tabs button:hover {
   background: #f8fafc;
   color: #0f172a;
   border-color: #94a3b8;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 14px rgba(0, 0, 0, 0.08);
 }
 
 body.tela-porteiro .tabs button.ativo {
@@ -82,8 +81,56 @@ body.tela-porteiro .tabs button.ativo {
   color: #ffffff;
   border-color: #155c39;
   font-weight: 700;
-  transform: translateY(-2px);
-  box-shadow: 0 6px 18px rgba(21, 92, 57, 0.35);
+  box-shadow: 0 -2px 10px rgba(21, 92, 57, 0.25);
+}
+
+/* Aba Encomendas ativa em tom amarelo/âmbar vibrante */
+body.tela-porteiro .tabs button[data-tab="encomendas"].ativo {
+  background: linear-gradient(145deg, #f59e0b 0%, #d97706 100%) !important;
+  color: #ffffff !important;
+  border-color: #b45309 !important;
+  box-shadow: 0 -2px 10px rgba(217, 119, 6, 0.35) !important;
+}
+
+body.tela-porteiro .tabs button[data-tab="encomendas"]:hover {
+  border-color: #f59e0b;
+}
+
+/* Botões da seção e ações de Encomenda em amarelo/âmbar */
+body.tela-porteiro .btn-amarelo-encomenda {
+  background: linear-gradient(145deg, #f59e0b, #d97706) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border: none !important;
+  border-radius: 8px !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 12px rgba(217, 119, 6, 0.35) !important;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+body.tela-porteiro .btn-amarelo-encomenda:hover {
+  background: linear-gradient(145deg, #fbbf24, #d97706) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.45) !important;
+}
+
+body.tela-porteiro .btn-retirada-encomenda {
+  background: linear-gradient(145deg, #f59e0b, #d97706) !important;
+  color: #ffffff !important;
+  font-weight: 700 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 8px 16px !important;
+  font-size: 14px !important;
+  cursor: pointer !important;
+  box-shadow: 0 3px 10px rgba(217, 119, 6, 0.35) !important;
+  transition: all 0.18s cubic-bezier(0.4, 0, 0.2, 1) !important;
+}
+
+body.tela-porteiro .btn-retirada-encomenda:hover {
+  background: linear-gradient(145deg, #fbbf24, #d97706) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 14px rgba(217, 119, 6, 0.45) !important;
 }
 
 /* ============================================================
@@ -129,31 +176,56 @@ body.tela-porteiro .btn-ifood {
   box-shadow: 0 6px 16px rgba(234, 29, 44, 0.35) !important;
 }
 
-/* Encomenda (Azul vibrante) */
+/* Encomenda (Amarelo vibrante / Âmbar para diferenciar do azul do prestador) */
 body.tela-porteiro .btn-encomenda {
-  background: linear-gradient(145deg, #2563eb, #1d4ed8) !important;
+  background: linear-gradient(145deg, #f59e0b, #d97706) !important;
   color: #ffffff !important;
-  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.35) !important;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+  box-shadow: 0 6px 16px rgba(217, 119, 6, 0.4) !important;
+}
+
+body.tela-porteiro .btn-encomenda:hover {
+  background: linear-gradient(145deg, #fbbf24, #d97706) !important;
+  transform: translateY(-2px);
+  box-shadow: 0 8px 20px rgba(217, 119, 6, 0.5) !important;
+}
+
+/* Botões de ação em formato compacto (na frente do escrito Registrar entrada) */
+body.tela-porteiro .btn-acao-compacto {
+  padding: 8px 16px !important;
+  font-size: 14.5px !important;
+  font-weight: 700 !important;
+  border-radius: 8px !important;
+  min-height: 42px !important;
+  height: 42px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  white-space: nowrap !important;
+  box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15) !important;
+}
+
+body.tela-porteiro .btn-acao-compacto:hover {
+  transform: translateY(-1px) !important;
 }
 
 /* ============================================================
    3. CAMPOS DE BUSCA (CPF E AGENDADAS)
    ============================================================ */
-body.tela-porteiro #area-busca-cpf,
-body.tela-porteiro #area-busca-previstas {
-  padding: 18px 20px !important;
+body.tela-porteiro #area-busca-cpf {
+  padding: 16px 20px !important;
   border-radius: 12px !important;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.03);
-}
-
-body.tela-porteiro #area-busca-cpf {
   background: #f0fdf4 !important;
   border: 1.5px solid #86efac !important;
 }
 
 body.tela-porteiro #area-busca-previstas {
-  background: #f8fafc !important;
-  border: 1.5px solid #cbd5e1 !important;
+  background: transparent !important;
+  border: none !important;
+  padding: 0 !important;
+  box-shadow: none !important;
 }
 
 body.tela-porteiro label {
@@ -182,6 +254,42 @@ body.tela-porteiro textarea:focus {
   border-color: #16a34a !important;
   box-shadow: 0 0 0 4px rgba(22, 163, 74, 0.18) !important;
   outline: none !important;
+}
+
+/* Espaçamento compacto no formulário Registrar entrada */
+body.tela-porteiro #form-entrada {
+  margin-top: 6px !important;
+}
+
+body.tela-porteiro #form-entrada .grid {
+  row-gap: 8px !important;
+  column-gap: 14px !important;
+}
+
+body.tela-porteiro #form-entrada label {
+  font-size: 14px !important;
+  font-weight: 700 !important;
+  color: #1e293b !important;
+  margin: 0 0 3px 0 !important;
+}
+
+body.tela-porteiro #form-entrada input,
+body.tela-porteiro #form-entrada select {
+  font-size: 15.5px !important;
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  border: 1.5px solid #cbd5e1 !important;
+  min-height: 42px !important;
+  height: 42px !important;
+  margin: 0 !important;
+}
+
+body.tela-porteiro #form-entrada #btn-entrada {
+  margin-top: 10px !important;
+  min-height: 48px !important;
+  height: 48px !important;
+  font-size: 16px !important;
+  font-weight: 700 !important;
 }
 
 body.tela-porteiro #btn-buscar-doc {
