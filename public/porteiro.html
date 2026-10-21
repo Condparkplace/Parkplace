@@ -782,6 +782,40 @@
 
     // ---------- Modal Entrada Frequência Programada (Recorrente) ----------
     let avisoRecorrenteAtual = null;
+    let dataFixaHojeIso = '';
+    let transporteFreqAtual = 'pe';
+
+    function selecionarTransporteFreq(tipo) {
+      transporteFreqAtual = tipo;
+      const btnPe = document.getElementById('btn-transporte-pe');
+      const btnCarro = document.getElementById('btn-transporte-carro');
+      const areaPlaca = document.getElementById('area-freq-modal-placa');
+      const inputPlaca = document.getElementById('freq-modal-placa');
+
+      if (tipo === 'carro') {
+        btnCarro.style.background = '#dbeafe';
+        btnCarro.style.borderColor = '#2563eb';
+        btnCarro.style.color = '#1e40af';
+
+        btnPe.style.background = '#f8fafc';
+        btnPe.style.borderColor = '#cbd5e1';
+        btnPe.style.color = '#334155';
+
+        areaPlaca.classList.remove('hidden');
+        setTimeout(() => inputPlaca.focus(), 50);
+      } else {
+        btnPe.style.background = '#dcfce7';
+        btnPe.style.borderColor = '#16a34a';
+        btnPe.style.color = '#166534';
+
+        btnCarro.style.background = '#f8fafc';
+        btnCarro.style.borderColor = '#cbd5e1';
+        btnCarro.style.color = '#334155';
+
+        areaPlaca.classList.add('hidden');
+        inputPlaca.value = '';
+      }
+    }
 
     function abrirModalEntradaRecorrente(aviso) {
       avisoRecorrenteAtual = aviso;
@@ -789,16 +823,27 @@
       document.getElementById('freq-modal-nome').textContent = aviso.nome_visitante || 'Visitante';
       document.getElementById('freq-modal-tipo').textContent = aviso.tipo || 'Visitante';
       document.getElementById('freq-modal-destino').textContent = `Destino: ${m.nome || '-'} (${m.bloco || ''})`;
-      document.getElementById('freq-modal-placa').value = aviso.veiculo_placa || '';
 
-      // Preenche com o momento atual local (fuso horário local)
+      // Se o visitante já tiver placa cadastrada, seleciona 'De carro' por padrão. Senão, 'A pé'.
+      const placaSalva = (aviso.veiculo_placa || '').trim();
+      document.getElementById('freq-modal-placa').value = placaSalva;
+      if (placaSalva) {
+        selecionarTransporteFreq('carro');
+      } else {
+        selecionarTransporteFreq('pe');
+      }
+
+      // Preenche com a data fixa de hoje e a hora atual
       const agora = new Date();
       const ano = agora.getFullYear();
       const mes = String(agora.getMonth() + 1).padStart(2, '0');
       const dia = String(agora.getDate()).padStart(2, '0');
       const hora = String(agora.getHours()).padStart(2, '0');
       const min = String(agora.getMinutes()).padStart(2, '0');
-      document.getElementById('freq-modal-datahora').value = `${ano}-${mes}-${dia}T${hora}:${min}`;
+
+      dataFixaHojeIso = `${ano}-${mes}-${dia}`;
+      document.getElementById('freq-modal-data-fixa').textContent = `Data: ${dia}/${mes}/${ano}`;
+      document.getElementById('freq-modal-hora').value = `${hora}:${min}`;
 
       const msg = document.getElementById('msg-modal-freq');
       if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
@@ -806,7 +851,7 @@
       const modal = document.getElementById('modal-frequencia-entrada');
       modal.classList.remove('hidden');
       modal.style.display = 'flex';
-      setTimeout(() => document.getElementById('freq-modal-datahora').focus(), 100);
+      setTimeout(() => document.getElementById('freq-modal-hora').focus(), 100);
     }
 
     function fecharModalEntradaRecorrente() {
@@ -820,9 +865,9 @@
 
     async function confirmarEntradaRecorrente() {
       if (!avisoRecorrenteAtual) return;
-      const dataHoraVal = document.getElementById('freq-modal-datahora').value;
-      if (!dataHoraVal) {
-        alert('Por favor, informe a data e hora da entrada.');
+      const horaVal = document.getElementById('freq-modal-hora').value.trim();
+      if (!horaVal) {
+        alert('Por favor, informe a hora da entrada.');
         return;
       }
 
@@ -833,9 +878,13 @@
 
       const aviso = avisoRecorrenteAtual;
       const m = aviso.morador || {};
-      const placa = document.getElementById('freq-modal-placa').value.trim();
+      const placa = (transporteFreqAtual === 'carro')
+        ? document.getElementById('freq-modal-placa').value.trim().toUpperCase()
+        : null;
 
       try {
+        const entradaData = new Date(`${dataFixaHojeIso}T${horaVal}:00`);
+
         await api('/api/portaria/entrada', {
           method: 'POST',
           body: JSON.stringify({
@@ -843,13 +892,13 @@
             nome_pessoa: aviso.nome_visitante,
             tipo: aviso.tipo || 'Visitante',
             documento: aviso.documento_visitante || '',
-            veiculo_placa: placa || aviso.veiculo_placa || '',
+            veiculo_placa: placa || null,
             destino_bloco: m.bloco || '',
             destino_morador: aviso.morador_id || null,
             endereco_visitante: aviso.endereco_visitante || null,
             cep_visitante: aviso.cep_visitante || null,
             observacao: 'Frequência programada',
-            entrada: new Date(dataHoraVal).toISOString()
+            entrada: entradaData.toISOString()
           }),
         });
 
@@ -2213,19 +2262,46 @@
         </div>
       </div>
 
-      <div style="margin-bottom:12px;">
-        <label for="freq-modal-placa" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Placa do veículo (opcional):</label>
-        <input type="text" id="freq-modal-placa" placeholder="Ex: ABC1D23" style="text-transform:uppercase; width:100%; box-sizing:border-box;" />
+      <!-- Meio de transporte: A pé ou De carro -->
+      <div style="margin-bottom:14px;">
+        <label style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:6px;">
+          Como o visitante está entrando?
+        </label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <button type="button" id="btn-transporte-pe" onclick="selecionarTransporteFreq('pe')"
+            style="padding:10px; font-size:14px; font-weight:700; border-radius:8px; cursor:pointer; border:2px solid #cbd5e1; background:#f8fafc; color:#334155; display:flex; align-items:center; justify-content:center; gap:6px;">
+            🚶 A pé
+          </button>
+          <button type="button" id="btn-transporte-carro" onclick="selecionarTransporteFreq('carro')"
+            style="padding:10px; font-size:14px; font-weight:700; border-radius:8px; cursor:pointer; border:2px solid #cbd5e1; background:#f8fafc; color:#334155; display:flex; align-items:center; justify-content:center; gap:6px;">
+            🚗 De carro
+          </button>
+        </div>
       </div>
 
-      <div style="margin-bottom:16px;">
-        <label for="freq-modal-datahora" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
-          Data e hora da entrada: *
+      <!-- Placa do veículo (abre quando 'De carro' estiver selecionado) -->
+      <div id="area-freq-modal-placa" class="hidden" style="margin-bottom:14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px;">
+        <label for="freq-modal-placa" style="font-size:13px; font-weight:700; color:#1e40af; display:block; margin-bottom:4px;">
+          Placa do veículo:
         </label>
-        <input type="datetime-local" id="freq-modal-datahora" required
-          style="width:100%; box-sizing:border-box; font-size:15px; font-weight:600; padding:10px; border:2px solid #3b82f6; border-radius:8px;" />
+        <input type="text" id="freq-modal-placa" placeholder="Ex: ABC1D23" maxlength="8"
+          style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:15px; font-weight:700; padding:8px 10px; border:2px solid #3b82f6; border-radius:6px; background:#fff;" />
+      </div>
+
+      <!-- Horário de entrada (data fixa, só seleciona a hora) -->
+      <div style="margin-bottom:16px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+          <label for="freq-modal-hora" style="font-size:13px; font-weight:700; color:#1e293b; margin:0;">
+            Hora da entrada: *
+          </label>
+          <span id="freq-modal-data-fixa" style="font-size:12px; font-weight:700; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:4px; border:1px solid #e2e8f0;">
+            Data: Hoje
+          </span>
+        </div>
+        <input type="time" id="freq-modal-hora" required
+          style="width:100%; box-sizing:border-box; font-size:17px; font-weight:700; padding:10px 12px; border:2px solid #3b82f6; border-radius:8px; text-align:center;" />
         <span class="text-muted" style="font-size:12px; display:block; margin-top:4px;">
-          Informe o dia e o horário em que o visitante está ingressando.
+          Apenas selecione o horário em que o visitante está entrando.
         </span>
       </div>
 
