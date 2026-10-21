@@ -157,7 +157,7 @@
           <option value="Prestador">Prestador de serviço</option>
         </select>
 
-        <label for="documento_visitante">Documento (RG/CPF)</label>
+        <label for="documento_visitante">Documento (CPF)</label>
         <input type="text" id="documento_visitante" />
         <span id="aviso-cpf-visitante" class="hidden"
           style="display:block; margin-top:4px; font-size:12px; font-weight:600;"></span>
@@ -347,6 +347,43 @@
         <div class="grid grid-2" style="margin-top:16px;">
           <button type="button" class="secundario block" onclick="fecharCadastroMoradorLote()">Cancelar</button>
           <button type="submit" class="block" id="cadml-btn">Cadastrar</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Editar dados do visitante (lápis em Visitas Frequentes) -->
+  <div id="modal-editar-visitante-freq" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box; overflow-y:auto;">
+    <div class="card" style="width:100%; max-width:420px; margin:20px;">
+      <h3 style="margin-top:0;">✏️ Editar visitante</h3>
+      <p class="text-muted" style="margin:0 0 14px; font-size:13px;">
+        Os dados são atualizados em todas as visitas deste visitante no seu lote.
+      </p>
+      <form id="form-editar-visitante-freq">
+        <input type="hidden" id="efreq-nome-original" />
+        <input type="hidden" id="efreq-doc-original" />
+
+        <label for="efreq-nome">Nome *</label>
+        <input type="text" id="efreq-nome" required />
+
+        <label for="efreq-doc">Documento (RG/CPF)</label>
+        <input type="text" id="efreq-doc" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" />
+
+        <label for="efreq-tipo">Tipo</label>
+        <select id="efreq-tipo">
+          <option value="Visitante">Visitante</option>
+          <option value="Prestador">Prestador de serviço</option>
+        </select>
+
+        <label for="efreq-placa">Veículo / placa</label>
+        <input type="text" id="efreq-placa" placeholder="Ex: ABC1D23" />
+
+        <div id="efreq-msg" class="msg hidden" style="margin-top:12px;"></div>
+
+        <div class="grid grid-2" style="margin-top:16px;">
+          <button type="button" class="secundario block" onclick="fecharEditarVisitanteFreq()">Cancelar</button>
+          <button type="submit" class="block" id="efreq-btn">Salvar</button>
         </div>
       </form>
     </div>
@@ -1312,6 +1349,7 @@
             <div class="row-inline" style="justify-content:flex-end;">
               <button class="mini" style="${btnStyle}" onclick="iniciarReagendamento(${realIndex})">Agendar Visita</button>
               <button class="mini" style="${btnFreqStyle}" onclick="abrirFrequencia(${realIndex})" title="Programar dias fixos da semana">${freqLabel}</button>
+              <button class="mini" style="background-color:#64748b; color:#fff;" onclick="abrirEditarVisitanteFreq(${realIndex})" title="Editar dados do visitante">&#9999;&#65039; Editar</button>
               <button class="perigo mini" onclick="iniciarBloqueio(${realIndex})" title="Bloquear este visitante">&#128683; Bloquear</button>
             </div>
           </td>
@@ -1350,6 +1388,72 @@
 
       alvo.innerHTML = html;
     }
+
+    // ---------- Editar visitante (lápis) ----------
+    let editarVisitanteFreqAtual = null;
+
+    function abrirEditarVisitanteFreq(index) {
+      const f = frequentes[index];
+      if (!f) return;
+      editarVisitanteFreqAtual = f;
+      document.getElementById('efreq-nome-original').value = f.nome_visitante || '';
+      document.getElementById('efreq-doc-original').value = f.documento_visitante || '';
+      document.getElementById('efreq-nome').value = f.nome_visitante || '';
+      document.getElementById('efreq-doc').value = f.documento_visitante || '';
+      document.getElementById('efreq-tipo').value = (f.tipo === 'Prestador') ? 'Prestador' : 'Visitante';
+      document.getElementById('efreq-placa').value = f.veiculo_placa || '';
+      const msg = document.getElementById('efreq-msg');
+      msg.classList.add('hidden'); msg.textContent = '';
+      const modal = document.getElementById('modal-editar-visitante-freq');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('efreq-nome').focus(), 50);
+    }
+
+    function fecharEditarVisitanteFreq() {
+      const modal = document.getElementById('modal-editar-visitante-freq');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+
+    document.getElementById('form-editar-visitante-freq').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const btn = document.getElementById('efreq-btn');
+      const msg = document.getElementById('efreq-msg');
+      msg.classList.add('hidden');
+      const nome = document.getElementById('efreq-nome').value.trim();
+      if (!nome) {
+        msg.textContent = 'Informe o nome do visitante.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      try {
+        await api('/api/morador/visitantes/editar', {
+          method: 'POST',
+          body: JSON.stringify({
+            nomeOriginal: document.getElementById('efreq-nome-original').value,
+            documentoOriginal: document.getElementById('efreq-doc-original').value,
+            nome,
+            documento: document.getElementById('efreq-doc').value.trim(),
+            tipo: document.getElementById('efreq-tipo').value,
+            veiculo_placa: document.getElementById('efreq-placa').value.trim(),
+          }),
+        });
+        fecharEditarVisitanteFreq();
+        alert('Visitante atualizado com sucesso!');
+        await abrirFrequentes();
+      } catch (err) {
+        msg.textContent = err.message;
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salvar';
+      }
+    });
 
     function iniciarReagendamento(index) {
       reagendamentoAtual = frequentes[index];

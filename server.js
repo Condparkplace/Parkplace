@@ -368,7 +368,7 @@ app.post('/api/public/cadastro', limitePublico, async (req, res) => {
     return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
   }
 
-  const meta = { nome: nome.trim(), tipo: 'morador', bloco, telefone: telefone.trim(), pendente: true };
+  const meta = { nome: maiuscula(nome.trim()), tipo: 'morador', bloco, telefone: telefone.trim(), pendente: true };
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email.trim().toLowerCase(),
     password,
@@ -413,17 +413,17 @@ app.put('/api/me', requireAuth, async (req, res) => {
 
   // Monta a atualização apenas com os campos realmente enviados, para não
   // apagar dados que o formulário não envia (ex: o lote, que nunca muda aqui).
-  const patch = { nome: nome.trim() };
+  const patch = { nome: maiuscula(nome.trim()) };
   if (telefone !== undefined) patch.telefone = telefone?.trim() || null;
   if (bloco !== undefined) patch.bloco = bloco?.trim() || null;
-  if (apartamento !== undefined) patch.apartamento = apartamento?.trim() || null;
+  if (apartamento !== undefined) patch.apartamento = maiuscula(apartamento?.trim()) || null;
   if (cep !== undefined) patch.cep = String(cep).replace(/\D/g, '') || null;
-  if (endereco_logradouro !== undefined) patch.endereco_logradouro = endereco_logradouro?.trim() || null;
+  if (endereco_logradouro !== undefined) patch.endereco_logradouro = maiuscula(endereco_logradouro?.trim()) || null;
   if (endereco_numero !== undefined) patch.endereco_numero = endereco_numero?.trim() || null;
-  if (endereco_bairro !== undefined) patch.endereco_bairro = endereco_bairro?.trim() || null;
-  if (endereco_cidade !== undefined) patch.endereco_cidade = endereco_cidade?.trim() || null;
+  if (endereco_bairro !== undefined) patch.endereco_bairro = maiuscula(endereco_bairro?.trim()) || null;
+  if (endereco_cidade !== undefined) patch.endereco_cidade = maiuscula(endereco_cidade?.trim()) || null;
   if (endereco_uf !== undefined) patch.endereco_uf = endereco_uf?.trim().toUpperCase().slice(0, 2) || null;
-  if (endereco_complemento !== undefined) patch.endereco_complemento = endereco_complemento?.trim() || null;
+  if (endereco_complemento !== undefined) patch.endereco_complemento = maiuscula(endereco_complemento?.trim()) || null;
 
   const { data, error } = await supabaseAdmin
     .from('perfis')
@@ -674,7 +674,7 @@ app.post('/api/morador/lote/cadastrar', requireAuth, requireRole('morador', 'adm
     }
 
     let { nome, email, password, telefone, cpf } = req.body || {};
-    nome = (nome || '').trim();
+    nome = maiuscula((nome || '').trim()) || '';
     email = (email || '').trim().toLowerCase();
     telefone = (telefone || '').trim();
     const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
@@ -782,8 +782,14 @@ app.get('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin'
 // Se já existir uma recorrência ativa para o mesmo nome, substitui os dias.
 app.post('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   const { nome_visitante, documento_visitante, tipo, veiculo_placa, dias_semana } = req.body || {};
-  const nome = (nome_visitante || '').trim();
+  const nome = maiuscula((nome_visitante || '').trim()) || '';
   if (!nome) return res.status(400).json({ error: 'Informe o nome do visitante.' });
+
+  // CPF obrigatório e válido.
+  const cpfRec = (documento_visitante || '').replace(/\D/g, '');
+  if (cpfRec.length !== 11 || !cpfValido(cpfRec)) {
+    return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos) para o visitante.' });
+  }
 
   // Normaliza os dias: inteiros únicos entre 0 (Dom) e 6 (Sáb).
   const dias = Array.isArray(dias_semana)
@@ -809,7 +815,7 @@ app.post('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin
         dias_semana: dias,
         documento_visitante: documento_visitante || jaExiste.documento_visitante || null,
         tipo: tipo || jaExiste.tipo || 'Visitante',
-        veiculo_placa: veiculo_placa || jaExiste.veiculo_placa || null,
+        veiculo_placa: maiuscula(veiculo_placa) || jaExiste.veiculo_placa || null,
       })
       .eq('id', jaExiste.id)
       .select()
@@ -825,7 +831,7 @@ app.post('/api/morador/recorrencias', requireAuth, requireRole('morador', 'admin
       nome_visitante: nome,
       documento_visitante: documento_visitante || null,
       tipo: tipo || 'Visitante',
-      veiculo_placa: veiculo_placa || null,
+      veiculo_placa: maiuscula(veiculo_placa) || null,
       dias_semana: dias,
       ativo: true,
     })
@@ -1027,6 +1033,99 @@ app.post('/api/morador/visitantes/bloquear', requireAuth, requireRole('morador',
   }
 });
 
+// Morador edita os dados de um visitante/prestador do SEU lote.
+// Atualiza nome/documento/tipo/placa nos avisos e recorrências dos moradores do
+// lote e nos registros de portaria direcionados ao lote. Escopo restrito ao lote.
+app.post('/api/morador/visitantes/editar', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
+  try {
+    const { nomeOriginal, documentoOriginal, nome, documento, tipo, veiculo_placa } = req.body || {};
+
+    const novoNome = maiuscula((nome || '').trim()) || '';
+    if (!novoNome) return res.status(400).json({ error: 'Informe o nome do visitante.' });
+
+    // CPF obrigatório e válido.
+    const cpfEdit = (documento || '').replace(/\D/g, '');
+    if (cpfEdit.length !== 11 || !cpfValido(cpfEdit)) {
+      return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos) para o visitante.' });
+    }
+
+    const bloco = req.perfil?.bloco;
+    if (!bloco) return res.status(400).json({ error: 'Seu cadastro não tem um lote definido.' });
+
+    // Moradores do mesmo lote (para escopar avisos/recorrências).
+    const { data: moradoresLote } = await supabaseAdmin
+      .from('perfis').select('id').eq('bloco', bloco);
+    const idsLote = (moradoresLote || []).map((m) => m.id);
+    if (req.user?.id && !idsLote.includes(req.user.id)) idsLote.push(req.user.id);
+
+    // Formatos de lote aceitos nos registros de portaria.
+    const numLote = (bloco || '').replace(/\D/g, '');
+    const lotesPermitidos = [...new Set([
+      bloco,
+      numLote ? `Lote ${String(parseInt(numLote, 10)).padStart(2, '0')}` : null,
+      numLote ? `Lote ${String(parseInt(numLote, 10))}` : null,
+      numLote ? String(parseInt(numLote, 10)) : null,
+    ].filter(Boolean))];
+
+    const docLimpoOriginal = (documentoOriginal || '').replace(/\D/g, '');
+    const nomeNormOriginal = (nomeOriginal || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const novoDocFormatado = formatarDocumento(documento);
+    const novoTipo = tipo || 'Visitante';
+    const novaPlaca = maiuscula((veiculo_placa || '').trim()) || null;
+
+    const casaPorNomeOuDoc = (regDoc, regNome) => {
+      const d = (regDoc || '').replace(/\D/g, '');
+      if (docLimpoOriginal && d && d === docLimpoOriginal) return true;
+      const n = (regNome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      return !!(nomeNormOriginal && n === nomeNormOriginal);
+    };
+
+    // 1) avisos_visitas dos moradores do lote
+    if (idsLote.length) {
+      const { data: avisos } = await supabaseAdmin
+        .from('avisos_visitas')
+        .select('id, nome_visitante, documento_visitante')
+        .in('morador_id', idsLote);
+      const ids = (avisos || []).filter((a) => casaPorNomeOuDoc(a.documento_visitante, a.nome_visitante)).map((a) => a.id);
+      if (ids.length) {
+        await supabaseAdmin.from('avisos_visitas')
+          .update({ nome_visitante: novoNome, documento_visitante: novoDocFormatado || null, tipo: novoTipo, veiculo_placa: novaPlaca })
+          .in('id', ids);
+      }
+    }
+
+    // 2) visitas_recorrentes dos moradores do lote
+    if (idsLote.length) {
+      const { data: recs } = await supabaseAdmin
+        .from('visitas_recorrentes')
+        .select('id, nome_visitante, documento_visitante')
+        .in('morador_id', idsLote);
+      const ids = (recs || []).filter((r) => casaPorNomeOuDoc(r.documento_visitante, r.nome_visitante)).map((r) => r.id);
+      if (ids.length) {
+        await supabaseAdmin.from('visitas_recorrentes')
+          .update({ nome_visitante: novoNome, documento_visitante: novoDocFormatado || null, tipo: novoTipo, veiculo_placa: novaPlaca })
+          .in('id', ids);
+      }
+    }
+
+    // 3) registros_portaria direcionados ao lote
+    const { data: regs } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('id, nome_pessoa, documento, destino_bloco')
+      .in('destino_bloco', lotesPermitidos);
+    const idsRegs = (regs || []).filter((r) => casaPorNomeOuDoc(r.documento, r.nome_pessoa)).map((r) => r.id);
+    if (idsRegs.length) {
+      await supabaseAdmin.from('registros_portaria')
+        .update({ nome_pessoa: novoNome, documento: novoDocFormatado || null, tipo: novoTipo, veiculo_placa: novaPlaca })
+        .in('id', idsRegs);
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Cria um novo aviso de visita
 app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), async (req, res) => {
   const {
@@ -1042,6 +1141,12 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), as
 
   if (!nome_visitante) {
     return res.status(400).json({ error: 'Informe o nome do visitante.' });
+  }
+
+  // CPF obrigatório e válido (11 dígitos) em todos os cadastros.
+  const cpfAviso = (documento_visitante || '').replace(/\D/g, '');
+  if (cpfAviso.length !== 11 || !cpfValido(cpfAviso)) {
+    return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos) para o visitante.' });
   }
 
   const docFormatado = formatarDocumento(documento_visitante);
@@ -1084,6 +1189,12 @@ app.post('/api/public/avisos', limitePublico, async (req, res) => {
 
   if (!morador_id || !nome_visitante) {
     return res.status(400).json({ error: 'Morador e nome do visitante são obrigatórios.' });
+  }
+
+  // CPF obrigatório e válido (11 dígitos).
+  const cpfPub = (documento_visitante || '').replace(/\D/g, '');
+  if (cpfPub.length !== 11 || !cpfValido(cpfPub)) {
+    return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos).' });
   }
 
   // Valida o prazo (2h) e a assinatura do link antes de aceitar o cadastro.
@@ -2089,7 +2200,15 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
   }
 
   const docLimpo = (documento || '').replace(/\D/g, '');
-  if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
+  // CPF obrigatório e válido para Visitante/Prestador. Encomenda, Entregador
+  // (iFood) e Morador não exigem CPF do visitante.
+  const tipoEntrada = tipo || 'Visitante';
+  const exigeCpf = (tipoEntrada === 'Visitante' || tipoEntrada === 'Prestador') && nome_pessoa !== 'Encomenda';
+  if (exigeCpf) {
+    if (docLimpo.length !== 11 || !cpfValido(docLimpo)) {
+      return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos) para registrar a entrada.' });
+    }
+  } else if (docLimpo.length === 11 && !cpfValido(docLimpo)) {
     return res.status(400).json({ error: 'O CPF informado no documento é inválido.' });
   }
 
@@ -2658,7 +2777,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     endereco_cidade, endereco_uf, endereco_complemento
   } = req.body || {};
 
-  nome = (nome || '').trim();
+  nome = maiuscula((nome || '').trim()) || '';
   tipo = (tipo || '').trim();
   email = (email || '').trim().toLowerCase();
   const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
@@ -2673,6 +2792,13 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
   }
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
     return res.status(400).json({ error: 'Tipo inválido.' });
+  }
+
+  // CPF obrigatório e válido para morador e admin (porteiro loga por nome, CPF opcional).
+  if ((tipo === 'morador' || tipo === 'admin') && !morador_id) {
+    if (!cpfLimpo || cpfLimpo.length !== 11 || !cpfValido(cpfLimpo)) {
+      return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos).' });
+    }
   }
 
   // Se morador_id foi fornecido (ou seja, selecionou morador existente para admin)
@@ -2808,12 +2934,12 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
     telefone: telefone || null,
     cpf: cpfLimpo,
     cep: cepLimpo,
-    endereco_logradouro: endereco_logradouro?.trim() || null,
+    endereco_logradouro: maiuscula(endereco_logradouro?.trim()) || null,
     endereco_numero: endereco_numero?.trim() || null,
-    endereco_bairro: endereco_bairro?.trim() || null,
-    endereco_cidade: endereco_cidade?.trim() || null,
+    endereco_bairro: maiuscula(endereco_bairro?.trim()) || null,
+    endereco_cidade: maiuscula(endereco_cidade?.trim()) || null,
     endereco_uf: endereco_uf?.trim().toUpperCase().slice(0, 2) || null,
-    endereco_complemento: endereco_complemento?.trim() || null,
+    endereco_complemento: maiuscula(endereco_complemento?.trim()) || null,
     ativo: true,
     aprovado: true,
   });
@@ -2834,7 +2960,7 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
     return res.status(400).json({ error: 'Tipo inválido.' });
   }
 
-  const nomeLimpo = (nome || '').trim();
+  const nomeLimpo = maiuscula((nome || '').trim()) || '';
   const cpfLimpo = cpf !== undefined ? ((cpf || '').replace(/\D/g, '') || null) : undefined;
 
   if (cpfLimpo && !cpfValido(cpfLimpo)) {
@@ -2873,22 +2999,22 @@ app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req
     updatesPerfil.cep = String(cep).replace(/\D/g, '') || null;
   }
   if (endereco_logradouro !== undefined) {
-    updatesPerfil.endereco_logradouro = (endereco_logradouro || '').trim() || null;
+    updatesPerfil.endereco_logradouro = maiuscula((endereco_logradouro || '').trim()) || null;
   }
   if (endereco_numero !== undefined) {
     updatesPerfil.endereco_numero = (endereco_numero || '').trim() || null;
   }
   if (endereco_bairro !== undefined) {
-    updatesPerfil.endereco_bairro = (endereco_bairro || '').trim() || null;
+    updatesPerfil.endereco_bairro = maiuscula((endereco_bairro || '').trim()) || null;
   }
   if (endereco_cidade !== undefined) {
-    updatesPerfil.endereco_cidade = (endereco_cidade || '').trim() || null;
+    updatesPerfil.endereco_cidade = maiuscula((endereco_cidade || '').trim()) || null;
   }
   if (endereco_uf !== undefined) {
     updatesPerfil.endereco_uf = (endereco_uf || '').trim().toUpperCase().slice(0, 2) || null;
   }
   if (endereco_complemento !== undefined) {
-    updatesPerfil.endereco_complemento = (endereco_complemento || '').trim() || null;
+    updatesPerfil.endereco_complemento = maiuscula((endereco_complemento || '').trim()) || null;
   }
 
   // Atualiza metadados no Auth
@@ -3101,9 +3227,15 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
       observacao,
     } = req.body || {};
 
-    const novoNome = (nome || '').trim();
+    const novoNome = maiuscula((nome || '').trim()) || '';
     if (!novoNome) {
       return res.status(400).json({ error: 'Informe o nome do visitante.' });
+    }
+
+    // CPF obrigatório e válido.
+    const cpfEditAdmin = (documento || '').replace(/\D/g, '');
+    if (cpfEditAdmin.length !== 11 || !cpfValido(cpfEditAdmin)) {
+      return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos) para o visitante.' });
     }
 
     const docLimpoOriginal = (documentoOriginal || '').replace(/\D/g, '');
@@ -3567,8 +3699,8 @@ app.post('/api/admin/notificacoes', requireAuth, requireRole('admin'), async (re
     .from('notificacoes_morador')
     .insert({
       morador_id,
-      titulo: titulo.trim(),
-      texto: texto.trim(),
+      titulo: maiuscula(titulo.trim()),
+      texto: maiuscula(texto.trim()),
       dias: diasNum,
       expira_em: expiraEm,
       criado_por: req.user.id,

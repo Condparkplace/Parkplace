@@ -185,6 +185,23 @@ input:focus, select:focus, textarea:focus {
 }
 textarea { resize: vertical; min-height: 60px; }
 
+/* Caixa alta visual nos campos de conteúdo (nome, endereço, observação, placa,
+   motivo, título, etc.). O backend também grava em MAIÚSCULAS. Não inclui
+   e-mail, senha, CPF, telefone e CEP. */
+#nome, #nome_pessoa, #nome_visitante,
+#end_logradouro, #end_bairro, #end_cidade, #end_uf,
+#cad_end_logradouro, #cad_end_bairro, #cad_end_cidade, #cad_end_uf,
+#morador_end_logradouro, #morador_end_bairro, #morador_end_cidade, #morador_end_uf, #morador_end_complemento,
+#observacao, #observacao_saida, #modal-saida-obs,
+#motivo-cancelamento, #motivo, #bloqueio-motivo,
+#notif-titulo, #notif-texto,
+#edit-vis-nome, #edit-vis-obs,
+#ifood-nome, #cadml_nome,
+#freq-modal-nome, #popup-vis-nome, #popup-vis-destino,
+#veiculo_placa, #veiculo_placa_rapido, #ifood-placa, #edit-vis-placa, #freq-modal-placa, #popup-vis-placa {
+  text-transform: uppercase;
+}
+
 button {
   cursor: pointer;
   border: none;

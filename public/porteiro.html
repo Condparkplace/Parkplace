@@ -202,7 +202,10 @@
         </div>
 
         <input type="hidden" id="aviso_id" />
-        <button type="submit" class="block" id="btn-entrada">Confirmar entrada</button>
+        <div style="display:flex; justify-content:center; margin-top:16px;">
+          <button type="submit" id="btn-entrada"
+            style="padding:12px 32px; font-size:15px; font-weight:600;">Confirmar entrada</button>
+        </div>
       </form>
       <div id="msg-entrada" class="msg hidden"></div>
 
@@ -1698,23 +1701,7 @@
         return;
       }
 
-      // Para prestador, o endereço completo é obrigatório.
-      if (document.getElementById('tipo').value === 'Prestador') {
-        const campos = {
-          cep: 'o CEP', end_logradouro: 'o logradouro', end_numero: 'o número',
-          end_bairro: 'o bairro', end_cidade: 'a cidade', end_uf: 'a UF',
-        };
-        for (const [id, rotulo] of Object.entries(campos)) {
-          const el = document.getElementById(id);
-          if (!el || !el.value.trim()) {
-            msgEntrada.textContent = `Para prestador, informe ${rotulo} do endereço.`;
-            msgEntrada.className = 'msg erro';
-            msgEntrada.classList.remove('hidden');
-            if (el) el.focus();
-            return;
-          }
-        }
-      }
+      // Endereço do prestador é opcional: não bloqueia o registro da entrada.
 
       // Acesso de carro exige placa; a pé grava "A pé" no lugar da placa.
       const acessoEntrada = document.getElementById('acesso_tipo_entrada').value;
