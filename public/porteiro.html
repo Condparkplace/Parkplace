@@ -2993,30 +2993,42 @@
     }
 
     // ---------- Troca de turno ----------
-    // Abre uma tela de login sobreposta que trava o sistema até o próximo
-    // porteiro autenticar. A sessão atual só é substituída quando o novo
-    // login tem sucesso (se cancelar, nada é perdido).
-    function abrirTrocaTurno() {
-      const overlay = document.getElementById('overlay-troca-turno');
+    // Desloga imediatamente o porteiro atual e abre a tela de login sobreposta
+    // para que o próximo porteiro assuma o plantão.
+    let nomePorteiroSaindo = '';
+
+    async function abrirTrocaTurno() {
+      nomePorteiroSaindo = perfil ? perfil.nome : '';
       document.getElementById('turno-login').value = '';
       document.getElementById('turno-senha').value = '';
       document.getElementById('msg-turno').classList.add('hidden');
-      document.getElementById('turno-atual-nome').textContent = perfil ? perfil.nome : '';
+      document.getElementById('turno-atual-nome').textContent = nomePorteiroSaindo;
+
+      const overlay = document.getElementById('overlay-troca-turno');
       overlay.classList.remove('hidden');
       overlay.style.display = 'flex';
       setTimeout(() => document.getElementById('turno-login').focus(), 50);
+
+      // Desloga imediatamente a sessão do porteiro que está saindo
+      try {
+        await api('/api/logout', { method: 'POST' });
+      } catch (e) {
+        console.warn('Logout na troca de turno:', e);
+      }
+      perfil = null;
     }
 
-    // Encerra a sessão do porteiro atual e volta para a tela de login.
-    async function sairTrocaTurno() {
-      try { await api('/api/logout', { method: 'POST' }); } catch { }
+    // Como já deslogou ao abrir a troca de turno, o botão voltar redireciona para o login
+    function cancelarTrocaTurno() {
       window.location.href = '/login.html';
     }
 
-    function cancelarTrocaTurno() {
+    function fecharOverlayTrocaTurno() {
       const overlay = document.getElementById('overlay-troca-turno');
-      overlay.classList.add('hidden');
-      overlay.style.display = 'none';
+      if (overlay) {
+        overlay.classList.add('hidden');
+        overlay.style.display = 'none';
+      }
     }
 
     async function confirmarTrocaTurno() {
@@ -3060,7 +3072,7 @@
         }
 
         // Registra a troca de turno no histórico (não bloqueia a troca se falhar).
-        const porteiroAnterior = perfil ? perfil.nome : null;
+        const porteiroAnterior = nomePorteiroSaindo || null;
         try {
           await api('/api/portaria/troca-turno', {
             method: 'POST',
@@ -3075,8 +3087,9 @@
         document.getElementById('porteiro-plantao').textContent = novoPerfil.nome;
         document.getElementById('btn-exportar').classList.toggle('hidden', novoPerfil.tipo !== 'admin');
 
-        cancelarTrocaTurno();
+        fecharOverlayTrocaTurno();
         trocarAba('entrada');
+        carregarPrevistas();
         msgEntrada.textContent = `Plantão assumido por ${novoPerfil.nome}.`;
         msgEntrada.className = 'msg ok';
         msgEntrada.classList.remove('hidden');
@@ -3118,9 +3131,6 @@
       <button type="button" class="block" id="btn-confirmar-turno" onclick="confirmarTrocaTurno()"
         style="margin-top:18px;">
         Assumir plantão
-      </button>
-      <button type="button" class="block secundario" onclick="sairTrocaTurno()" style="margin-top:10px;">
-        &#128682; Apenas sair (encerrar sessão)
       </button>
       <button type="button" class="block" onclick="cancelarTrocaTurno()"
         style="margin-top:10px; background:transparent; color:var(--texto-suave); box-shadow:none;">

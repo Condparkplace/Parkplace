@@ -1389,29 +1389,15 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
   // 2) Acrescenta as VISITAS RECORRENTES cujo dia da semana corresponde a hoje
   try {
     const hojeDOW = diaSemanaHojeBR();
-    const hojeStr = dataHojeBR();
-    const inicioHoje = `${hojeStr}T00:00:00-03:00`;
-    const fimHoje = `${hojeStr}T23:59:59-03:00`;
 
-    // Busca entradas já registradas hoje na portaria para não exibir recorrentes que já entraram
-    const { data: regsHoje } = await supabaseAdmin
-      .from('registros_portaria')
-      .select('nome_pessoa, documento, destino_bloco')
-      .gte('entrada', new Date(inicioHoje).toISOString())
-      .lte('entrada', new Date(fimHoje).toISOString());
-
-    const jaEntraramHoje = new Set();
-    (regsHoje || []).forEach((r) => {
-      const doc = (r.documento || '').replace(/\D/g, '');
-      const nome = (r.nome_pessoa || '').trim().toLowerCase();
-      if (doc) jaEntraramHoje.add(doc);
-      if (nome) jaEntraramHoje.add(nome);
-    });
-
-    const { data: recs } = await supabaseAdmin
+    const { data: recs, error: recsErr } = await supabaseAdmin
       .from('visitas_recorrentes')
       .select('*, morador:perfis!visitas_recorrentes_morador_id_fkey(nome, bloco, apartamento, telefone)')
       .eq('ativo', true);
+
+    if (recsErr) {
+      console.error('Erro ao buscar visitas_recorrentes:', recsErr);
+    }
 
     const doDia = (recs || []).filter(
       (r) => Array.isArray(r.dias_semana) && r.dias_semana.includes(hojeDOW)
@@ -1425,10 +1411,7 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
     const recorrentes = doDia
       .filter((r) => {
         const d = (r.documento_visitante || '').replace(/\D/g, '');
-        const n = (r.nome_visitante || '').trim().toLowerCase();
         if (d && docsAvisos.has(d)) return false; // já tem aviso específico hoje
-        if (d && jaEntraramHoje.has(d)) return false; // já deu entrada hoje
-        if (n && jaEntraramHoje.has(n)) return false; // já deu entrada hoje
         return true;
       })
       .map((r) => ({
@@ -1448,7 +1431,7 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
 
     avisos = avisos.concat(recorrentes);
   } catch (e) {
-    // Tabela de recorrências pode não existir ainda; segue só com os avisos.
+    console.error('Falha ao processar visitas recorrentes:', e);
   }
 
   res.json({ avisos });
@@ -3085,6 +3068,251 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
     res.json({ visitantes });
   } catch (error) {
     res.status(400).json({ error: error.message });
+  }
+});
+
+// Edita dados cadastrais de um visitante (atualiza registros_portaria, avisos_visitas, visitas_recorrentes e observações)
+app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const {
+      chaveOriginal,
+      nomeOriginal,
+      documentoOriginal,
+      nome,
+      documento,
+      tipo,
+      veiculo_placa,
+      observacao,
+    } = req.body || {};
+
+    const novoNome = (nome || '').trim();
+    if (!novoNome) {
+      return res.status(400).json({ error: 'Informe o nome do visitante.' });
+    }
+
+    const docLimpoOriginal = (documentoOriginal || '').replace(/\D/g, '');
+    const nomeNormOriginal = (nomeOriginal || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    const novoDocFormatado = formatarDocumento(documento);
+    const novoDocLimpo = (documento || '').replace(/\D/g, '');
+    const novoNomeNorm = novoNome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+    const novoTipo = tipo || 'Visitante';
+    const novaPlaca = (veiculo_placa || '').trim().toUpperCase() || null;
+
+    // 1. Atualiza em registros_portaria
+    const { data: todosRegs } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('id, nome_pessoa, documento');
+    const idsRegs = (todosRegs || [])
+      .filter((r) => {
+        const rDoc = (r.documento || '').replace(/\D/g, '');
+        if (docLimpoOriginal && rDoc && rDoc === docLimpoOriginal) return true;
+        const rNome = (r.nome_pessoa || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNormOriginal && rNome === nomeNormOriginal) return true;
+        return false;
+      })
+      .map((r) => r.id);
+
+    if (idsRegs.length > 0) {
+      await supabaseAdmin
+        .from('registros_portaria')
+        .update({
+          nome_pessoa: novoNome,
+          documento: novoDocFormatado || null,
+          tipo: novoTipo,
+          veiculo_placa: novaPlaca,
+        })
+        .in('id', idsRegs);
+    }
+
+    // 2. Atualiza em avisos_visitas
+    const { data: todosAvisos } = await supabaseAdmin
+      .from('avisos_visitas')
+      .select('id, nome_visitante, documento_visitante');
+    const idsAvisos = (todosAvisos || [])
+      .filter((a) => {
+        const aDoc = (a.documento_visitante || '').replace(/\D/g, '');
+        if (docLimpoOriginal && aDoc && aDoc === docLimpoOriginal) return true;
+        const aNome = (a.nome_visitante || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNormOriginal && aNome === nomeNormOriginal) return true;
+        return false;
+      })
+      .map((a) => a.id);
+
+    if (idsAvisos.length > 0) {
+      await supabaseAdmin
+        .from('avisos_visitas')
+        .update({
+          nome_visitante: novoNome,
+          documento_visitante: novoDocFormatado || null,
+          tipo: novoTipo,
+          veiculo_placa: novaPlaca,
+        })
+        .in('id', idsAvisos);
+    }
+
+    // 3. Atualiza em visitas_recorrentes
+    const { data: todosRecs } = await supabaseAdmin
+      .from('visitas_recorrentes')
+      .select('id, nome_visitante, documento_visitante');
+    const idsRecs = (todosRecs || [])
+      .filter((r) => {
+        const rDoc = (r.documento_visitante || '').replace(/\D/g, '');
+        if (docLimpoOriginal && rDoc && rDoc === docLimpoOriginal) return true;
+        const rNome = (r.nome_visitante || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNormOriginal && rNome === nomeNormOriginal) return true;
+        return false;
+      })
+      .map((r) => r.id);
+
+    if (idsRecs.length > 0) {
+      await supabaseAdmin
+        .from('visitas_recorrentes')
+        .update({
+          nome_visitante: novoNome,
+          documento_visitante: novoDocFormatado || null,
+          tipo: novoTipo,
+          veiculo_placa: novaPlaca,
+        })
+        .in('id', idsRecs);
+    }
+
+    // 4. Atualiza em observacoes_visitantes
+    const novaChave = novoDocLimpo || ('nome:' + novoNomeNorm);
+    const chaveAntiga = chaveOriginal || docLimpoOriginal || ('nome:' + nomeNormOriginal);
+
+    if (observacao !== undefined && observacao !== null) {
+      const textoObs = observacao.trim();
+      if (textoObs) {
+        await salvarObservacaoVisitante({
+          chave: novaChave,
+          doc: novoDocFormatado,
+          nome: novoNome,
+          texto: textoObs,
+          userId: req.user.id,
+          exibirAlerta: true,
+        });
+      }
+    }
+
+    // Se a chave mudou e existia observação com a chave antiga, migra para a nova chave
+    if (chaveAntiga && chaveAntiga !== novaChave) {
+      const obsAntiga = cacheObsVisitantes.get(chaveAntiga);
+      if (obsAntiga) {
+        cacheObsVisitantes.delete(chaveAntiga);
+        obsAntiga.chave = novaChave;
+        obsAntiga.nome = novoNome;
+        obsAntiga.documento = novoDocFormatado;
+        cacheObsVisitantes.set(novaChave, obsAntiga);
+        salvarCacheObsVisitantes();
+        try {
+          await supabaseAdmin.from('observacoes_visitantes').delete().eq('chave', chaveAntiga);
+          await supabaseAdmin.from('observacoes_visitantes').upsert({
+            chave: novaChave,
+            nome: novoNome,
+            documento: novoDocFormatado,
+            observacao: obsAntiga.observacao,
+            historico: obsAntiga.historico || [],
+            atualizado_em: new Date().toISOString(),
+            atualizado_por: req.user.id,
+          }, { onConflict: 'chave' });
+        } catch (e) {}
+      }
+    }
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Exclui um visitante cadastrado (remove registros_portaria, avisos_visitas, visitas_recorrentes e observações vinculadas)
+app.post('/api/admin/visitantes/excluir', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { chave, nome, documento } = req.body || {};
+    const docLimpo = (documento || '').replace(/\D/g, '');
+    const nomeNorm = (nome || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+
+    if (!chave && !docLimpo && !nomeNorm) {
+      return res.status(400).json({ error: 'Informe a identificação do visitante para exclusão.' });
+    }
+
+    // 1. Exclui registros_portaria
+    const { data: todosRegs } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('id, nome_pessoa, documento');
+    const idsRegs = (todosRegs || [])
+      .filter((r) => {
+        const rDoc = (r.documento || '').replace(/\D/g, '');
+        if (docLimpo && rDoc && rDoc === docLimpo) return true;
+        const rNome = (r.nome_pessoa || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNorm && rNome === nomeNorm) return true;
+        return false;
+      })
+      .map((r) => r.id);
+
+    if (idsRegs.length > 0) {
+      await supabaseAdmin
+        .from('registros_portaria')
+        .delete()
+        .in('id', idsRegs);
+    }
+
+    // 2. Exclui avisos_visitas
+    const { data: todosAvisos } = await supabaseAdmin
+      .from('avisos_visitas')
+      .select('id, nome_visitante, documento_visitante');
+    const idsAvisos = (todosAvisos || [])
+      .filter((a) => {
+        const aDoc = (a.documento_visitante || '').replace(/\D/g, '');
+        if (docLimpo && aDoc && aDoc === docLimpo) return true;
+        const aNome = (a.nome_visitante || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNorm && aNome === nomeNorm) return true;
+        return false;
+      })
+      .map((a) => a.id);
+
+    if (idsAvisos.length > 0) {
+      await supabaseAdmin
+        .from('avisos_visitas')
+        .delete()
+        .in('id', idsAvisos);
+    }
+
+    // 3. Exclui visitas_recorrentes
+    const { data: todosRecs } = await supabaseAdmin
+      .from('visitas_recorrentes')
+      .select('id, nome_visitante, documento_visitante');
+    const idsRecs = (todosRecs || [])
+      .filter((r) => {
+        const rDoc = (r.documento_visitante || '').replace(/\D/g, '');
+        if (docLimpo && rDoc && rDoc === docLimpo) return true;
+        const rNome = (r.nome_visitante || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        if (nomeNorm && rNome === nomeNorm) return true;
+        return false;
+      })
+      .map((r) => r.id);
+
+    if (idsRecs.length > 0) {
+      await supabaseAdmin
+        .from('visitas_recorrentes')
+        .delete()
+        .in('id', idsRecs);
+    }
+
+    // 4. Exclui observações do visitante
+    const chavesParaDeletar = [chave, docLimpo, 'nome:' + nomeNorm].filter(Boolean);
+    for (const c of chavesParaDeletar) {
+      cacheObsVisitantes.delete(c);
+      try {
+        await supabaseAdmin.from('observacoes_visitantes').delete().eq('chave', c);
+      } catch (e) {}
+    }
+    salvarCacheObsVisitantes();
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
   }
 });
 

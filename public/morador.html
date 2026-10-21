@@ -6,6 +6,16 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
   <title>Painel do Morador - Park Place</title>
   <link rel="stylesheet" href="/css/style.css" />
+  <style>
+    @media (max-width: 520px) {
+      .grupo-convite {
+        flex-direction: column !important;
+      }
+      .btn-copiar-convite {
+        width: 100% !important;
+      }
+    }
+  </style>
 </head>
 
 <body>
@@ -109,13 +119,25 @@
             onclick="mostrarFormPrestador()">+ Cadastrar Prestador</button>
         </div>
 
-        <button id="btn-compartilhar-visita" class="block"
-          style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Visitante')">&#128242; Convidar via WhatsApp seu Visitante</button>
+        <!-- Convidar Visitante -->
+        <div class="grupo-convite" style="display: flex; gap: 8px; width: 100%; box-sizing: border-box;">
+          <button id="btn-compartilhar-visita" class="block"
+            style="flex: 1; min-width: 0; padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; box-sizing: border-box;"
+            onclick="compartilharVisita('Visitante')">&#128242; Convidar via WhatsApp seu Visitante</button>
+          <button type="button" id="btn-copiar-visita" class="secundario btn-copiar-convite"
+            style="flex-shrink: 0; padding: 14px 16px; font-size: 0.98em; margin: 0; white-space: nowrap; box-sizing: border-box; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;"
+            onclick="copiarLinkVisita('Visitante', this)" title="Copiar link para enviar ao Visitante">&#128203; Copiar link</button>
+        </div>
 
-        <button id="btn-compartilhar-prestador" class="block"
-          style="padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; width: 100%; box-sizing: border-box;"
-          onclick="compartilharVisita('Prestador')">&#128242; Convidar via WhatsApp seu Prestador de serviço</button>
+        <!-- Convidar Prestador de serviço -->
+        <div class="grupo-convite" style="display: flex; gap: 8px; width: 100%; box-sizing: border-box;">
+          <button id="btn-compartilhar-prestador" class="block"
+            style="flex: 1; min-width: 0; padding: 14px; font-size: 1.05em; margin: 0; background-color: #25d366; border-color: #25d366; color: white; box-sizing: border-box;"
+            onclick="compartilharVisita('Prestador')">&#128242; Convidar via WhatsApp seu Prestador de serviço</button>
+          <button type="button" id="btn-copiar-prestador" class="secundario btn-copiar-convite"
+            style="flex-shrink: 0; padding: 14px 16px; font-size: 0.98em; margin: 0; white-space: nowrap; box-sizing: border-box; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px;"
+            onclick="copiarLinkVisita('Prestador', this)" title="Copiar link para enviar ao Prestador de serviço">&#128203; Copiar link</button>
+        </div>
         <!-- Alerta de Encomendas -->
         <div id="alerta-encomendas" class="hidden"
           style="margin-top: 8px; margin-bottom: 0px; background-color: #fdf2f8; border: 1px solid #fbcfe8; border-radius: 8px; padding: 16px; width: 100%; max-width: 100%; box-sizing: border-box; overflow: hidden; word-break: break-word;">
@@ -793,6 +815,53 @@
       } catch (err) {
         if (janela) janela.close();
         alert('Não foi possível gerar o link: ' + (err.message || 'tente novamente.'));
+      }
+    }
+
+    async function copiarLinkVisita(tipo, btn) {
+      if (!perfil || !perfil.id) return;
+      const textoOriginal = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = 'Gerando...';
+      }
+
+      try {
+        const { caminho } = await api('/api/morador/link-visita?tipo=' + encodeURIComponent(tipo));
+        const link = window.location.origin + caminho;
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(link);
+        } else {
+          const inputTemp = document.createElement('textarea');
+          inputTemp.value = link;
+          inputTemp.style.position = 'fixed';
+          inputTemp.style.opacity = '0';
+          document.body.appendChild(inputTemp);
+          inputTemp.select();
+          document.execCommand('copy');
+          document.body.removeChild(inputTemp);
+        }
+
+        if (btn) {
+          btn.innerHTML = '✅ Link copiado!';
+          btn.style.backgroundColor = '#dcfce7';
+          btn.style.color = '#15803d';
+          btn.style.borderColor = '#86efac';
+          setTimeout(() => {
+            btn.innerHTML = textoOriginal;
+            btn.style.backgroundColor = '';
+            btn.style.color = '';
+            btn.style.borderColor = '';
+            btn.disabled = false;
+          }, 2500);
+        }
+      } catch (err) {
+        alert('Não foi possível gerar o link: ' + (err.message || 'tente novamente.'));
+        if (btn) {
+          btn.innerHTML = textoOriginal;
+          btn.disabled = false;
+        }
       }
     }
 

@@ -1195,6 +1195,10 @@
       renderizarVisitantes(todosVisitantes);
     }
 
+    let listaVisitantesRender = [];
+    let visitanteEmEdicao = null;
+    let visitanteEmExclusao = null;
+
     function renderizarVisitantes(lista) {
       const alvo = document.getElementById('lista-visitantes');
       const total = document.getElementById('total-visitantes');
@@ -1209,13 +1213,23 @@
         return;
       }
 
+      listaVisitantesRender = lista;
       alvo.innerHTML = `
         <table>
           <thead>
-            <tr><th>Nome</th><th>Documento</th><th>Tipo</th><th>Veículo</th><th>Visitas</th><th>Última vez</th><th>Observação</th></tr>
+            <tr>
+              <th>Nome</th>
+              <th>Documento</th>
+              <th>Tipo</th>
+              <th>Veículo</th>
+              <th>Visitas</th>
+              <th>Última vez</th>
+              <th>Observação</th>
+              <th style="text-align:right;">Ações</th>
+            </tr>
           </thead>
           <tbody>
-            ${lista.map((v) => `
+            ${lista.map((v, idx) => `
               <tr>
                 <td data-label="Nome">
                   <a href="javascript:void(0)" onclick="abrirDashboardVisitante('${escapeAttr(v.chave || '')}', '${escapeAttr(v.nome)}', '${escapeAttr(formatarDocumento(v.documento) || '')}')" style="font-weight:600; color:var(--azul, #2563eb); text-decoration:none; cursor:pointer;" title="Clique para abrir dashboard e observação do visitante">
@@ -1230,10 +1244,159 @@
                 <td data-label="Observação" style="max-width:220px;">
                   ${v.observacao_cadastro ? `<span style="display:inline-block; max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:500;" title="${escapeAttr(v.observacao_cadastro)}">📝 ${escapeHtml(v.observacao_cadastro)}</span>` : '<span class="text-muted" style="font-size:12px;">-</span>'}
                 </td>
+                <td data-label="Ações" style="text-align:right; white-space:nowrap;">
+                  <button type="button" class="mini" onclick="abrirEditarVisitantePorIndice(${idx})" style="background:var(--verde, #166534); color:#fff; border:none; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:600; margin-right:4px;" title="Editar visitante">✏️ Editar</button>
+                  <button type="button" class="mini secundario" onclick="confirmarExcluirVisitantePorIndice(${idx})" style="color:#dc2626; border-color:#fca5a5; padding:4px 10px; border-radius:6px; cursor:pointer; font-weight:600;" title="Excluir visitante">🗑️ Excluir</button>
+                </td>
               </tr>
             `).join('')}
           </tbody>
         </table>`;
+    }
+
+    function mascaraCpfInput(el) {
+      let v = el.value.replace(/\D/g, '').slice(0, 11);
+      if (v.length > 9) v = v.replace(/^(\d{3})(\d{3})(\d{3})(\d{1,2})$/, '$1.$2.$3-$4');
+      else if (v.length > 6) v = v.replace(/^(\d{3})(\d{3})(\d{1,3})$/, '$1.$2.$3');
+      else if (v.length > 3) v = v.replace(/^(\d{3})(\d{1,3})$/, '$1.$2');
+      el.value = v;
+    }
+
+    function abrirEditarVisitantePorIndice(idx) {
+      const v = listaVisitantesRender[idx];
+      if (!v) return;
+      visitanteEmEdicao = v;
+
+      document.getElementById('edit-vis-chave-original').value = v.chave || '';
+      document.getElementById('edit-vis-nome-original').value = v.nome || '';
+      document.getElementById('edit-vis-doc-original').value = v.documento || '';
+
+      document.getElementById('edit-vis-nome').value = v.nome || '';
+      document.getElementById('edit-vis-doc').value = formatarDocumento(v.documento) || '';
+      document.getElementById('edit-vis-tipo').value = v.tipo || 'Visitante';
+      document.getElementById('edit-vis-placa').value = v.veiculo_placa || '';
+      document.getElementById('edit-vis-obs').value = v.observacao_cadastro || '';
+
+      const msg = document.getElementById('msg-edit-vis');
+      msg.classList.add('hidden');
+      msg.textContent = '';
+
+      const modal = document.getElementById('modal-editar-visitante');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('edit-vis-nome').focus(), 50);
+    }
+
+    function fecharModalEditarVisitante() {
+      const modal = document.getElementById('modal-editar-visitante');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
+      visitanteEmEdicao = null;
+    }
+
+    async function salvarEditarVisitante(ev) {
+      if (ev) ev.preventDefault();
+      const btn = document.getElementById('btn-salvar-edit-vis');
+      const msg = document.getElementById('msg-edit-vis');
+      const nome = document.getElementById('edit-vis-nome').value.trim();
+      const doc = document.getElementById('edit-vis-doc').value.trim();
+      const tipo = document.getElementById('edit-vis-tipo').value;
+      const placa = document.getElementById('edit-vis-placa').value.trim().toUpperCase();
+      const obs = document.getElementById('edit-vis-obs').value.trim();
+
+      if (!nome) {
+        msg.textContent = 'Informe o nome do visitante.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        return;
+      }
+
+      btn.disabled = true;
+      btn.textContent = 'Salvando...';
+      msg.classList.add('hidden');
+
+      try {
+        await api('/api/admin/visitantes/editar', {
+          method: 'POST',
+          body: JSON.stringify({
+            chaveOriginal: document.getElementById('edit-vis-chave-original').value,
+            nomeOriginal: document.getElementById('edit-vis-nome-original').value,
+            documentoOriginal: document.getElementById('edit-vis-doc-original').value,
+            nome,
+            documento: doc,
+            tipo,
+            veiculo_placa: placa,
+            observacao: obs,
+          }),
+        });
+
+        fecharModalEditarVisitante();
+        await carregarVisitantes();
+      } catch (err) {
+        msg.textContent = err.message || 'Erro ao salvar alterações.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Salvar alterações';
+      }
+    }
+
+    function confirmarExcluirVisitantePorIndice(idx) {
+      const v = listaVisitantesRender[idx];
+      if (!v) return;
+      visitanteEmExclusao = v;
+
+      document.getElementById('excluir-vis-nome').textContent = `${v.nome}${v.documento ? ' (' + formatarDocumento(v.documento) + ')' : ''}`;
+      const msg = document.getElementById('msg-excluir-vis');
+      msg.classList.add('hidden');
+      msg.textContent = '';
+
+      const modal = document.getElementById('modal-excluir-visitante');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    }
+
+    function fecharModalExcluirVisitante() {
+      const modal = document.getElementById('modal-excluir-visitante');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
+      visitanteEmExclusao = null;
+    }
+
+    async function executarExcluirVisitante() {
+      if (!visitanteEmExclusao) return;
+      const btn = document.getElementById('btn-confirmar-excluir-vis');
+      const msg = document.getElementById('msg-excluir-vis');
+
+      btn.disabled = true;
+      btn.textContent = 'Excluindo...';
+      msg.classList.add('hidden');
+
+      try {
+        await api('/api/admin/visitantes/excluir', {
+          method: 'POST',
+          body: JSON.stringify({
+            chave: visitanteEmExclusao.chave,
+            nome: visitanteEmExclusao.nome,
+            documento: visitanteEmExclusao.documento,
+          }),
+        });
+
+        fecharModalExcluirVisitante();
+        await carregarVisitantes();
+      } catch (err) {
+        msg.textContent = err.message || 'Erro ao excluir visitante.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Sim, excluir';
+      }
     }
 
     let visitanteModalAtual = null;
@@ -1672,6 +1835,85 @@
       <div style="margin-top:20px; border-top:1px solid var(--cinza-borda); padding-top:14px;">
         <h3 style="margin:0 0 10px; font-size:14px; color:var(--texto-suave);">Notificações enviadas</h3>
         <div id="notif-historico" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal Editar Visitante -->
+  <div id="modal-editar-visitante" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:14px; width:100%; max-width:480px; padding:24px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+        <h3 style="margin:0; font-size:18px; color:var(--verde-escuro); display:flex; align-items:center; gap:8px;">
+          <span>✏️</span> Editar Visitante Cadastrado
+        </h3>
+        <button type="button" class="secundario mini" onclick="fecharModalEditarVisitante()" style="border:none; font-size:20px; line-height:1; padding:4px 10px; cursor:pointer;">&times;</button>
+      </div>
+
+      <form id="form-editar-visitante" onsubmit="salvarEditarVisitante(event)">
+        <input type="hidden" id="edit-vis-chave-original" />
+        <input type="hidden" id="edit-vis-nome-original" />
+        <input type="hidden" id="edit-vis-doc-original" />
+
+        <div style="margin-bottom:12px;">
+          <label for="edit-vis-nome" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Nome *</label>
+          <input type="text" id="edit-vis-nome" required style="width:100%; box-sizing:border-box;" />
+        </div>
+
+        <div class="grid grid-2" style="margin-bottom:12px;">
+          <div>
+            <label for="edit-vis-doc" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">CPF / Documento</label>
+            <input type="text" id="edit-vis-doc" inputmode="numeric" maxlength="14" placeholder="000.000.000-00" oninput="mascaraCpfInput(this)" style="width:100%; box-sizing:border-box;" />
+          </div>
+          <div>
+            <label for="edit-vis-tipo" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Tipo *</label>
+            <select id="edit-vis-tipo" style="width:100%; box-sizing:border-box;">
+              <option value="Visitante">Visitante</option>
+              <option value="Prestador">Prestador</option>
+              <option value="Entregador">Entregador</option>
+              <option value="Outro">Outro</option>
+            </select>
+          </div>
+        </div>
+
+        <div style="margin-bottom:12px;">
+          <label for="edit-vis-placa" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Placa do Veículo</label>
+          <input type="text" id="edit-vis-placa" maxlength="8" placeholder="Ex: ABC1D23" style="width:100%; box-sizing:border-box; text-transform:uppercase;" />
+        </div>
+
+        <div style="margin-bottom:16px;">
+          <label for="edit-vis-obs" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Observação Cadastral (alerta)</label>
+          <textarea id="edit-vis-obs" rows="3" placeholder="Observação importante ou alerta exibido na portaria..." style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+        </div>
+
+        <div id="msg-edit-vis" class="msg hidden" style="margin-bottom:12px;"></div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px;">
+          <button type="button" class="secundario" onclick="fecharModalEditarVisitante()">Cancelar</button>
+          <button type="submit" id="btn-salvar-edit-vis">Salvar alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal Excluir Visitante -->
+  <div id="modal-excluir-visitante" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:24px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.25); text-align:center;">
+      <div style="font-size:42px; line-height:1; margin-bottom:12px;">🗑️</div>
+      <h3 style="margin:0 0 8px; font-size:18px; color:#b91c1c;">Excluir Visitante Cadastrado</h3>
+      <p style="color:#475569; font-size:14px; margin:0 0 16px;">
+        Tem certeza que deseja excluir o cadastro de <strong id="excluir-vis-nome"></strong>?
+      </p>
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 14px; margin-bottom:18px; text-align:left; font-size:12px; color:#991b1b; line-height:1.4;">
+        ⚠️ Esta ação removerá o registro cadastral, observações vinculadas e histórico de visitas deste visitante.
+      </div>
+
+      <div id="msg-excluir-vis" class="msg hidden" style="margin-bottom:14px;"></div>
+
+      <div style="display:flex; justify-content:center; gap:12px;">
+        <button type="button" class="secundario" onclick="fecharModalExcluirVisitante()">Cancelar</button>
+        <button type="button" id="btn-confirmar-excluir-vis" onclick="executarExcluirVisitante()" style="background:#dc2626; color:#fff;">Sim, excluir</button>
       </div>
     </div>
   </div>
