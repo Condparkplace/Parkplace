@@ -403,7 +403,7 @@
 
       // 3) Não atualizar se algum modal estiver aberto (iFood, Encomenda, Seleção de Morador, etc.).
       const modaisAbertos = document.querySelectorAll(
-        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-retirada-encomenda:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #modal-entrada-visitante-encontrado:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
+        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-escolher-morador:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #modal-entrada-visitante-encontrado:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
       );
       if (modaisAbertos.length > 0) return false;
 
@@ -1743,6 +1743,96 @@
       abrirModalSelecionarMorador(lote);
     });
 
+    // ====================================================
+    // Seletor GENÉRICO de morador (pop-up reutilizável)
+    // Abre um pop-up com a lista de moradores do lote + filtro por nome.
+    // opcoes: { titulo, corBotao, onSelecionar(morador) }
+    // ====================================================
+    let seletorMoradorLista = [];       // moradores carregados
+    let seletorMoradorOnSelecionar = null; // callback ao escolher
+    let seletorMoradorCorBotao = 'var(--verde)';
+
+    async function abrirSeletorMorador(lote, opcoes = {}) {
+      const modal = document.getElementById('modal-escolher-morador');
+      const tituloEl = document.getElementById('escolher-morador-titulo');
+      const loteEl = document.getElementById('escolher-morador-lote');
+      const lista = document.getElementById('escolher-morador-lista');
+      const busca = document.getElementById('escolher-morador-busca');
+      const msg = document.getElementById('escolher-morador-msg');
+
+      seletorMoradorOnSelecionar = typeof opcoes.onSelecionar === 'function' ? opcoes.onSelecionar : null;
+      seletorMoradorCorBotao = opcoes.corBotao || 'var(--verde)';
+      tituloEl.innerHTML = opcoes.titulo || '&#128100; Selecione o morador';
+      loteEl.textContent = lote;
+      busca.value = '';
+      msg.classList.add('hidden');
+      seletorMoradorLista = [];
+      lista.innerHTML = '<p class="text-muted" style="text-align:center; padding:12px 0;">Buscando moradores do ' + escapeHtml(lote) + '...</p>';
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+
+      try {
+        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        seletorMoradorLista = moradores || [];
+        if (!seletorMoradorLista.length) {
+          lista.innerHTML = '<p class="vazio" style="margin:4px 0;">Nenhum morador cadastrado para este lote.</p>';
+          return;
+        }
+        renderSeletorMorador(seletorMoradorLista);
+        setTimeout(() => busca.focus(), 50);
+      } catch (err) {
+        msg.textContent = err.message || 'Erro ao carregar moradores.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        lista.innerHTML = '';
+      }
+    }
+
+    function renderSeletorMorador(moradores) {
+      const lista = document.getElementById('escolher-morador-lista');
+      if (!moradores.length) {
+        lista.innerHTML = '<p class="vazio" style="margin:4px 0;">Nenhum morador corresponde ao filtro.</p>';
+        return;
+      }
+      lista.innerHTML = moradores.map((m) => {
+        const idxReal = seletorMoradorLista.indexOf(m);
+        return `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:12px 14px; border-radius:8px; border:1px solid var(--cinza-borda); gap:10px; cursor:pointer;"
+               onmouseover="this.style.borderColor='${seletorMoradorCorBotao}';"
+               onmouseout="this.style.borderColor='var(--cinza-borda)';"
+               onclick="selecionarNoSeletorMorador(${idxReal})">
+            <div style="min-width:0;">
+              <strong style="display:block; font-size:15px; color:var(--texto-escuro);">&#128100; ${escapeHtml(m.nome)}</strong>
+              <span class="text-muted" style="font-size:12px;">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
+            </div>
+            <button type="button" class="mini" style="background-color:${seletorMoradorCorBotao}; color:white; pointer-events:none; font-weight:600; white-space:nowrap;">Selecionar</button>
+          </div>`;
+      }).join('');
+    }
+
+    function filtrarSeletorMorador() {
+      const termo = (document.getElementById('escolher-morador-busca').value || '').toLowerCase().trim();
+      const filtrados = termo
+        ? seletorMoradorLista.filter((m) => (m.nome || '').toLowerCase().includes(termo))
+        : seletorMoradorLista;
+      renderSeletorMorador(filtrados);
+    }
+
+    function selecionarNoSeletorMorador(idx) {
+      const morador = seletorMoradorLista[idx];
+      if (!morador) return;
+      const cb = seletorMoradorOnSelecionar;
+      fecharSeletorMorador();
+      if (cb) cb(morador);
+    }
+
+    function fecharSeletorMorador() {
+      const modal = document.getElementById('modal-escolher-morador');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+      seletorMoradorOnSelecionar = null;
+    }
+
     async function abrirModalSelecionarMorador(lote) {
       const modal = document.getElementById('modal-selecionar-morador');
       const destaqueLote = document.getElementById('modal-morador-lote-destaque');
@@ -2697,8 +2787,8 @@
       <div id="ifood-area-busca-lote">
         <label for="ifood-lote" style="font-weight:600; font-size:14px; margin-top:0;">Seleção de lote *</label>
         <input type="text" id="ifood-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
-          oninput="buscarMoradoresIfoodDebounced()" onchange="buscarMoradoresIfood()"
-          onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarMoradoresIfood();}"
+          onchange="abrirSeletorMoradorIfood()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); abrirSeletorMoradorIfood();}"
           style="width:100%; font-size:16px; padding:10px 12px;" />
         <datalist id="ifood-lotes-list">
           <option value="Lote 01"></option>
@@ -2731,11 +2821,6 @@
           <option value="Lote 28"></option>
         </datalist>
 
-        <!-- 5. Aí abre a seleção de moradores do lote -->
-        <div id="ifood-moradores-container" class="hidden" style="margin-top: 14px;">
-          <label style="font-weight:600; font-size:13px; color:#475569;">Selecione o morador para confirmar:</label>
-          <div id="ifood-lista-moradores" style="display:flex; flex-direction:column; gap:8px; margin-top:6px;"></div>
-        </div>
       </div>
 
       <div id="msg-ifood" class="msg hidden" style="margin-top:14px;"></div>
@@ -2769,13 +2854,10 @@
       <div style="margin-top: 14px;">
         <label for="encomenda-lote">Lote de destino</label>
         <input type="text" id="encomenda-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
-          onchange="buscarMoradoresEncomenda()" style="width:100%;" />
+          onchange="abrirSeletorMoradorEncomenda()"
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); abrirSeletorMoradorEncomenda();}" style="width:100%;" />
       </div>
 
-      <div id="encomenda-moradores-container" class="hidden" style="margin-top: 14px;">
-        <label>Selecione o Morador</label>
-        <div id="encomenda-lista-moradores" style="display:flex; flex-direction:column; gap:8px;"></div>
-      </div>
 
       <div id="msg-encomenda" class="msg hidden" style="margin-top: 10px;"></div>
 
@@ -2784,23 +2866,7 @@
       </div>
     </div>
   </div>
-  <!-- Modal Retirada Encomenda -->
-  <div id="modal-retirada-encomenda" class="hidden"
-    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
-    <div
-      style="background:#fff; padding:20px; border-radius:8px; width:90%; max-width:400px; box-shadow:0 4px 12px rgba(0,0,0,0.15); max-height:80vh; overflow-y:auto;">
-      <h3 style="margin-top:0;">Quem está retirando?</h3>
-      <p class="text-muted" style="margin-top:0; margin-bottom:14px; font-size:14px;">Selecione abaixo o morador que
-        veio buscar a encomenda.</p>
 
-      <div id="retirada-lista-moradores" style="display:flex; flex-direction:column; gap:8px;"></div>
-      <div id="msg-retirada-encomenda" class="msg hidden" style="margin-top: 10px;"></div>
-
-      <div class="row-inline" style="justify-content: flex-end; margin-top: 20px;">
-        <button class="secundario" onclick="fecharModalRetiradaEncomenda()">Cancelar</button>
-      </div>
-    </div>
-  </div>
 
   <!-- Modal Selecionar Morador (Identificar Morador da Entrada) -->
   <div id="modal-selecionar-morador" class="hidden"
@@ -2836,6 +2902,36 @@
       <div class="row-inline"
         style="justify-content:flex-start; align-items:center; margin-top:6px; padding-top:12px; border-top:1px solid var(--cinza-borda);">
         <button type="button" class="secundario" onclick="fecharModalSelecionarMorador()">Voltar / Cancelar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal GENÉRICO de seleção de morador (reutilizável por iFood, encomenda, retirada) -->
+  <div id="modal-escolher-morador" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:10050; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div
+      style="background:#fff; padding:22px; border-radius:12px; width:100%; max-width:460px; box-shadow:0 8px 24px rgba(0,0,0,0.2); max-height:85vh; display:flex; flex-direction:column; gap:12px;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:1px solid var(--cinza-borda); padding-bottom:12px;">
+        <div>
+          <h3 id="escolher-morador-titulo" style="margin:0 0 6px; font-size:18px; color:var(--texto-escuro);">&#128100; Selecione o morador</h3>
+          <p class="text-muted" style="margin:0; font-size:14px;">
+            Lote: <strong id="escolher-morador-lote" style="color:var(--verde-escuro);"></strong>
+          </p>
+        </div>
+        <button type="button" class="secundario mini" onclick="fecharSeletorMorador()"
+          style="border:none; font-size:20px; line-height:1; padding:4px 8px; cursor:pointer;" title="Fechar">&times;</button>
+      </div>
+
+      <input type="search" id="escolher-morador-busca" placeholder="Filtrar por nome..."
+        autocomplete="off" oninput="filtrarSeletorMorador()"
+        style="margin:0; width:100%;" />
+
+      <div id="escolher-morador-lista" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:60px;"></div>
+
+      <div id="escolher-morador-msg" class="msg hidden" style="margin:0;"></div>
+
+      <div class="row-inline" style="justify-content:flex-start; padding-top:10px; border-top:1px solid var(--cinza-borda);">
+        <button type="button" class="secundario" onclick="fecharSeletorMorador()">Cancelar</button>
       </div>
     </div>
   </div>
@@ -2916,7 +3012,6 @@
       document.getElementById('modal-encomenda').classList.remove('hidden');
       document.getElementById('encomenda-lote').value = '';
       document.getElementById('encomenda-quantidade').value = '1';
-      document.getElementById('encomenda-moradores-container').classList.add('hidden');
       document.getElementById('msg-encomenda').classList.add('hidden');
     }
 
@@ -2924,43 +3019,20 @@
       document.getElementById('modal-encomenda').classList.add('hidden');
     }
 
-    async function buscarMoradoresEncomenda() {
-      const lote = document.getElementById('encomenda-lote').value.trim();
-      const cont = document.getElementById('encomenda-moradores-container');
-      const lista = document.getElementById('encomenda-lista-moradores');
-      const msg = document.getElementById('msg-encomenda');
-
-      msg.classList.add('hidden');
-      if (!lote) {
-        cont.classList.add('hidden');
-        return;
-      }
-
-      lista.innerHTML = '<p class="text-muted">Carregando...</p>';
-      cont.classList.remove('hidden');
-
-      try {
-        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
-        if (!moradores || moradores.length === 0) {
-          lista.innerHTML = '<p class="vazio">Nenhum morador encontrado para este lote.</p>';
-          return;
-        }
-
-        lista.innerHTML = moradores.map(m => `
-          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px; border-radius:6px; border:1px solid var(--cinza-borda);">
-            <div>
-              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
-              <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
-            </div>
-            <button class="mini btn-amarelo-encomenda" style="padding:6px 14px;" onclick="registrarEncomenda('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Receber</button>
-          </div>
-        `).join('');
-
-      } catch (err) {
-        msg.textContent = err.message;
-        msg.className = 'msg erro';
-        lista.innerHTML = '';
-      }
+    // Abre o pop-up genérico de seleção de morador para o recebimento de encomenda.
+    function abrirSeletorMoradorEncomenda() {
+      const loteBruto = (document.getElementById('encomenda-lote').value || '').trim();
+      if (!loteBruto) return;
+      const num = loteBruto.replace(/\D/g, '');
+      const lote = /^\d+$/.test(loteBruto.replace(/\s|lote/gi, '')) && num
+        ? 'Lote ' + String(parseInt(num, 10)).padStart(2, '0')
+        : loteBruto;
+      document.getElementById('encomenda-lote').value = lote;
+      abrirSeletorMorador(lote, {
+        titulo: '📦 Para qual morador é a encomenda?',
+        corBotao: '#2b6cb0',
+        onSelecionar: (m) => registrarEncomenda(lote, m.nome, m.id),
+      });
     }
 
     async function registrarEncomenda(lote, nomeMorador, moradorId) {
@@ -3036,32 +3108,13 @@
       }
     }
 
-    async function abrirModalRetiradaEncomenda(id, lote, observacaoAtual) {
-      document.getElementById('modal-retirada-encomenda').classList.remove('hidden');
-      const lista = document.getElementById('retirada-lista-moradores');
-      lista.innerHTML = '<p class="text-muted">Carregando moradores do ' + escapeHtml(lote) + '...</p>';
-
-      try {
-        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
-        if (!moradores || !moradores.length) {
-          lista.innerHTML = '<p class="vazio">Nenhum morador encontrado para este lote.</p>';
-          return;
-        }
-        lista.innerHTML = moradores.map(m => `
-          <div style="display:flex; justify-content:space-between; align-items:center; background:var(--fundo-cor); padding:10px; border-radius:6px; border:1px solid var(--cinza-borda);">
-            <div>
-              <strong style="display:block;">${escapeHtml(m.nome)}</strong>
-            </div>
-            <button class="mini btn-amarelo-encomenda" style="padding:6px 14px;" onclick="confirmarRetiradaEncomenda(${id}, '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(observacaoAtual).replace(/'/g, "\\'")}')">Selecionar</button>
-          </div>
-        `).join('');
-      } catch (err) {
-        lista.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
-      }
-    }
-
-    function fecharModalRetiradaEncomenda() {
-      document.getElementById('modal-retirada-encomenda').classList.add('hidden');
+    // Abre o pop-up genérico para escolher quem está retirando a encomenda.
+    function abrirModalRetiradaEncomenda(id, lote, observacaoAtual) {
+      abrirSeletorMorador(lote, {
+        titulo: '📦 Quem está retirando a encomenda?',
+        corBotao: '#2b6cb0',
+        onSelecionar: (m) => confirmarRetiradaEncomenda(id, m.nome, observacaoAtual),
+      });
     }
 
     async function confirmarRetiradaEncomenda(id, retiradoPor, observacaoAtual) {
@@ -3070,8 +3123,7 @@
           method: 'POST',
           body: JSON.stringify({ retiradoPor, observacaoAtual })
         });
-        fecharModalRetiradaEncomenda();
-        // Permanece na aba "Retirada Encomendas"; só atualiza a lista e avisa o sucesso.
+        // O seletor genérico já se fecha ao escolher; só atualiza a lista e avisa.
         await carregarEncomendas();
         const msgEncomenda = document.getElementById('msg-encomenda-tab');
         if (msgEncomenda) {
@@ -3086,12 +3138,21 @@
       }
     }
 
-    let debounceTimerIfood = null;
-    function buscarMoradoresIfoodDebounced() {
-      clearTimeout(debounceTimerIfood);
-      debounceTimerIfood = setTimeout(() => {
-        buscarMoradoresIfood();
-      }, 350);
+    // Abre o pop-up genérico de seleção de morador para o fluxo iFood.
+    function abrirSeletorMoradorIfood() {
+      const loteBruto = (document.getElementById('ifood-lote').value || '').trim();
+      if (!loteBruto) return;
+      // Normaliza "12" -> "Lote 12".
+      const num = loteBruto.replace(/\D/g, '');
+      const lote = /^\d+$/.test(loteBruto.replace(/\s|lote/gi, '')) && num
+        ? 'Lote ' + String(parseInt(num, 10)).padStart(2, '0')
+        : loteBruto;
+      document.getElementById('ifood-lote').value = lote;
+      abrirSeletorMorador(lote, {
+        titulo: '🛵 Selecione o morador do iFood',
+        corBotao: '#ea1d2c',
+        onSelecionar: (m) => selecionarMoradorIfood(lote, m.nome, m.id),
+      });
     }
 
     function abrirModalIfood() {
@@ -3108,8 +3169,6 @@
 
       document.getElementById('ifood-lote').value = '';
       document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
-      document.getElementById('ifood-moradores-container').classList.add('hidden');
-      document.getElementById('ifood-lista-moradores').innerHTML = '';
       document.getElementById('ifood-destino-resumo').classList.add('hidden');
 
       const btnConfirmar = document.getElementById('btn-confirmar-ifood');
@@ -3147,7 +3206,6 @@
 
       // Oculta a busca de lote pois já veio do aviso
       document.getElementById('ifood-area-busca-lote').classList.add('hidden');
-      document.getElementById('ifood-moradores-container').classList.add('hidden');
 
       // Limpa os dados do motorista
       document.getElementById('ifood-nome').value = '';
@@ -3170,46 +3228,6 @@
       document.getElementById('modal-ifood').classList.add('hidden');
     }
 
-    async function buscarMoradoresIfood() {
-      const lote = document.getElementById('ifood-lote').value.trim();
-      const cont = document.getElementById('ifood-moradores-container');
-      const lista = document.getElementById('ifood-lista-moradores');
-      const msg = document.getElementById('msg-ifood');
-
-      msg.classList.add('hidden');
-      if (!lote) {
-        cont.classList.add('hidden');
-        return;
-      }
-
-      lista.innerHTML = '<p class="text-muted" style="font-size:14px; margin:8px 0;">Buscando moradores do ' + escapeHtml(lote) + '...</p>';
-      cont.classList.remove('hidden');
-
-      try {
-        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
-        if (!moradores || moradores.length === 0) {
-          lista.innerHTML = '<p class="vazio" style="padding:10px 0;">Nenhum morador encontrado para este lote.</p>';
-          return;
-        }
-
-        lista.innerHTML = moradores.map(m => `
-          <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 12px; border-radius:8px; border:1px solid #cbd5e1;">
-            <div>
-              <strong style="display:block; font-size:15px; color:#1e293b;">${escapeHtml(m.nome)}</strong>
-              <span class="text-muted" style="font-size:12px;">${escapeHtml(m.telefone || 'Sem telefone')}</span>
-            </div>
-            <button type="button" class="mini" style="background:#ea1d2c; color:white; padding:8px 14px; font-weight:700; border:none; border-radius:6px; cursor:pointer;" onclick="selecionarMoradorIfood('${escapeHtml(lote).replace(/'/g, "\\'")}', '${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">Selecionar</button>
-          </div>
-        `).join('');
-
-      } catch (err) {
-        msg.textContent = err.message;
-        msg.className = 'msg erro';
-        msg.classList.remove('hidden');
-        lista.innerHTML = '';
-      }
-    }
-
     function selecionarMoradorIfood(lote, nomeMorador, moradorId) {
       document.getElementById('ifood-lote-selecionado').value = lote;
       document.getElementById('ifood-morador-id').value = moradorId || '';
@@ -3225,7 +3243,6 @@
       document.getElementById('ifood-destino-resumo').classList.remove('hidden');
 
       document.getElementById('ifood-area-busca-lote').classList.add('hidden');
-      document.getElementById('ifood-moradores-container').classList.add('hidden');
 
       const nomeEntregador = (document.getElementById('ifood-nome').value || '').trim();
       const acessoTipo = document.getElementById('ifood-acesso-tipo').value;
@@ -3247,8 +3264,6 @@
       document.getElementById('ifood-lote-selecionado').value = '';
       document.getElementById('ifood-morador-id').value = '';
       document.getElementById('ifood-morador-nome').value = '';
-      document.getElementById('ifood-moradores-container').classList.add('hidden');
-      document.getElementById('ifood-lista-moradores').innerHTML = '';
       document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
       document.getElementById('ifood-lote').focus();
     }
