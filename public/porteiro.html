@@ -47,10 +47,9 @@
       <div id="area-busca-cpf"
         style="background:var(--verde-claro); border-radius:12px; padding:14px 18px; margin:0 0 8px;">
         <div style="display:flex; align-items:center; gap:12px; margin-bottom:6px; flex-wrap:wrap;">
-          <label for="busca-doc"
-            style="margin:0; font-weight:700; color:#1e293b; font-size:14px;">Buscar / Cadastrar Visitas por CPF</label>
-          <span id="aviso-cpf-busca" class="hidden"
-            style="font-size:13px; font-weight:600; line-height:1;"></span>
+          <label for="busca-doc" style="margin:0; font-weight:700; color:#1e293b; font-size:14px;">Buscar / Cadastrar
+            Visitas por CPF</label>
+          <span id="aviso-cpf-busca" class="hidden" style="font-size:13px; font-weight:600; line-height:1;"></span>
         </div>
         <div class="row-inline" style="align-items:center; gap:8px;">
           <input type="text" id="busca-doc" placeholder="Digite o CPF ou documento" inputmode="numeric" maxlength="14"
@@ -298,9 +297,11 @@
         <h2 style="margin:0; white-space:nowrap;">Mapa do condomínio</h2>
         <div style="display:inline-flex; align-items:center; gap:8px; margin:0; flex-wrap:nowrap;">
           <input type="search" id="busca-mapa" placeholder="Destacar lote (ex: 11)..." autocomplete="off"
-            oninput="destacarLoteMapa(this.value)" style="width:230px; height:42px; font-size:14.5px; padding:0 12px; margin:0; box-sizing:border-box;" />
+            oninput="destacarLoteMapa(this.value)"
+            style="width:230px; height:42px; font-size:14.5px; padding:0 12px; margin:0; box-sizing:border-box;" />
           <button type="button" class="secundario mini" onclick="limparDestaqueMapa()"
-            style="height:42px; padding:0 16px; font-size:13.5px; margin:0; white-space:nowrap; flex-shrink:0;">Limpar destaque</button>
+            style="height:42px; padding:0 16px; font-size:13.5px; margin:0; white-space:nowrap; flex-shrink:0;">Limpar
+            destaque</button>
         </div>
       </div>
       <div id="mapa-container"
@@ -354,7 +355,7 @@
 
       // 3) Não atualizar se algum modal estiver aberto (iFood, Encomenda, Seleção de Morador, etc.).
       const modaisAbertos = document.querySelectorAll(
-        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-retirada-encomenda:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
+        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-retirada-encomenda:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
       );
       if (modaisAbertos.length > 0) return false;
 
@@ -592,10 +593,8 @@
       try {
         if (!pularFetch) {
           const { avisos } = await api('/api/portaria/avisos');
-          // Mostra TODOS os avisos pendentes/autorizados que o backend retorna.
-          // (O backend já filtra por status; não filtramos por data no cliente
-          // para não esconder visitas válidas por diferença de fuso/horário.)
-          avisosHoje = avisos || [];
+          // Mostra SOMENTE avisos do dia de hoje (ou frequências ativas para hoje)
+          avisosHoje = (avisos || []).filter(a => a.recorrente || ehHoje(a.data_prevista));
         }
 
         let lista = avisosHoje;
@@ -665,12 +664,12 @@
                     <td data-label="Visitante">${escapeHtml(a.nome_visitante)}<br><span class="text-muted">${escapeHtml(a.veiculo_placa || '')}</span></td>
                     <td data-label="Tipo">${escapeHtml(a.tipo)}</td>
                     <td data-label="Morador / destino">${escapeHtml(m.nome || '-')}<br><span class="text-muted">${escapeHtml(destino)}${m.telefone ? ' | ' + linkWhatsapp(m.telefone) : ''}</span></td>
-                    <td data-label="Previsto">${formatarData(a.data_prevista)}</td>
+                    <td data-label="Previsto">${a.recorrente ? '<span class="badge" style="background:#e0f2fe; color:#0369a1; font-weight:700;">🔄 Frequência</span>' : formatarData(a.data_prevista)}</td>
                     <td data-label="Status">${badgeStatus(a.status)}</td>
                     <td data-label="">
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="mini" style="${btnStyle}" onclick="registrarDeAvisoPorIndice(${idx})">Registrar entrada</button>
-                        <button class="secundario mini" onclick="marcarNaoVeioPorIndice(${idx})">Não veio</button>
+                        ${a.recorrente ? '' : `<button class="secundario mini" onclick="marcarNaoVeioPorIndice(${idx})">Não veio</button>`}
                       </div>
                     </td>
                   </tr>`;
@@ -715,7 +714,7 @@
           msgEntrada.classList.remove('hidden');
         }
       } catch (err) {
-        alert('Erro: ' + err.message);
+        mostrarAlertaSistema(err.message, 'Erro ao Registrar');
       }
     }
 
@@ -738,6 +737,12 @@
       // Quando for aviso de iFood vindo de morador ou entregador sem placa, solicita nome e placa ao porteiro
       if (aviso.nome_visitante === 'Entregador iFood' || (aviso.tipo === 'Entregador' && !aviso.veiculo_placa)) {
         abrirModalIfoodDeAviso(aviso);
+        return;
+      }
+
+      // Quando for visita de FREQUÊNCIA PROGRAMADA (recorrente), solicita a data e hora que está entrando
+      if (aviso.recorrente || String(aviso.id).startsWith('rec-')) {
+        abrirModalEntradaRecorrente(aviso);
         return;
       }
 
@@ -771,7 +776,102 @@
           msgEntrada.classList.remove('hidden');
         }
       } catch (err) {
-        alert('Erro ao registrar entrada: ' + err.message);
+        mostrarAlertaSistema(err.message, 'Entrada Não Permitida');
+      }
+    }
+
+    // ---------- Modal Entrada Frequência Programada (Recorrente) ----------
+    let avisoRecorrenteAtual = null;
+
+    function abrirModalEntradaRecorrente(aviso) {
+      avisoRecorrenteAtual = aviso;
+      const m = aviso.morador || {};
+      document.getElementById('freq-modal-nome').textContent = aviso.nome_visitante || 'Visitante';
+      document.getElementById('freq-modal-tipo').textContent = aviso.tipo || 'Visitante';
+      document.getElementById('freq-modal-destino').textContent = `Destino: ${m.nome || '-'} (${m.bloco || ''})`;
+      document.getElementById('freq-modal-placa').value = aviso.veiculo_placa || '';
+
+      // Preenche com o momento atual local (fuso horário local)
+      const agora = new Date();
+      const ano = agora.getFullYear();
+      const mes = String(agora.getMonth() + 1).padStart(2, '0');
+      const dia = String(agora.getDate()).padStart(2, '0');
+      const hora = String(agora.getHours()).padStart(2, '0');
+      const min = String(agora.getMinutes()).padStart(2, '0');
+      document.getElementById('freq-modal-datahora').value = `${ano}-${mes}-${dia}T${hora}:${min}`;
+
+      const msg = document.getElementById('msg-modal-freq');
+      if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+
+      const modal = document.getElementById('modal-frequencia-entrada');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('freq-modal-datahora').focus(), 100);
+    }
+
+    function fecharModalEntradaRecorrente() {
+      const modal = document.getElementById('modal-frequencia-entrada');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
+      avisoRecorrenteAtual = null;
+    }
+
+    async function confirmarEntradaRecorrente() {
+      if (!avisoRecorrenteAtual) return;
+      const dataHoraVal = document.getElementById('freq-modal-datahora').value;
+      if (!dataHoraVal) {
+        alert('Por favor, informe a data e hora da entrada.');
+        return;
+      }
+
+      const btn = document.getElementById('btn-confirmar-freq-entrada');
+      const originalTexto = btn.textContent;
+      btn.disabled = true;
+      btn.textContent = 'Registrando...';
+
+      const aviso = avisoRecorrenteAtual;
+      const m = aviso.morador || {};
+      const placa = document.getElementById('freq-modal-placa').value.trim();
+
+      try {
+        await api('/api/portaria/entrada', {
+          method: 'POST',
+          body: JSON.stringify({
+            aviso_id: null,
+            nome_pessoa: aviso.nome_visitante,
+            tipo: aviso.tipo || 'Visitante',
+            documento: aviso.documento_visitante || '',
+            veiculo_placa: placa || aviso.veiculo_placa || '',
+            destino_bloco: m.bloco || '',
+            destino_morador: aviso.morador_id || null,
+            endereco_visitante: aviso.endereco_visitante || null,
+            cep_visitante: aviso.cep_visitante || null,
+            observacao: 'Frequência programada',
+            entrada: new Date(dataHoraVal).toISOString()
+          }),
+        });
+
+        fecharModalEntradaRecorrente();
+        await carregarPrevistas();
+        if (msgEntrada) {
+          msgEntrada.textContent = `Entrada de ${aviso.nome_visitante} registrada com sucesso.`;
+          msgEntrada.className = 'msg ok';
+          msgEntrada.classList.remove('hidden');
+        }
+      } catch (err) {
+        const msg = document.getElementById('msg-modal-freq');
+        if (msg) {
+          msg.textContent = 'Erro ao registrar entrada: ' + err.message;
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+        } else {
+          mostrarAlertaSistema(err.message, 'Erro ao Registrar');
+        }
+      } finally {
+        btn.disabled = false;
+        btn.textContent = originalTexto;
       }
     }
 
@@ -784,9 +884,54 @@
         // para refletir que o aviso saiu da lista de pendentes.
         await carregarPrevistas();
       } catch (err) {
-        alert('Não foi possível marcar como "não veio": ' + err.message);
+        mostrarAlertaSistema('Não foi possível marcar como "não veio": ' + err.message, 'Aviso');
       }
     }
+
+    // ---------- Modal de Alerta Padrão do Sistema ----------
+    function mostrarAlertaSistema(mensagem, titulo = null, icone = null, corBorda = null) {
+      const modal = document.getElementById('modal-alerta-sistema');
+      if (!modal) return;
+      const elTitulo = document.getElementById('alerta-sistema-titulo');
+      const elTexto = document.getElementById('alerta-sistema-texto');
+      const elIcone = document.getElementById('alerta-sistema-icone');
+      const elCard = modal.querySelector('div');
+      const elBtn = document.getElementById('btn-fechar-alerta-sistema');
+
+      const msgStr = String(mensagem || '');
+      const ehBloqueio = /bloquead/i.test(msgStr);
+      const ehErro = (/erro|falha|inválid|não permitid/i.test(msgStr)) && !ehBloqueio;
+
+      const t = titulo || (ehBloqueio ? 'Visitante Bloqueado' : (ehErro ? 'Atenção' : 'Aviso do Sistema'));
+      const ico = icone || (ehBloqueio ? '🚫' : (ehErro ? '⚠️' : 'ℹ️'));
+      const cor = corBorda || (ehBloqueio ? '#dc2626' : (ehErro ? '#ea580c' : '#2b6cb0'));
+
+      if (elTitulo) {
+        elTitulo.textContent = t;
+        elTitulo.style.color = ehBloqueio ? '#991b1b' : (ehErro ? '#9a3412' : '#1e3a8a');
+      }
+      if (elTexto) elTexto.textContent = msgStr;
+      if (elIcone) elIcone.textContent = ico;
+      if (elCard) elCard.style.borderTop = `6px solid ${cor}`;
+      if (elBtn) elBtn.style.background = cor;
+
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      setTimeout(() => { if (elBtn) elBtn.focus(); }, 80);
+    }
+
+    function fecharAlertaSistema() {
+      const modal = document.getElementById('modal-alerta-sistema');
+      if (modal) {
+        modal.classList.add('hidden');
+        modal.style.display = 'none';
+      }
+    }
+
+    // Intercepta qualquer alert() nativo para usar o modal padrão do sistema
+    window.alert = function (msg) {
+      mostrarAlertaSistema(msg);
+    };
 
     // ---------- Busca por documento ----------
     async function buscarPorDocumento() {
@@ -1481,7 +1626,7 @@
                       <div class="row-inline" style="justify-content: flex-end;">
                         <button class="secundario mini" style="background-color: #fbe3e0; color: var(--vermelho);" onclick="cancelarEntrada(${r.id})">Cancelar</button>
                         <button class="perigo mini" onclick="registrarSaidaDireta(${r.id}, '${escapeHtml((r.nome_pessoa || '').replace(/'/g, "\\'"))}')">Registrar saída</button>
-                        <button class="secundario mini" style="background-color:#fef3c7; color:#92400e;" onclick='abrirModalConfirmarSaida(${JSON.stringify(r).replace(/'/g, "&#39;")})' title="Registrar saída anotando uma ocorrência">Registrar Problema</button>
+                        <button class="secundario mini" style="background-color:#fef3c7; color:#92400e;" onclick='abrirModalConfirmarSaida(${JSON.stringify(r).replace(/'/g, "&#39;")})' title="Registrar saída anotando uma ocorrência"> Problema?</button>
                       </div>
                     </td>
                   </tr>`;
@@ -2029,6 +2174,73 @@
     }
   </script>
 
+  <!-- Modal Alerta Padrão do Sistema -->
+  <div id="modal-alerta-sistema" class="hidden"
+    style="position:fixed; inset:0; background:rgba(15,23,42,0.65); backdrop-filter:blur(3px); z-index:10005; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div
+      style="background:#fff; border-radius:14px; width:100%; max-width:440px; padding:28px 24px; box-shadow:0 20px 50px rgba(0,0,0,0.35); text-align:center; border-top:6px solid #dc2626;">
+      <div id="alerta-sistema-icone" style="font-size:48px; line-height:1; margin-bottom:12px;">🚫</div>
+      <h3 id="alerta-sistema-titulo" style="margin:0 0 10px; font-size:20px; color:#991b1b; font-weight:700;">
+        Visitante Bloqueado
+      </h3>
+      <p id="alerta-sistema-texto" style="margin:0 0 22px; font-size:15px; color:#334155; line-height:1.5; white-space:pre-wrap; word-break:break-word;">
+      </p>
+      <button type="button" class="block" id="btn-fechar-alerta-sistema" onclick="fecharAlertaSistema()"
+        style="margin:0; background:#dc2626; color:#fff; font-size:15px; font-weight:700; padding:12px; border-radius:8px; border:none; cursor:pointer;">
+        Entendido
+      </button>
+    </div>
+  </div>
+
+  <!-- Modal Entrada Frequência Programada (Recorrente) -->
+  <div id="modal-frequencia-entrada" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);">
+    <div
+      style="background:#fff; padding:24px; border-radius:12px; width:92%; max-width:440px; box-shadow:0 8px 30px rgba(0,0,0,0.25); max-height:88vh; overflow-y:auto; border-top:6px solid #2b6cb0;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="margin:0; font-size:18px; color:#1e3a8a; display:flex; align-items:center; gap:8px;">
+          🗓️ Entrada - Frequência Programada
+        </h3>
+        <button type="button" onclick="fecharModalEntradaRecorrente()"
+          style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:#64748b; padding:0 4px;">&times;</button>
+      </div>
+
+      <div style="background:#f1f5f9; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
+        <div style="font-size:16px; font-weight:700; color:#0f172a;" id="freq-modal-nome">-</div>
+        <div style="font-size:13px; color:#475569; margin-top:2px;">
+          <span id="freq-modal-tipo" class="badge" style="font-size:11px; margin-right:6px;">Visitante</span>
+          <span id="freq-modal-destino">-</span>
+        </div>
+      </div>
+
+      <div style="margin-bottom:12px;">
+        <label for="freq-modal-placa" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Placa do veículo (opcional):</label>
+        <input type="text" id="freq-modal-placa" placeholder="Ex: ABC1D23" style="text-transform:uppercase; width:100%; box-sizing:border-box;" />
+      </div>
+
+      <div style="margin-bottom:16px;">
+        <label for="freq-modal-datahora" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
+          Data e hora da entrada: *
+        </label>
+        <input type="datetime-local" id="freq-modal-datahora" required
+          style="width:100%; box-sizing:border-box; font-size:15px; font-weight:600; padding:10px; border:2px solid #3b82f6; border-radius:8px;" />
+        <span class="text-muted" style="font-size:12px; display:block; margin-top:4px;">
+          Informe o dia e o horário em que o visitante está ingressando.
+        </span>
+      </div>
+
+      <div id="msg-modal-freq" class="msg hidden" style="margin-bottom:12px;"></div>
+
+      <div class="row-inline" style="justify-content:flex-end; gap:10px;">
+        <button type="button" class="secundario" onclick="fecharModalEntradaRecorrente()">Cancelar</button>
+        <button type="button" id="btn-confirmar-freq-entrada" onclick="confirmarEntradaRecorrente()"
+          style="background-color:var(--verde); color:white; font-weight:700; padding:10px 20px; font-size:15px; border-radius:8px; border:none; cursor:pointer;">
+          ✅ Confirmar Entrada
+        </button>
+      </div>
+    </div>
+  </div>
+
   <!-- Modal Cancelar -->
   <div id="modal-cancelar" class="hidden"
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:999; display:flex; align-items:center; justify-content:center;">
@@ -2105,7 +2317,8 @@
         </div>
 
         <div id="wrap-ifood-placa">
-          <label for="ifood-placa" id="lbl-ifood-placa" style="font-weight:600; font-size:13px; margin-top:0;">Placa do veículo *</label>
+          <label for="ifood-placa" id="lbl-ifood-placa" style="font-weight:600; font-size:13px; margin-top:0;">Placa do
+            veículo *</label>
           <input type="text" id="ifood-placa" placeholder="Ex: ABC1D23" maxlength="8"
             style="width:100%; text-transform:uppercase; font-size:16px; font-weight:700; letter-spacing:1px; padding:10px 12px;"
             onkeydown="if(event.key==='Enter'){event.preventDefault(); document.getElementById('ifood-lote').focus();}" />
@@ -2121,8 +2334,7 @@
       <div id="ifood-area-busca-lote">
         <label for="ifood-lote" style="font-weight:600; font-size:14px; margin-top:0;">Seleção de lote *</label>
         <input type="text" id="ifood-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
-          oninput="buscarMoradoresIfoodDebounced()"
-          onchange="buscarMoradoresIfood()"
+          oninput="buscarMoradoresIfoodDebounced()" onchange="buscarMoradoresIfood()"
           onkeydown="if(event.key==='Enter'){event.preventDefault(); buscarMoradoresIfood();}"
           style="width:100%; font-size:16px; padding:10px 12px;" />
         <datalist id="ifood-lotes-list">

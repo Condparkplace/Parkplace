@@ -1336,7 +1336,45 @@ app.get('/api/morador/encomendas', requireAuth, requireRole('morador', 'admin'),
 // PORTEIRO - visitas previstas, entradas e saidas
 // ============================================================
 
-// Avisos pendentes/autorizados que a portaria deve esperar
+// Helpers de fuso horário de Brasília (America/Sao_Paulo)
+function dataHojeBR() {
+  const agora = new Date();
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'America/Sao_Paulo',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(agora);
+}
+
+function diaSemanaHojeBR() {
+  const agora = new Date();
+  const dStr = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Sao_Paulo',
+    weekday: 'short',
+  }).format(agora);
+  const mapa = { Sun: 0, Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6 };
+  return mapa[dStr];
+}
+
+function ehDoDiaHoje(dataPrevistaIso) {
+  if (!dataPrevistaIso) return true;
+  try {
+    const d = new Date(dataPrevistaIso);
+    if (isNaN(d.getTime())) return false;
+    const dataAviso = new Intl.DateTimeFormat('en-CA', {
+      timeZone: 'America/Sao_Paulo',
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+    }).format(d);
+    return dataAviso === dataHojeBR();
+  } catch (e) {
+    return false;
+  }
+}
+
+// Avisos pendentes/autorizados que a portaria deve esperar (SOMENTE do dia de hoje)
 app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const { data, error } = await req.supabase
     .from('avisos_visitas')
@@ -1345,11 +1383,31 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
     .order('data_prevista', { ascending: true, nullsFirst: false });
   if (error) return res.status(400).json({ error: error.message });
 
-  let avisos = data || [];
+  // 1) Filtra avisos normais para exibir SOMENTE as visitas previstas para HOJE
+  let avisos = (data || []).filter((a) => ehDoDiaHoje(a.data_prevista));
 
-  // Acrescenta as VISITAS RECORRENTES cujo dia da semana corresponde a hoje.
+  // 2) Acrescenta as VISITAS RECORRENTES cujo dia da semana corresponde a hoje
   try {
-    const hojeDOW = new Date().getDay(); // 0=Dom ... 6=Sáb
+    const hojeDOW = diaSemanaHojeBR();
+    const hojeStr = dataHojeBR();
+    const inicioHoje = `${hojeStr}T00:00:00-03:00`;
+    const fimHoje = `${hojeStr}T23:59:59-03:00`;
+
+    // Busca entradas já registradas hoje na portaria para não exibir recorrentes que já entraram
+    const { data: regsHoje } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('nome_pessoa, documento, destino_bloco')
+      .gte('entrada', new Date(inicioHoje).toISOString())
+      .lte('entrada', new Date(fimHoje).toISOString());
+
+    const jaEntraramHoje = new Set();
+    (regsHoje || []).forEach((r) => {
+      const doc = (r.documento || '').replace(/\D/g, '');
+      const nome = (r.nome_pessoa || '').trim().toLowerCase();
+      if (doc) jaEntraramHoje.add(doc);
+      if (nome) jaEntraramHoje.add(nome);
+    });
+
     const { data: recs } = await supabaseAdmin
       .from('visitas_recorrentes')
       .select('*, morador:perfis!visitas_recorrentes_morador_id_fkey(nome, bloco, apartamento, telefone)')
@@ -1367,11 +1425,16 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
     const recorrentes = doDia
       .filter((r) => {
         const d = (r.documento_visitante || '').replace(/\D/g, '');
-        return !d || !docsAvisos.has(d); // não duplica quem já tem aviso hoje
+        const n = (r.nome_visitante || '').trim().toLowerCase();
+        if (d && docsAvisos.has(d)) return false; // já tem aviso específico hoje
+        if (d && jaEntraramHoje.has(d)) return false; // já deu entrada hoje
+        if (n && jaEntraramHoje.has(n)) return false; // já deu entrada hoje
+        return true;
       })
       .map((r) => ({
         id: 'rec-' + r.id,
         recorrente: true,
+        recorrencia_id: r.id,
         morador_id: r.morador_id,
         nome_visitante: r.nome_visitante,
         documento_visitante: r.documento_visitante,
@@ -1379,7 +1442,7 @@ app.get('/api/portaria/avisos', requireAuth, requireRole('porteiro', 'admin'), a
         tipo: r.tipo,
         data_prevista: null,
         status: 'Pendente',
-        observacao: 'Visita recorrente (frequência semanal)',
+        observacao: 'Frequência programada para hoje',
         morador: r.morador || null,
       }));
 
@@ -2045,8 +2108,15 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
   const tipoFinal = tipo || 'Visitante';
   const isMorador = tipoFinal === 'Morador';
   const agora = new Date().toISOString();
+  const rawAvisoId = aviso_id;
+  const avisoIdValido = (rawAvisoId && !String(rawAvisoId).startsWith('rec-') && !isNaN(Number(rawAvisoId)))
+    ? Number(rawAvisoId)
+    : null;
+
+  const entradaFinal = req.body.entrada ? new Date(req.body.entrada).toISOString() : agora;
+
   const insertPayload = {
-    aviso_id: aviso_id || null,
+    aviso_id: avisoIdValido,
     nome_pessoa,
     documento: docFormatado || null,
     tipo: tipoFinal,
@@ -2058,6 +2128,7 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     cep_visitante: cep_visitante || null,
     observacao: observacao || null,
     registrado_por: req.user.id,
+    entrada: entradaFinal,
     saida: isMorador ? agora : null,
     saida_por: isMorador ? req.user.id : null,
   };
@@ -2097,12 +2168,12 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
 
   if (error) return res.status(400).json({ error: error.message });
 
-  // Se veio de um aviso, atualiza o status dele
-  if (aviso_id) {
+  // Se veio de um aviso real do banco (não de recorrência virtual), atualiza o status dele
+  if (avisoIdValido) {
     await req.supabase
       .from('avisos_visitas')
       .update({ status: 'Entrada Realizada' })
-      .eq('id', aviso_id);
+      .eq('id', avisoIdValido);
   }
 
   // Disparar notificação push se for encomenda

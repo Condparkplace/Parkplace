@@ -40,11 +40,22 @@
       </div>
     </div>
 
-    <div class="grid">
-      <!-- Cadastro de usuario -->
-      <div>
-        <div class="card">
-          <h2>Cadastrar usuário</h2>
+    <!-- Guias / Botões de Navegação -->
+    <div class="tabs" style="margin-bottom:18px;">
+      <button type="button" class="ativo" data-tab="tab-cadastrar" onclick="trocarGuiaAdmin('tab-cadastrar')">
+        ➕ Cadastrar usuário
+      </button>
+      <button type="button" data-tab="tab-moradores" onclick="trocarGuiaAdmin('tab-moradores')">
+        🏠 Moradores cadastrados
+      </button>
+      <button type="button" data-tab="tab-visitantes" onclick="trocarGuiaAdmin('tab-visitantes')">
+        👥 Visitantes cadastrados
+      </button>
+    </div>
+
+    <!-- Guia 1: Cadastrar usuário -->
+    <div id="tab-cadastrar" class="tab-admin-conteudo card">
+      <h2>Cadastrar usuário</h2>
           <form id="form-usuario">
             <label for="tipo">Perfil *</label>
             <select id="tipo" onchange="atualizarCamposPorTipo()">
@@ -243,29 +254,27 @@
               onclick="cancelarEdicao()">Cancelar edição</button>
           </form>
           <div id="msg-usuario" class="msg hidden"></div>
-        </div>
-      </div>
+    </div>
 
-      <!-- Lista de usuarios -->
-      <div class="card">
-        <div
-          style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
-          <h2 style="margin:0;">Moradores cadastrados</h2>
-          <span id="total-usuarios-cadastrados" class="text-muted" style="font-size:13px;"></span>
-        </div>
-        <div class="row-inline" style="margin-bottom:16px;">
-          <input type="text" id="busca-usuario" placeholder="Buscar por nome, lote, CPF, e-mail..."
-            style="flex:1; min-width:220px;" oninput="filtrarUsuarios()" />
-          <button type="button" class="secundario mini" onclick="limparBuscaUsuario()">Limpar</button>
-        </div>
-        <div id="lista-usuarios">
-          <p class="vazio">Carregando...</p>
-        </div>
+    <!-- Guia 2: Moradores cadastrados -->
+    <div id="tab-moradores" class="tab-admin-conteudo card hidden">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+        <h2 style="margin:0;">Moradores cadastrados</h2>
+        <span id="total-usuarios-cadastrados" class="text-muted" style="font-size:13px;"></span>
+      </div>
+      <div class="row-inline" style="margin-bottom:16px;">
+        <input type="text" id="busca-usuario" placeholder="Buscar por nome, lote, CPF, e-mail..."
+          style="flex:1; min-width:220px;" oninput="filtrarUsuarios()" />
+        <button type="button" class="secundario mini" onclick="limparBuscaUsuario()">Limpar</button>
+      </div>
+      <div id="lista-usuarios">
+        <p class="vazio">Carregando...</p>
       </div>
     </div>
 
-    <!-- Listagem de visitantes cadastrados -->
-    <div class="card" style="margin-top:18px;">
+    <!-- Guia 3: Visitantes cadastrados -->
+    <div id="tab-visitantes" class="tab-admin-conteudo card hidden">
       <div
         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
         <h2 style="margin:0;">&#128101; Visitantes cadastrados</h2>
@@ -299,6 +308,33 @@
       carregarVisitantes();
       atualizarCamposPorTipo();
     })();
+
+    // ---------- Controle de Guias (Abas) da Administração ----------
+    function trocarGuiaAdmin(tabId) {
+      const secao = document.getElementById(tabId);
+      const btn = document.querySelector(`.tabs button[data-tab="${tabId}"]`);
+      if (!secao || !btn) return;
+
+      const jaAtivo = btn.classList.contains('ativo') && !secao.classList.contains('hidden');
+
+      // Se já está aberto e o usuário clica novamente, permite recolher (toggle)
+      if (jaAtivo) {
+        secao.classList.add('hidden');
+        btn.classList.remove('ativo');
+        return;
+      }
+
+      document.querySelectorAll('.tab-admin-conteudo').forEach(el => el.classList.add('hidden'));
+      document.querySelectorAll('.tabs button[data-tab]').forEach(b => b.classList.remove('ativo'));
+
+      secao.classList.remove('hidden');
+      btn.classList.add('ativo');
+
+      if (tabId === 'tab-cadastrar') {
+        const nomeInp = document.getElementById('nome');
+        if (nomeInp) nomeInp.focus();
+      }
+    }
 
     let timerBuscaPrestador = null;
 
@@ -560,6 +596,8 @@
 
     function editarUsuario(u) {
       editandoId = u.id;
+      // Expande a guia de cadastro/edição
+      trocarGuiaAdmin('tab-cadastrar');
       document.getElementById('nome').value = u.nome || '';
       document.getElementById('tipo').value = u.tipo || 'morador';
       document.getElementById('bloco').value = u.bloco || '';
