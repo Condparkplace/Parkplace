@@ -1051,6 +1051,13 @@
       if (alertaMorador) alertaMorador.classList.add('hidden');
       esconderBotaoEntradaMorador();
 
+      // Limpa destaque prévio de visitante encontrado
+      const areaVisPrevia = document.getElementById('area-visitante-encontrado');
+      if (areaVisPrevia) areaVisPrevia.classList.add('hidden');
+      const painelPrevPrevio = document.getElementById('painel-previstas');
+      if (painelPrevPrevio) painelPrevPrevio.classList.remove('hidden');
+      visitanteEncontradoAtual = null;
+
       try {
         const docLimpo = doc.replace(/\D/g, '');
         // É CPF quando o que foi digitado é só número (sem letras).
@@ -1392,9 +1399,10 @@
           }),
         });
 
+        const nomeRegistrado = visitanteEncontradoAtual.nome;
         fecharModalEntradaVisitanteEncontrado();
         limparFormEntrada(); // Limpa e restaura a lista de moradores
-        msgEntrada.textContent = `Entrada de ${visitanteEncontradoAtual.nome} (Destino: ${destino}) registrada com sucesso.`;
+        msgEntrada.textContent = `Entrada de ${nomeRegistrado} (Destino: ${destino}) registrada com sucesso.`;
         msgEntrada.className = 'msg ok';
         msgEntrada.classList.remove('hidden');
       } catch (err) {
@@ -1529,6 +1537,11 @@
           }
           document.getElementById('alerta-morador-cpf')?.classList.add('hidden');
           document.getElementById('alerta-obs-visitante')?.classList.add('hidden');
+          const areaVis = document.getElementById('area-visitante-encontrado');
+          if (areaVis) areaVis.classList.add('hidden');
+          const painelPrev = document.getElementById('painel-previstas');
+          if (painelPrev) painelPrev.classList.remove('hidden');
+          visitanteEncontradoAtual = null;
           carregarPrevistas();
         }
       });
@@ -2444,74 +2457,71 @@
 
   <!-- Modal Entrada Frequência Programada (Recorrente) -->
   <div id="modal-frequencia-entrada" class="hidden"
-    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px);">
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.55); z-index:999; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(2px); padding:12px; box-sizing:border-box;">
     <div
-      style="background:#fff; padding:24px; border-radius:12px; width:92%; max-width:440px; box-shadow:0 8px 30px rgba(0,0,0,0.25); max-height:88vh; overflow-y:auto; border-top:6px solid #2b6cb0;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="margin:0; font-size:18px; color:#1e3a8a; display:flex; align-items:center; gap:8px;">
+      style="background:#fff; padding:16px 20px; border-radius:12px; width:100%; max-width:430px; box-shadow:0 8px 30px rgba(0,0,0,0.25); border-top:5px solid #2b6cb0; box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0; font-size:17px; color:#1e3a8a; display:flex; align-items:center; gap:6px;">
           🗓️ Entrada - Frequência Programada
         </h3>
         <button type="button" onclick="fecharModalEntradaRecorrente()"
-          style="background:none; border:none; font-size:24px; line-height:1; cursor:pointer; color:#64748b; padding:0 4px;">&times;</button>
+          style="background:none; border:none; font-size:22px; line-height:1; cursor:pointer; color:#64748b; padding:0 4px;">&times;</button>
       </div>
 
-      <div style="background:#f1f5f9; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
-        <div style="font-size:16px; font-weight:700; color:#0f172a;" id="freq-modal-nome">-</div>
-        <div style="font-size:13px; color:#475569; margin-top:2px;">
-          <span id="freq-modal-tipo" class="badge" style="font-size:11px; margin-right:6px;">Visitante</span>
-          <span id="freq-modal-destino">-</span>
+      <div style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+        <div>
+          <span style="font-size:15px; font-weight:700; color:#0f172a;" id="freq-modal-nome">-</span>
+          <span id="freq-modal-tipo" class="badge" style="font-size:11px; margin-left:6px;">Visitante</span>
         </div>
+        <div style="font-size:12px; color:#475569;" id="freq-modal-destino">-</div>
       </div>
 
       <!-- Meio de transporte: A pé ou De carro -->
-      <div style="margin-bottom:14px;">
-        <label style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:6px;">
+      <div style="margin-bottom:10px;">
+        <label style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">
           Como o visitante está entrando?
         </label>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
           <button type="button" id="btn-transporte-pe" onclick="selecionarTransporteFreq('pe')"
-            style="padding:10px; font-size:14px; font-weight:700; border-radius:8px; cursor:pointer; border:2px solid #cbd5e1; background:#f8fafc; color:#334155; display:flex; align-items:center; justify-content:center; gap:6px;">
+            style="padding:8px 10px; font-size:13px; font-weight:700; border-radius:8px; cursor:pointer; border:2px solid #cbd5e1; background:#f8fafc; color:#334155; display:flex; align-items:center; justify-content:center; gap:6px;">
             🚶 A pé
           </button>
           <button type="button" id="btn-transporte-carro" onclick="selecionarTransporteFreq('carro')"
-            style="padding:10px; font-size:14px; font-weight:700; border-radius:8px; cursor:pointer; border:2px solid #cbd5e1; background:#f8fafc; color:#334155; display:flex; align-items:center; justify-content:center; gap:6px;">
+            style="padding:8px 10px; font-size:13px; font-weight:700; border-radius:8px; cursor:pointer; border:2px solid #cbd5e1; background:#f8fafc; color:#334155; display:flex; align-items:center; justify-content:center; gap:6px;">
             🚗 De carro
           </button>
         </div>
       </div>
 
       <!-- Placa do veículo (abre quando 'De carro' estiver selecionado) -->
-      <div id="area-freq-modal-placa" class="hidden" style="margin-bottom:14px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px;">
-        <label for="freq-modal-placa" style="font-size:13px; font-weight:700; color:#1e40af; display:block; margin-bottom:4px;">
+      <div id="area-freq-modal-placa" class="hidden" style="margin-bottom:10px; background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:8px 12px;">
+        <label for="freq-modal-placa" style="font-size:12px; font-weight:700; color:#1e40af; display:block; margin-bottom:3px;">
           Placa do veículo:
         </label>
         <input type="text" id="freq-modal-placa" placeholder="Ex: ABC1D23" maxlength="8"
-          style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:15px; font-weight:700; padding:8px 10px; border:2px solid #3b82f6; border-radius:6px; background:#fff;" />
+          style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:14px; font-weight:700; padding:6px 10px; border:2px solid #3b82f6; border-radius:6px; background:#fff;" />
       </div>
 
       <!-- Horário de entrada (data fixa, só seleciona a hora) -->
-      <div style="margin-bottom:16px;">
+      <div style="margin-bottom:12px;">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
-          <label for="freq-modal-hora" style="font-size:13px; font-weight:700; color:#1e293b; margin:0;">
+          <label for="freq-modal-hora" style="font-size:12px; font-weight:700; color:#1e293b; margin:0;">
             Hora da entrada: *
           </label>
-          <span id="freq-modal-data-fixa" style="font-size:12px; font-weight:700; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:4px; border:1px solid #e2e8f0;">
+          <span id="freq-modal-data-fixa" style="font-size:11px; font-weight:700; color:#475569; background:#f1f5f9; padding:2px 8px; border-radius:4px; border:1px solid #e2e8f0;">
             Data: Hoje
           </span>
         </div>
         <input type="time" id="freq-modal-hora" required
-          style="width:100%; box-sizing:border-box; font-size:17px; font-weight:700; padding:10px 12px; border:2px solid #3b82f6; border-radius:8px; text-align:center;" />
-        <span class="text-muted" style="font-size:12px; display:block; margin-top:4px;">
-          Apenas selecione o horário em que o visitante está entrando.
-        </span>
+          style="width:100%; box-sizing:border-box; font-size:15px; font-weight:700; padding:6px 10px; border:2px solid #3b82f6; border-radius:8px; text-align:center;" />
       </div>
 
-      <div id="msg-modal-freq" class="msg hidden" style="margin-bottom:12px;"></div>
+      <div id="msg-modal-freq" class="msg hidden" style="margin-bottom:8px;"></div>
 
-      <div class="row-inline" style="justify-content:flex-end; gap:10px;">
-        <button type="button" class="secundario" onclick="fecharModalEntradaRecorrente()">Cancelar</button>
+      <div class="row-inline" style="justify-content:flex-end; gap:8px;">
+        <button type="button" class="secundario" onclick="fecharModalEntradaRecorrente()" style="padding:8px 16px; font-size:14px;">Cancelar</button>
         <button type="button" id="btn-confirmar-freq-entrada" onclick="confirmarEntradaRecorrente()"
-          style="background-color:var(--verde); color:white; font-weight:700; padding:10px 20px; font-size:15px; border-radius:8px; border:none; cursor:pointer;">
+          style="background-color:var(--verde); color:white; font-weight:700; padding:8px 18px; font-size:14px; border-radius:8px; border:none; cursor:pointer;">
           ✅ Confirmar Entrada
         </button>
       </div>
@@ -2520,36 +2530,36 @@
 
   <!-- Modal Entrada de Visitante Cadastrado Encontrado por CPF -->
   <div id="modal-entrada-visitante-encontrado" class="hidden"
-    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
     <div
-      style="background:#fff; border-radius:14px; width:100%; max-width:480px; max-height:90vh; overflow-y:auto; padding:24px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.25); border-top:6px solid var(--verde);">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
-        <h3 style="margin:0; font-size:18px; color:var(--verde-escuro); display:flex; align-items:center; gap:8px;">
+      style="background:#fff; border-radius:12px; width:100%; max-width:440px; padding:16px 20px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:5px solid var(--verde); box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+        <h3 style="margin:0; font-size:17px; color:var(--verde-escuro); display:flex; align-items:center; gap:6px;">
           <span>👤</span> Confirmar Entrada de Visitante
         </h3>
         <button type="button" onclick="fecharModalEntradaVisitanteEncontrado()"
-          style="background:none; border:none; font-size:24px; line-height:1; padding:0 4px; cursor:pointer; color:#64748b;">&times;</button>
+          style="background:none; border:none; font-size:22px; line-height:1; padding:0 4px; cursor:pointer; color:#64748b;">&times;</button>
       </div>
 
       <!-- Cabeçalho com dados fixos do visitante -->
-      <div style="background:#f1f5f9; border-radius:8px; padding:12px 14px; margin-bottom:14px;">
-        <div style="font-size:16px; font-weight:700; color:#0f172a;" id="popup-vis-nome">-</div>
-        <div style="font-size:13px; color:#475569; margin-top:2px;" id="popup-vis-doc">-</div>
+      <div style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+        <div style="font-size:15px; font-weight:700; color:#0f172a;" id="popup-vis-nome">-</div>
+        <div style="font-size:12px; color:#475569;" id="popup-vis-doc">-</div>
       </div>
 
       <form id="form-popup-visitante-encontrado" onsubmit="confirmarEntradaPopupVisitante(event)">
         <!-- Tipo e Acesso -->
-        <div class="grid grid-2" style="margin-bottom:12px;">
+        <div class="grid grid-2" style="margin-bottom:10px; gap:8px;">
           <div>
-            <label for="popup-vis-tipo" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Tipo *</label>
-            <select id="popup-vis-tipo" required onchange="togglePopupEndereco()">
+            <label for="popup-vis-tipo" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Tipo *</label>
+            <select id="popup-vis-tipo" required onchange="togglePopupEndereco()" style="padding:7px 10px; font-size:13px;">
               <option value="Visitante">Visitante</option>
               <option value="Prestador">Prestador de serviço</option>
             </select>
           </div>
           <div>
-            <label for="popup-vis-acesso" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Acesso *</label>
-            <select id="popup-vis-acesso" onchange="togglePopupPlaca()">
+            <label for="popup-vis-acesso" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Acesso *</label>
+            <select id="popup-vis-acesso" onchange="togglePopupPlaca()" style="padding:7px 10px; font-size:13px;">
               <option value="carro">🚗 Entrada de carro</option>
               <option value="pe">🚶 Entrada a pé</option>
             </select>
@@ -2557,36 +2567,36 @@
         </div>
 
         <!-- Placa do veículo (visível se acesso === carro) -->
-        <div id="popup-wrap-placa" style="margin-bottom:12px;">
-          <label for="popup-vis-placa" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Placa do veículo *</label>
+        <div id="popup-wrap-placa" style="margin-bottom:10px;">
+          <label for="popup-vis-placa" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Placa do veículo *</label>
           <input type="text" id="popup-vis-placa" placeholder="Ex: ABC1D23" maxlength="8"
-            style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:14px; padding:10px; border:2px solid #cbd5e1; border-radius:8px;" />
+            style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:14px; padding:7px 10px; border:2px solid #cbd5e1; border-radius:6px;" />
         </div>
 
         <!-- Lote de destino -->
-        <div style="margin-bottom:14px;">
-          <label for="popup-vis-destino" style="font-size:13px; font-weight:700; color:#1e293b; display:block; margin-bottom:4px;">Lote de destino *</label>
+        <div style="margin-bottom:10px;">
+          <label for="popup-vis-destino" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Lote de destino *</label>
           <input type="text" id="popup-vis-destino" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..." required
             autocomplete="off" onchange="normalizarLoteDestino(this)"
-            style="width:100%; box-sizing:border-box; font-size:15px; font-weight:600; padding:10px; border:2px solid #3b82f6; border-radius:8px;" />
+            style="width:100%; box-sizing:border-box; font-size:14px; font-weight:600; padding:7px 10px; border:2px solid #3b82f6; border-radius:6px;" />
         </div>
 
         <!-- Endereço do Prestador (se prestador selecionado) -->
-        <div id="popup-area-endereco" class="hidden" style="margin-bottom:14px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
-          <h4 style="margin:0 0 8px; font-size:13px; color:#1e293b;">Endereço do Prestador</h4>
-          <div style="display:flex; gap:6px; margin-bottom:8px;">
-            <input type="text" id="popup-vis-cep" placeholder="CEP (00000-000)" maxlength="9" style="flex:1;" />
-            <button type="button" class="mini" onclick="buscarCepPopup()">Buscar</button>
+        <div id="popup-area-endereco" class="hidden" style="margin-bottom:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px;">
+          <h4 style="margin:0 0 6px; font-size:12px; color:#1e293b;">Endereço do Prestador</h4>
+          <div style="display:flex; gap:6px; margin-bottom:6px;">
+            <input type="text" id="popup-vis-cep" placeholder="CEP (00000-000)" maxlength="9" style="flex:1; padding:6px 8px; font-size:13px;" />
+            <button type="button" class="mini" onclick="buscarCepPopup()" style="padding:6px 12px;">Buscar</button>
           </div>
-          <input type="text" id="popup-vis-endereco" placeholder="Rua, Número, Bairro, Cidade/UF" style="width:100%; box-sizing:border-box; font-size:13px;" />
+          <input type="text" id="popup-vis-endereco" placeholder="Rua, Número, Bairro, Cidade/UF" style="width:100%; box-sizing:border-box; font-size:12px; padding:6px 8px;" />
         </div>
 
-        <div id="msg-popup-vis" class="msg hidden" style="margin-bottom:14px;"></div>
+        <div id="msg-popup-vis" class="msg hidden" style="margin-bottom:10px;"></div>
 
-        <div style="display:flex; justify-content:flex-end; gap:10px;">
-          <button type="button" class="secundario" onclick="fecharModalEntradaVisitanteEncontrado()">Cancelar</button>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="secundario" onclick="fecharModalEntradaVisitanteEncontrado()" style="padding:8px 16px; font-size:14px;">Cancelar</button>
           <button type="submit" id="btn-confirmar-popup-vis"
-            style="background:var(--verde); color:#fff; font-weight:700; padding:10px 18px; border-radius:8px; border:none; cursor:pointer;">
+            style="background:var(--verde); color:#fff; font-weight:700; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:14px;">
             Confirmar entrada
           </button>
         </div>
