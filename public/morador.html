@@ -15,6 +15,39 @@
         width: 100% !important;
       }
     }
+
+    /* Alternância "Minhas visitas" / "Outros moradores do Lote" com cara de BOTÃO
+       clicável (o pessoal não entendia que era uma aba). */
+    #tabs-visitas {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 16px;
+    }
+    #tabs-visitas button {
+      flex: 1;
+      min-width: 150px;
+      padding: 13px 18px;
+      font-size: 15px;
+      font-weight: 700;
+      border-radius: 10px;
+      border: 2px solid var(--verde);
+      background: #fff;
+      color: var(--verde-escuro, #155c39);
+      cursor: pointer;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+      transition: all .15s ease;
+    }
+    #tabs-visitas button:hover {
+      background: var(--verde-claro, #e7f3ec);
+    }
+    /* Botão selecionado: verde cheio, bem destacado. */
+    #tabs-visitas button.ativo {
+      background: var(--verde);
+      color: #fff;
+      border-color: var(--verde);
+      box-shadow: 0 4px 12px rgba(22,163,74,0.35);
+    }
   </style>
 </head>
 
@@ -214,8 +247,8 @@
       <!-- Abas -->
       <div class="tabs" id="tabs-visitas">
         <button class="ativo" data-aba="minhas" onclick="trocarAbaVisitas('minhas')">Minhas visitas</button>
-        <button data-aba="lote" id="tab-lote" class="hidden" onclick="trocarAbaVisitas('lote')">Visitas gerais do
-          lote</button>
+        <button data-aba="lote" id="tab-lote" class="hidden" onclick="trocarAbaVisitas('lote')">Outros moradores do
+          Lote</button>
       </div>
 
       <!-- Aba: Minhas visitas -->
