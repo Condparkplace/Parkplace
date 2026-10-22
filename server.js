@@ -27,6 +27,7 @@ if (vapidPublicKey && vapidPrivateKey) {
 }
 
 const { supabaseAnon, supabaseAdmin, supabaseForToken } = require('./src/supabase');
+const { whatsappAtivo, enviarTemplateEntrada, descreverEntrada } = require('./src/whatsapp');
 const {
   setSessionCookie,
   clearSessionCookie,
@@ -534,6 +535,81 @@ async function notificarLote(bloco, titulo, mensagem) {
     moradores.forEach(m => {
       webpush.sendNotification(m.push_subscription, payload).catch(err => console.error("Erro push:", err));
     });
+  }
+}
+
+// Formata um horário (ISO) como "13/10 às 14:32" para o aviso de WhatsApp.
+function horarioCurto(iso) {
+  try {
+    const d = iso ? new Date(iso) : new Date();
+    const dia = String(d.getDate()).padStart(2, '0');
+    const mes = String(d.getMonth() + 1).padStart(2, '0');
+    const hora = String(d.getHours()).padStart(2, '0');
+    const min = String(d.getMinutes()).padStart(2, '0');
+    return `${dia}/${mes} às ${hora}:${min}`;
+  } catch {
+    return '';
+  }
+}
+
+// Dispara o aviso de WhatsApp para o morador destino de uma entrada registrada.
+// "Dispara e esquece": nunca lança, apenas loga. O registro de entrada não pode
+// falhar por causa do WhatsApp. Resolve o telefone por destino_morador (quando
+// o porteiro selecionou o morador) ou por lote (todos os moradores do lote).
+async function notificarWhatsappEntrada(registro) {
+  try {
+    if (!whatsappAtivo()) return;
+    if (!registro) return;
+
+    const tipo = registro.tipo || 'Visitante';
+    // Não notifica a entrada do próprio morador (evita auto-aviso).
+    if (tipo === 'Morador') return;
+    // Sentinela administrativa: troca de turno não é visita.
+    if (registro.nome_pessoa === 'Troca de turno') return;
+
+    const oQueChegou = descreverEntrada({ nome_pessoa: registro.nome_pessoa, tipo });
+    const destino = registro.destino_bloco || 'portaria';
+    const horario = horarioCurto(registro.entrada);
+
+    // 1) Destino direto: um morador específico foi selecionado.
+    let telefones = [];
+    if (registro.destino_morador) {
+      const { data: m } = await supabaseAdmin
+        .from('perfis')
+        .select('telefone')
+        .eq('id', registro.destino_morador)
+        .single();
+      if (m && m.telefone) telefones.push(m.telefone);
+    }
+
+    // 2) Fallback: sem morador específico, avisa todos os moradores do lote.
+    if (telefones.length === 0 && registro.destino_bloco) {
+      const numeroBloco = registro.destino_bloco.replace(/lote\s*/i, '').trim();
+      if (numeroBloco) {
+        const { data: moradores } = await supabaseAdmin
+          .from('perfis')
+          .select('telefone, tipo')
+          .ilike('bloco', `%${numeroBloco}%`)
+          .in('tipo', ['morador', 'admin'])
+          .not('telefone', 'is', null);
+        (moradores || []).forEach((m) => {
+          if (m.telefone) telefones.push(m.telefone);
+        });
+      }
+    }
+
+    // Remove duplicados.
+    telefones = [...new Set(telefones.filter(Boolean))];
+    if (telefones.length === 0) return;
+
+    for (const tel of telefones) {
+      const r = await enviarTemplateEntrada({ telefone: tel, oQueChegou, destino, horario });
+      if (!r.ok && r.motivo !== 'desativado') {
+        console.warn('[WhatsApp] Falha ao notificar entrada:', r.motivo, r.detalhe || '');
+      }
+    }
+  } catch (err) {
+    console.warn('[WhatsApp] Erro inesperado ao notificar entrada:', err.message);
   }
 }
 
@@ -2362,6 +2438,9 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
   } else {
     notificarLote(destino_bloco, '🛎️ Nova Visita', `O visitante ${nome_pessoa} chegou na portaria.`);
   }
+
+  // Dispara o aviso por WhatsApp (dispara-e-esquece; não bloqueia a resposta).
+  notificarWhatsappEntrada(data);
 
   res.status(201).json({ registro: data });
 });
