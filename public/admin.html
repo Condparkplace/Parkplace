@@ -1287,7 +1287,11 @@
       document.getElementById('edit-vis-doc').value = formatarDocumento(v.documento) || '';
       document.getElementById('edit-vis-tipo').value = v.tipo || 'Visitante';
       document.getElementById('edit-vis-placa').value = v.veiculo_placa || '';
+      document.getElementById('edit-vis-endereco').value = v.endereco_visitante || '';
+      document.getElementById('edit-vis-cep').value = v.cep_visitante || '';
+      document.getElementById('edit-vis-msg-cep').textContent = '';
       document.getElementById('edit-vis-obs').value = v.observacao_cadastro || '';
+      atualizarCamposEdicaoPorTipo();
 
       const msg = document.getElementById('msg-edit-vis');
       msg.classList.add('hidden');
@@ -1297,6 +1301,57 @@
       modal.classList.remove('hidden');
       modal.style.display = 'flex';
       setTimeout(() => document.getElementById('edit-vis-nome').focus(), 50);
+    }
+
+    // Mostra/oculta e ajusta o formulário conforme o tipo selecionado.
+    // Prestador: exibe o bloco de endereço (dados cadastrais mais completos).
+    // Visitante/Entregador/Outro: oculta o endereço.
+    function atualizarCamposEdicaoPorTipo() {
+      const tipo = document.getElementById('edit-vis-tipo').value;
+      const titulo = document.getElementById('edit-vis-titulo');
+      const blocoEnd = document.getElementById('edit-vis-bloco-endereco');
+      const ehPrestador = tipo === 'Prestador';
+
+      if (blocoEnd) blocoEnd.style.display = ehPrestador ? '' : 'none';
+      if (titulo) titulo.textContent = 'Editar ' + (tipo || 'Visitante') + ' Cadastrado';
+    }
+
+    function mascaraCepEdit(el) {
+      let v = el.value.replace(/\D/g, '').slice(0, 8);
+      if (v.length > 5) v = v.replace(/^(\d{5})(\d{1,3})$/, '$1-$2');
+      el.value = v;
+    }
+
+    async function buscarCepEdit() {
+      const campoCep = document.getElementById('edit-vis-cep');
+      const campoEnd = document.getElementById('edit-vis-endereco');
+      const msgCep = document.getElementById('edit-vis-msg-cep');
+      const cep = (campoCep.value || '').replace(/\D/g, '');
+      if (cep.length !== 8) return;
+      msgCep.style.color = '#64748b';
+      msgCep.textContent = 'Buscando CEP...';
+      try {
+        const resp = await fetch('https://viacep.com.br/ws/' + cep + '/json/');
+        const dados = await resp.json();
+        if (dados && !dados.erro) {
+          const partes = [];
+          if (dados.logradouro) partes.push(dados.logradouro);
+          if (dados.bairro) partes.push(dados.bairro);
+          const cidadeUf = [dados.localidade, dados.uf].filter(Boolean).join('/');
+          if (cidadeUf) partes.push(cidadeUf);
+          const montado = partes.join(', ');
+          // Preenche só se o endereço estiver vazio, para não sobrescrever o que já havia.
+          if (montado && !campoEnd.value.trim()) campoEnd.value = montado;
+          msgCep.style.color = '#166534';
+          msgCep.textContent = montado ? 'Endereço encontrado.' : 'CEP válido.';
+        } else {
+          msgCep.style.color = '#b91c1c';
+          msgCep.textContent = 'CEP não encontrado.';
+        }
+      } catch (e) {
+        msgCep.style.color = '#b91c1c';
+        msgCep.textContent = 'Não foi possível consultar o CEP.';
+      }
     }
 
     function fecharModalEditarVisitante() {
@@ -1316,6 +1371,8 @@
       const doc = document.getElementById('edit-vis-doc').value.trim();
       const tipo = document.getElementById('edit-vis-tipo').value;
       const placa = document.getElementById('edit-vis-placa').value.trim().toUpperCase();
+      const endereco = document.getElementById('edit-vis-endereco').value.trim();
+      const cep = document.getElementById('edit-vis-cep').value.trim();
       const obs = document.getElementById('edit-vis-obs').value.trim();
 
       if (!nome) {
@@ -1350,6 +1407,8 @@
             documento: doc,
             tipo,
             veiculo_placa: placa,
+            endereco_visitante: endereco,
+            cep_visitante: cep,
             observacao: obs,
           }),
         });
@@ -1867,7 +1926,7 @@
     <div style="background:#fff; border-radius:14px; width:100%; max-width:480px; padding:24px 26px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
         <h3 style="margin:0; font-size:18px; color:var(--verde-escuro); display:flex; align-items:center; gap:8px;">
-          <span>✏️</span> Editar Visitante Cadastrado
+          <span>✏️</span> <span id="edit-vis-titulo">Editar Visitante Cadastrado</span>
         </h3>
         <button type="button" class="secundario mini" onclick="fecharModalEditarVisitante()" style="border:none; font-size:20px; line-height:1; padding:4px 10px; cursor:pointer;">&times;</button>
       </div>
@@ -1889,7 +1948,7 @@
           </div>
           <div>
             <label for="edit-vis-tipo" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Tipo *</label>
-            <select id="edit-vis-tipo" style="width:100%; box-sizing:border-box;">
+            <select id="edit-vis-tipo" style="width:100%; box-sizing:border-box;" onchange="atualizarCamposEdicaoPorTipo()">
               <option value="Visitante">Visitante</option>
               <option value="Prestador">Prestador</option>
               <option value="Entregador">Entregador</option>
@@ -1901,6 +1960,26 @@
         <div style="margin-bottom:12px;">
           <label for="edit-vis-placa" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Placa do Veículo</label>
           <input type="text" id="edit-vis-placa" maxlength="8" placeholder="Ex: ABC1D23" style="width:100%; box-sizing:border-box; text-transform:uppercase;" />
+        </div>
+
+        <!-- Bloco de endereço: aplicável a Prestador -->
+        <div id="edit-vis-bloco-endereco" style="margin-bottom:12px; padding:12px 14px; border:1px solid #e2e8f0; border-radius:10px; background:#f8fafc;">
+          <div style="font-size:13px; font-weight:700; color:var(--verde-escuro); margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+            <span>📍</span> Endereço do prestador
+          </div>
+          <div class="grid grid-2" style="margin-bottom:10px;">
+            <div>
+              <label for="edit-vis-cep" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">CEP</label>
+              <input type="text" id="edit-vis-cep" inputmode="numeric" maxlength="9" placeholder="00000-000" oninput="mascaraCepEdit(this)" onblur="buscarCepEdit()" style="width:100%; box-sizing:border-box;" />
+            </div>
+            <div style="display:flex; align-items:flex-end;">
+              <div id="edit-vis-msg-cep" style="font-size:12px; color:#64748b;"></div>
+            </div>
+          </div>
+          <div style="margin-bottom:0;">
+            <label for="edit-vis-endereco" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Endereço completo</label>
+            <input type="text" id="edit-vis-endereco" placeholder="Rua, número, bairro, cidade/UF" style="width:100%; box-sizing:border-box;" />
+          </div>
         </div>
 
         <div style="margin-bottom:16px;">

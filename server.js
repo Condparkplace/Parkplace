@@ -3190,7 +3190,7 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
     // Avisos cadastrados pelos moradores
     const { data: avisos, error: errAv } = await supabaseAdmin
       .from('avisos_visitas')
-      .select('nome_visitante, documento_visitante, veiculo_placa, tipo, criado_em')
+      .select('nome_visitante, documento_visitante, veiculo_placa, tipo, endereco_visitante, cep_visitante, criado_em')
       .order('criado_em', { ascending: false })
       .limit(2000);
     if (errAv) throw errAv;
@@ -3198,7 +3198,7 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
     // Registros reais da portaria (entradas) - ignora encomendas
     const { data: registros, error: errReg } = await supabaseAdmin
       .from('registros_portaria')
-      .select('nome_pessoa, documento, veiculo_placa, tipo, entrada')
+      .select('nome_pessoa, documento, veiculo_placa, tipo, endereco_visitante, cep_visitante, entrada')
       .neq('nome_pessoa', 'Encomenda')
       .order('entrada', { ascending: false })
       .limit(2000);
@@ -3207,13 +3207,15 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
     // Agrega por chave (documento quando houver; senao, nome normalizado).
     const mapa = new Map();
 
-    const adicionar = (nome, documento, placa, tipo, quando) => {
+    const adicionar = (nome, documento, placa, tipo, quando, endereco, cep) => {
       if (!nome || !nome.trim()) return;
       if (nome === 'Entregador iFood') return; // entregas automaticas nao sao visitantes cadastrados
       const nomeLimpo = nome.trim();
       const docLimpo = (documento || '').replace(/\D/g, '');
       const docFormatado = formatarDocumento(documento);
       const chave = docLimpo || ('nome:' + nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, ''));
+      const enderecoLimpo = (endereco || '').trim();
+      const cepLimpo = (cep || '').trim();
 
       const existente = mapa.get(chave);
       if (!existente) {
@@ -3223,8 +3225,12 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
           documento: docFormatado || null,
           veiculo_placa: placa || null,
           tipo: tipo || 'Visitante',
+          endereco_visitante: enderecoLimpo || null,
+          cep_visitante: cepLimpo || null,
           vezes: 1,
           ultima_vez: quando || null,
+          // Marca de tempo do endereço mais recente registrado, para preferir o valor mais novo.
+          _endereco_em: enderecoLimpo ? (quando || null) : null,
         });
       } else {
         existente.vezes += 1;
@@ -3234,14 +3240,25 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
         if (quando && (!existente.ultima_vez || new Date(quando) > new Date(existente.ultima_vez))) {
           existente.ultima_vez = quando;
         }
+        // Prefere o endereço/CEP do registro mais recente que tenha endereço preenchido.
+        if (enderecoLimpo) {
+          const maisNovo = !existente._endereco_em || (quando && new Date(quando) > new Date(existente._endereco_em));
+          if (!existente.endereco_visitante || maisNovo) {
+            existente.endereco_visitante = enderecoLimpo;
+            existente.cep_visitante = cepLimpo || existente.cep_visitante || null;
+            existente._endereco_em = quando || existente._endereco_em || null;
+          }
+        } else if (cepLimpo && !existente.cep_visitante) {
+          existente.cep_visitante = cepLimpo;
+        }
       }
     };
 
     (avisos || []).forEach((a) =>
-      adicionar(a.nome_visitante, a.documento_visitante, a.veiculo_placa, a.tipo, a.criado_em)
+      adicionar(a.nome_visitante, a.documento_visitante, a.veiculo_placa, a.tipo, a.criado_em, a.endereco_visitante, a.cep_visitante)
     );
     (registros || []).forEach((r) =>
-      adicionar(r.nome_pessoa, r.documento, r.veiculo_placa, r.tipo, r.entrada)
+      adicionar(r.nome_pessoa, r.documento, r.veiculo_placa, r.tipo, r.entrada, r.endereco_visitante, r.cep_visitante)
     );
 
     const mapaObs = await obterTodasObservacoesVisitantes();
@@ -3249,8 +3266,9 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
       const docLimpo = (v.documento || '').replace(/\D/g, '');
       const nomeNorm = v.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const obsObj = (v.chave && mapaObs.get(v.chave)) || (docLimpo && mapaObs.get(docLimpo)) || mapaObs.get('nome:' + nomeNorm);
+      const { _endereco_em, ...limpo } = v;
       return {
-        ...v,
+        ...limpo,
         observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
         observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
       };
@@ -3286,6 +3304,8 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
       documento,
       tipo,
       veiculo_placa,
+      endereco_visitante,
+      cep_visitante,
       observacao,
     } = req.body || {};
 
@@ -3308,6 +3328,10 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
     const novoNomeNorm = novoNome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
     const novoTipo = tipo || 'Visitante';
     const novaPlaca = (veiculo_placa || '').trim().toUpperCase() || null;
+    // Endereço/CEP só fazem sentido para Prestador; para outros tipos limpamos.
+    const ehPrestador = novoTipo === 'Prestador';
+    const novoEndereco = ehPrestador ? (maiuscula((endereco_visitante || '').trim()) || null) : null;
+    const novoCep = ehPrestador ? ((cep_visitante || '').trim() || null) : null;
 
     // 1. Atualiza em registros_portaria
     const { data: todosRegs } = await supabaseAdmin
@@ -3331,6 +3355,8 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
           documento: novoDocFormatado || null,
           tipo: novoTipo,
           veiculo_placa: novaPlaca,
+          endereco_visitante: novoEndereco,
+          cep_visitante: novoCep,
         })
         .in('id', idsRegs);
     }
@@ -3357,6 +3383,8 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
           documento_visitante: novoDocFormatado || null,
           tipo: novoTipo,
           veiculo_placa: novaPlaca,
+          endereco_visitante: novoEndereco,
+          cep_visitante: novoCep,
         })
         .in('id', idsAvisos);
     }
