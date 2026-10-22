@@ -3842,6 +3842,90 @@ app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res)
   });
 });
 
+// Relatório: entradas em que o porteiro DIGITOU o nome do morador manualmente
+// (em vez de escolher da lista). Heurística: o registro tem a tag "[Falou com: X]"
+// na observação MAS não tem destino_morador vinculado (morador não estava na
+// lista do lote / foi digitado à mão). Serve para o admin identificar moradores
+// que aparecem manualmente e, por exemplo, cadastrá-los ou corrigir o lote.
+app.get('/api/admin/relatorio/moradores-manuais', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    // Extrai o nome que está dentro de "[Falou com: NOME]" (case-insensitive).
+    const extrairFalouCom = (obs) => {
+      if (!obs) return null;
+      const m = String(obs).match(/\[falou com:\s*([^\]]+)\]/i);
+      return m ? m[1].trim() : null;
+    };
+
+    const { data: registros, error } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('id, nome_pessoa, documento, tipo, destino_bloco, destino_apto, destino_morador, observacao, entrada, registrado_por')
+      .is('destino_morador', null)
+      .ilike('observacao', '%falou com%')
+      .order('entrada', { ascending: false })
+      .limit(3000);
+    if (error) throw error;
+
+    // Resolve o nome do porteiro que registrou cada entrada.
+    const idsPorteiros = [...new Set((registros || []).map((r) => r.registrado_por).filter(Boolean))];
+    let mapaPorteiros = new Map();
+    if (idsPorteiros.length > 0) {
+      const { data: perfisPorteiros } = await supabaseAdmin
+        .from('perfis')
+        .select('id, nome')
+        .in('id', idsPorteiros);
+      mapaPorteiros = new Map((perfisPorteiros || []).map((p) => [p.id, p.nome]));
+    }
+
+    const ocorrencias = [];
+    const agrupado = new Map(); // nomeNorm -> { nome, lotes:Set, vezes, ultima_vez }
+
+    (registros || []).forEach((r) => {
+      const nomeMorador = extrairFalouCom(r.observacao);
+      if (!nomeMorador) return; // sem nome legível, ignora
+
+      ocorrencias.push({
+        id: r.id,
+        morador_digitado: nomeMorador,
+        lote: r.destino_bloco || '-',
+        visitante: r.nome_pessoa === 'Encomenda' ? '📦 Encomenda' : r.nome_pessoa,
+        tipo: r.tipo || '-',
+        entrada: r.entrada,
+        porteiro: mapaPorteiros.get(r.registrado_por) || '-',
+      });
+
+      const chave = nomeMorador.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+      const g = agrupado.get(chave);
+      if (!g) {
+        agrupado.set(chave, {
+          nome: nomeMorador,
+          lotes: new Set(r.destino_bloco ? [r.destino_bloco] : []),
+          vezes: 1,
+          ultima_vez: r.entrada || null,
+        });
+      } else {
+        g.vezes += 1;
+        if (r.destino_bloco) g.lotes.add(r.destino_bloco);
+        if (r.entrada && (!g.ultima_vez || new Date(r.entrada) > new Date(g.ultima_vez))) {
+          g.ultima_vez = r.entrada;
+        }
+      }
+    });
+
+    const resumo = Array.from(agrupado.values())
+      .map((g) => ({
+        nome: g.nome,
+        lotes: Array.from(g.lotes),
+        vezes: g.vezes,
+        ultima_vez: g.ultima_vez,
+      }))
+      .sort((a, b) => b.vezes - a.vezes || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    res.json({ total: ocorrencias.length, resumo, ocorrencias });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // ============================================================
 // NOTIFICAÇÕES DO ADMIN PARA MORADORES
 // ============================================================

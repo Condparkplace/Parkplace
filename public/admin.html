@@ -51,6 +51,9 @@
       <button type="button" data-tab="tab-visitantes" onclick="trocarGuiaAdmin('tab-visitantes')">
         👥 Visitantes cadastrados
       </button>
+      <button type="button" data-tab="tab-manuais" onclick="trocarGuiaAdmin('tab-manuais')">
+        ✍️ Moradores digitados manualmente
+      </button>
     </div>
 
     <!-- Guia 1: Cadastrar usuário -->
@@ -292,6 +295,25 @@
         <p class="vazio">Carregando...</p>
       </div>
     </div>
+
+    <!-- Guia 4: Moradores digitados manualmente -->
+    <div id="tab-manuais" class="tab-admin-conteudo card hidden">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <h2 style="margin:0;">&#9997;&#65039; Moradores digitados manualmente</h2>
+        <span id="total-manuais" class="text-muted" style="font-size:13px;"></span>
+      </div>
+      <p class="text-muted" style="margin:0 0 12px; font-size:13px;">
+        Entradas em que o porteiro <strong>digitou o nome do morador à mão</strong> (o morador não estava na lista do lote).
+        Útil para identificar moradores que precisam ser cadastrados ou lotes com cadastro divergente.
+      </p>
+      <div class="row-inline" style="margin-bottom:16px;">
+        <button type="button" class="secundario mini" onclick="carregarManuais()">&#128260; Atualizar</button>
+      </div>
+      <div id="lista-manuais">
+        <p class="vazio">Carregando...</p>
+      </div>
+    </div>
   </div>
 
   <script src="/js/api.js"></script>
@@ -333,6 +355,68 @@
       if (tabId === 'tab-cadastrar') {
         const nomeInp = document.getElementById('nome');
         if (nomeInp) nomeInp.focus();
+      }
+      if (tabId === 'tab-manuais') {
+        carregarManuais();
+      }
+    }
+
+    // Relatório de moradores digitados manualmente pelo porteiro na entrada.
+    async function carregarManuais() {
+      const alvo = document.getElementById('lista-manuais');
+      const total = document.getElementById('total-manuais');
+      alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const dados = await api('/api/admin/relatorio/moradores-manuais');
+        const resumo = dados.resumo || [];
+        const ocorrencias = dados.ocorrencias || [];
+
+        if (total) total.textContent = `${dados.total || 0} entrada(s) manual(is)`;
+
+        if (!resumo.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhum morador foi digitado manualmente até agora.</p>';
+          return;
+        }
+
+        const linhasResumo = resumo.map((m) => `
+          <tr>
+            <td data-label="Morador (digitado)"><strong>${escapeHtml(m.nome)}</strong></td>
+            <td data-label="Lotes">${escapeHtml((m.lotes || []).join(', ') || '-')}</td>
+            <td data-label="Vezes" style="text-align:center;">${m.vezes}</td>
+            <td data-label="Última vez">${m.ultima_vez ? formatarData(m.ultima_vez) : '-'}</td>
+          </tr>`).join('');
+
+        const linhasOcorrencias = ocorrencias.map((o) => `
+          <tr>
+            <td data-label="Morador (digitado)"><strong>${escapeHtml(o.morador_digitado)}</strong></td>
+            <td data-label="Lote">${escapeHtml(o.lote)}</td>
+            <td data-label="Visitante / item">${escapeHtml(o.visitante || '-')}</td>
+            <td data-label="Tipo">${escapeHtml(o.tipo || '-')}</td>
+            <td data-label="Entrada">${o.entrada ? formatarData(o.entrada) : '-'}</td>
+            <td data-label="Porteiro">${escapeHtml(o.porteiro || '-')}</td>
+          </tr>`).join('');
+
+        alvo.innerHTML = `
+          <h3 style="margin:4px 0 8px; font-size:15px; color:var(--verde-escuro);">Resumo por morador</h3>
+          <div style="overflow-x:auto; margin-bottom:22px;">
+            <table>
+              <thead>
+                <tr><th>Morador (digitado)</th><th>Lotes</th><th style="text-align:center;">Vezes</th><th>Última vez</th></tr>
+              </thead>
+              <tbody>${linhasResumo}</tbody>
+            </table>
+          </div>
+          <h3 style="margin:4px 0 8px; font-size:15px; color:var(--verde-escuro);">Detalhamento das entradas</h3>
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr><th>Morador (digitado)</th><th>Lote</th><th>Visitante / item</th><th>Tipo</th><th>Entrada</th><th>Porteiro</th></tr>
+              </thead>
+              <tbody>${linhasOcorrencias}</tbody>
+            </table>
+          </div>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
       }
     }
 

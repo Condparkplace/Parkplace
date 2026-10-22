@@ -1819,6 +1819,8 @@
       tituloEl.innerHTML = opcoes.titulo || '&#128100; Selecione o morador';
       loteEl.textContent = lote;
       busca.value = '';
+      const inputOutro = document.getElementById('escolher-morador-outro-nome');
+      if (inputOutro) inputOutro.value = '';
       msg.classList.add('hidden');
       seletorMoradorLista = [];
       lista.innerHTML = '<p class="text-muted" style="text-align:center; padding:12px 0;">Buscando moradores do ' + escapeHtml(lote) + '...</p>';
@@ -1885,6 +1887,28 @@
       const cb = seletorMoradorOnSelecionar;
       fecharSeletorMorador();
       if (cb) cb(null);
+    }
+
+    // Confirma um morador DIGITADO manualmente (não está na lista do lote).
+    // Entrega ao callback um objeto sem id, marcado como manual, para que o
+    // fluxo grave só o nome (destino_morador fica null) e o admin consiga
+    // identificar depois que foi um morador colocado manualmente.
+    function confirmarOutroNoSeletorMorador() {
+      const input = document.getElementById('escolher-morador-outro-nome');
+      const msg = document.getElementById('escolher-morador-msg');
+      const nome = (input && input.value || '').trim();
+      if (!nome) {
+        if (msg) {
+          msg.textContent = 'Digite o nome do morador ou selecione na lista.';
+          msg.className = 'msg erro';
+          msg.classList.remove('hidden');
+        }
+        if (input) input.focus();
+        return;
+      }
+      const cb = seletorMoradorOnSelecionar;
+      fecharSeletorMorador();
+      if (cb) cb({ id: null, nome, telefone: '', manual: true });
     }
 
     function fecharSeletorMorador() {
@@ -3058,6 +3082,19 @@
         style="margin:0; width:100%;" />
 
       <div id="escolher-morador-lista" style="display:flex; flex-direction:column; gap:8px; overflow-y:auto; flex:1; min-height:60px;"></div>
+
+      <div id="escolher-morador-outro-container"
+        style="background:var(--fundo-cor); border:1px dashed var(--cinza-borda); border-radius:8px; padding:12px;">
+        <label for="escolher-morador-outro-nome"
+          style="font-size:13px; margin:0 0 6px; display:block; font-weight:600;">Outro morador / Não listado:</label>
+        <div class="row-inline" style="gap:8px;">
+          <input type="text" id="escolher-morador-outro-nome" placeholder="Digite o nome do morador..."
+            autocomplete="off" style="flex:1; padding:8px 10px; font-size:14px;"
+            onkeydown="if(event.key==='Enter'){event.preventDefault(); confirmarOutroNoSeletorMorador();}" />
+          <button type="button" class="mini" style="background-color:var(--verde); color:white; white-space:nowrap;"
+            onclick="confirmarOutroNoSeletorMorador()">Confirmar</button>
+        </div>
+      </div>
 
       <div id="escolher-morador-msg" class="msg hidden" style="margin:0;"></div>
 
