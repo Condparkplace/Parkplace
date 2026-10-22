@@ -40,6 +40,58 @@
       </div>
     </div>
 
+    <!-- Painel do dia (dashboard) -->
+    <div class="card" id="painel-hoje" style="margin-bottom:18px;">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <h2 style="margin:0; font-size:17px;" id="dash-titulo">📊 Hoje no condomínio</h2>
+          <div class="row-inline" style="gap:4px; align-items:center;">
+            <button type="button" class="secundario mini" id="dash-ant" onclick="mudarDiaDashboard(-1)" title="Dia anterior" style="padding:4px 10px;">◀</button>
+            <span id="dash-data" class="text-muted" style="font-size:13px; min-width:92px; text-align:center;"></span>
+            <button type="button" class="secundario mini" id="dash-prox" onclick="mudarDiaDashboard(1)" title="Próximo dia" style="padding:4px 10px;">▶</button>
+            <button type="button" class="secundario mini" id="dash-hoje" onclick="irHojeDashboard()" title="Voltar para hoje" style="padding:4px 10px; display:none;">Hoje</button>
+          </div>
+        </div>
+        <button type="button" class="secundario mini" onclick="carregarDashboard()">&#128260; Atualizar</button>
+      </div>
+
+      <!-- Alerta: moradores aguardando liberação do admin (aparece só quando há pendentes) -->
+      <div id="alerta-liberacao" class="hidden"
+        style="background:#fffbeb; border:1px solid #fcd34d; border-radius:10px; padding:12px 16px; margin-bottom:16px; display:flex; align-items:center; gap:12px; flex-wrap:wrap; cursor:pointer;"
+        onclick="irParaLiberacoes()" title="Clique para ver e liberar">
+        <span style="font-size:22px;">⏳</span>
+        <div style="flex:1; min-width:0;">
+          <div style="font-weight:700; color:#92400e;">Liberação pendente</div>
+          <div style="font-size:13px; color:#b45309;" id="alerta-liberacao-texto">—</div>
+        </div>
+        <span style="background:#f59e0b; color:#fff; font-weight:700; border-radius:8px; padding:6px 14px; white-space:nowrap;">Ver e liberar →</span>
+      </div>
+      <div class="grid grid-4" style="gap:12px; margin-bottom:16px;">
+        <div class="stat" style="background:#f0fdf4;">
+          <div class="num" id="dash-entradas" style="color:#166534;">-</div>
+          <div class="label">Entradas hoje</div>
+        </div>
+        <div class="stat" style="background:#eff6ff;">
+          <div class="num" id="dash-encomendas-hoje" style="color:#1e40af;">-</div>
+          <div class="label">Encomendas hoje</div>
+        </div>
+        <div class="stat" style="background:#fef3c7;">
+          <div class="num" id="dash-encomendas-pend" style="color:#92400e;">-</div>
+          <div class="label">Encomendas pendentes</div>
+        </div>
+        <div class="stat" style="background:#f5f3ff;">
+          <div class="num" id="dash-pico" style="color:#6d28d9; font-size:20px;">-</div>
+          <div class="label">Horário de pico</div>
+        </div>
+      </div>
+      <div>
+        <div class="text-muted" style="font-size:12px; margin-bottom:6px;">Entradas por hora (hoje) — passe o mouse para ver os detalhes</div>
+        <div id="dash-grafico" style="display:flex; align-items:flex-end; gap:2px; min-height:92px;">
+          <p class="vazio" style="margin:0;">Carregando...</p>
+        </div>
+      </div>
+    </div>
+
     <!-- Guias / Botões de Navegação -->
     <div class="tabs" style="margin-bottom:18px;">
       <button type="button" data-tab="tab-cadastrar" onclick="trocarGuiaAdmin('tab-cadastrar')">
@@ -370,6 +422,7 @@
       navAdmin(perfil, 'admin');
       document.getElementById('nome-usuario').textContent = perfil.nome;
       carregarResumo();
+      carregarDashboard();
       carregarUsuarios();
       carregarVisitantes();
       atualizarCamposPorTipo();
@@ -929,6 +982,109 @@
         document.getElementById('st-avisos').textContent = r.avisosPendentes;
       } catch (err) {
         console.error(err);
+      }
+    }
+
+    // Abre a aba de moradores cadastrados (onde ficam os pendentes de aprovação).
+    function irParaLiberacoes() {
+      trocarGuiaAdmin('tab-moradores');
+      const secao = document.getElementById('tab-moradores');
+      if (secao) secao.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+
+    // Data atualmente exibida no dashboard (null = hoje). Formato YYYY-MM-DD.
+    let dashboardData = null;
+
+    function mudarDiaDashboard(delta) {
+      // Base: a data exibida hoje (ou hoje se null).
+      const base = dashboardData ? new Date(dashboardData + 'T12:00:00') : new Date();
+      base.setDate(base.getDate() + delta);
+      const hoje = new Date();
+      // Não deixa passar de hoje.
+      if (base > hoje) return;
+      const y = base.getFullYear(), m = String(base.getMonth() + 1).padStart(2, '0'), dd = String(base.getDate()).padStart(2, '0');
+      dashboardData = `${y}-${m}-${dd}`;
+      carregarDashboard();
+    }
+
+    function irHojeDashboard() {
+      dashboardData = null;
+      carregarDashboard();
+    }
+
+    // Painel do dia: números do dia selecionado + mini-gráfico de entradas por hora.
+    async function carregarDashboard() {
+      try {
+        const url = '/api/admin/dashboard' + (dashboardData ? ('?data=' + encodeURIComponent(dashboardData)) : '');
+        const d = await api(url);
+        dashboardData = d.data; // sincroniza com o dia efetivamente usado pelo servidor
+
+        // Título e rótulo de data + controle das setas.
+        const titulo = document.getElementById('dash-titulo');
+        const dataEl = document.getElementById('dash-data');
+        const btnProx = document.getElementById('dash-prox');
+        const btnHoje = document.getElementById('dash-hoje');
+        if (titulo) titulo.textContent = d.ehHoje ? '📊 Hoje no condomínio' : '📊 Movimento do dia';
+        if (dataEl) dataEl.textContent = d.ehHoje ? ('Hoje · ' + d.dataLabel) : d.dataLabel;
+        if (btnProx) btnProx.disabled = d.ehHoje; // não avança além de hoje
+        if (btnHoje) btnHoje.style.display = d.ehHoje ? 'none' : 'inline-block';
+
+        document.getElementById('dash-entradas').textContent = d.entradasHoje;
+
+        // Alerta de liberação pendente (estado ATUAL — só faz sentido vendo "hoje").
+        const alertaLib = document.getElementById('alerta-liberacao');
+        const txtLib = document.getElementById('alerta-liberacao-texto');
+        const nPend = d.liberacoesPendentes || 0;
+        if (alertaLib) {
+          if (d.ehHoje && nPend > 0) {
+            if (txtLib) txtLib.textContent = nPend === 1
+              ? '1 morador aguardando sua aprovação para acessar o sistema.'
+              : `${nPend} moradores aguardando sua aprovação para acessar o sistema.`;
+            alertaLib.classList.remove('hidden');
+          } else {
+            alertaLib.classList.add('hidden');
+          }
+        }
+        document.getElementById('dash-encomendas-hoje').textContent = d.encomendasHoje;
+        // "Encomendas pendentes" é estado atual; em dias passados mostra "—".
+        document.getElementById('dash-encomendas-pend').textContent = d.ehHoje ? d.encomendasPendentes : '—';
+        document.getElementById('dash-pico').textContent =
+          (d.picoHora !== null && d.picoQtd > 0)
+            ? `${String(d.picoHora).padStart(2, '0')}h (${d.picoQtd})`
+            : '—';
+
+        // Mini-gráfico de barras por hora.
+        const grafico = document.getElementById('dash-grafico');
+        const porHora = d.porHora || [];
+        const maxQ = Math.max(1, ...porHora);
+        if (!porHora.some((q) => q > 0)) {
+          grafico.innerHTML = `<p class="vazio" style="margin:0;">Nenhuma entrada registrada ${d.ehHoje ? 'hoje ainda' : 'neste dia'}.</p>`;
+          return;
+        }
+        grafico.innerHTML = porHora.map((q, h) => {
+          const altura = Math.round((q / maxQ) * 100);
+          const ehPico = (h === d.picoHora && q > 0);
+          const cor = ehPico ? '#7c3aed' : '#86efac';
+          const hh = String(h).padStart(2, '0');
+          // Rótulo de hora: mostra de 3 em 3 horas (00,03,06...) ou se tiver entrada,
+          // para o eixo ficar legível sem poluir as 24 colunas.
+          const mostraLabel = (h % 3 === 0) || q > 0;
+          const labelCor = ehPico ? '#7c3aed' : '#94a3b8';
+          const labelPeso = q > 0 ? '700' : '400';
+          // Contagem em cima da barra quando há entradas.
+          const topo = q > 0
+            ? `<div style="font-size:10px; font-weight:700; color:${cor}; line-height:1; margin-bottom:2px;">${q}</div>`
+            : '';
+          return `<div title="${hh}h — ${q} entrada(s)"
+            style="flex:1; display:flex; flex-direction:column; justify-content:flex-end; align-items:center;">
+            ${topo}
+            <div style="width:100%; background:${cor}; border-radius:2px 2px 0 0; height:${Math.max(q > 0 ? 6 : 1, altura) * 0.6}px;"></div>
+            <div style="font-size:9px; color:${labelCor}; font-weight:${labelPeso}; margin-top:3px; border-top:1px solid #e2e8f0; width:100%; text-align:center; padding-top:2px;">${mostraLabel ? hh : '&nbsp;'}</div>
+          </div>`;
+        }).join('');
+      } catch (err) {
+        const grafico = document.getElementById('dash-grafico');
+        if (grafico) grafico.innerHTML = `<p class="msg erro" style="margin:0;">${escapeHtml(err.message)}</p>`;
       }
     }
 

@@ -3856,6 +3856,103 @@ app.post('/api/admin/visitantes/observacao/excluir', requireAuth, requireRole('a
   }
 });
 
+// Dashboard do admin: números do DIA de hoje + distribuição de entradas por hora.
+// "Hoje" é calculado no fuso de Brasília (America/Sao_Paulo, UTC-3).
+app.get('/api/admin/dashboard', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    // Dia-alvo em Brasília (UTC-3). Aceita ?data=YYYY-MM-DD; padrão = hoje.
+    // Nunca permite futuro (data máxima = hoje).
+    const OFFSET_BR_MS = 3 * 60 * 60 * 1000; // UTC-3
+    const agoraBr = new Date(Date.now() - OFFSET_BR_MS);
+    const hojeY = agoraBr.getUTCFullYear(), hojeM = agoraBr.getUTCMonth(), hojeD = agoraBr.getUTCDate();
+
+    let ano = hojeY, mes = hojeM, dia = hojeD;
+    const dataParam = (req.query.data || '').trim();
+    const mData = dataParam.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (mData) {
+      ano = parseInt(mData[1], 10);
+      mes = parseInt(mData[2], 10) - 1;
+      dia = parseInt(mData[3], 10);
+    }
+
+    // Início e fim do dia-alvo (em Brasília), como instantes UTC.
+    const inicioDiaBrUTC = new Date(Date.UTC(ano, mes, dia, 0, 0, 0) + OFFSET_BR_MS);
+    const fimDiaBrUTC = new Date(inicioDiaBrUTC.getTime() + 24 * 60 * 60 * 1000);
+
+    // Não deixa consultar o futuro: se a data pedida é depois de hoje, usa hoje.
+    const inicioHojeBrUTC = new Date(Date.UTC(hojeY, hojeM, hojeD, 0, 0, 0) + OFFSET_BR_MS);
+    let inicioUsado = inicioDiaBrUTC;
+    let fimUsado = fimDiaBrUTC;
+    if (inicioDiaBrUTC.getTime() > inicioHojeBrUTC.getTime()) {
+      inicioUsado = inicioHojeBrUTC;
+      fimUsado = new Date(inicioHojeBrUTC.getTime() + 24 * 60 * 60 * 1000);
+      ano = hojeY; mes = hojeM; dia = hojeD;
+    }
+
+    const inicioISO = inicioUsado.toISOString();
+    const fimISO = fimUsado.toISOString();
+    const ehHoje = inicioUsado.getTime() === inicioHojeBrUTC.getTime();
+    const dataLabel = `${String(dia).padStart(2, '0')}/${String(mes + 1).padStart(2, '0')}/${ano}`;
+    // Data em formato YYYY-MM-DD do dia usado (para o front navegar).
+    const dataISO = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(dia).padStart(2, '0')}`;
+
+    // Registros do dia-alvo (para contagens e pico por hora).
+    const { data: regsHoje } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('nome_pessoa, tipo, entrada')
+      .gte('entrada', inicioISO)
+      .lt('entrada', fimISO)
+      .limit(5000);
+
+    const regs = (regsHoje || []).filter((r) => r.nome_pessoa !== 'Troca de turno');
+
+    let entradasHoje = 0;
+    let encomendasHoje = 0;
+    const porHora = new Array(24).fill(0);
+
+    regs.forEach((r) => {
+      const ehEncomenda = r.nome_pessoa === 'Encomenda';
+      if (ehEncomenda) encomendasHoje += 1;
+      else entradasHoje += 1;
+      // Hora local (Brasília) da entrada.
+      const d = new Date(new Date(r.entrada).getTime() - OFFSET_BR_MS);
+      const h = d.getUTCHours();
+      if (h >= 0 && h < 24) porHora[h] += 1;
+    });
+
+    // Pico de horário (hora com mais entradas hoje).
+    let picoHora = null, picoQtd = 0;
+    porHora.forEach((q, h) => { if (q > picoQtd) { picoQtd = q; picoHora = h; } });
+
+    // Contadores "agora".
+    const [{ count: presentes }, { count: encomendasPendentes }, { count: avisosHoje }, { count: liberacoesPendentes }] = await Promise.all([
+      supabaseAdmin.from('registros_portaria').select('*', { count: 'exact', head: true }).is('saida', null).neq('nome_pessoa', 'Troca de turno'),
+      supabaseAdmin.from('registros_portaria').select('*', { count: 'exact', head: true }).eq('nome_pessoa', 'Encomenda').is('saida', null),
+      supabaseAdmin.from('avisos_visitas').select('*', { count: 'exact', head: true }).in('status', ['Pendente', 'Autorizada']),
+      // Moradores cadastrados via link aguardando aprovação do admin.
+      supabaseAdmin.from('perfis').select('*', { count: 'exact', head: true }).eq('tipo', 'morador').eq('aprovado', false),
+    ]);
+
+    res.json({
+      data: dataISO,         // YYYY-MM-DD do dia exibido
+      dataLabel,             // DD/MM/AAAA
+      ehHoje,                // true se o dia exibido é hoje
+      inicio: inicioISO,
+      entradasHoje,
+      encomendasHoje,
+      presentes: presentes || 0,
+      encomendasPendentes: encomendasPendentes || 0,
+      avisosPendentes: avisosHoje || 0,
+      liberacoesPendentes: liberacoesPendentes || 0,
+      picoHora,       // 0-23 ou null
+      picoQtd,
+      porHora,        // array[24] com a contagem por hora
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
 // Relatorio resumido para o admin
 app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res) => {
   const [{ count: totalMoradores }, { count: totalPorteiros }, { count: presentes }, { count: avisosPendentes }] =
