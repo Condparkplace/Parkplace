@@ -56,6 +56,47 @@
           </div>
 
           <form id="form-confirmacao-rapida" onsubmit="event.preventDefault(); enviarAvisoExistente();">
+            <!-- Atualização de dados incompletos (aparece só quando necessário) -->
+            <div id="rapido-atualizar-nome" class="hidden" style="background:#fffbeb; border:1px solid #fcd34d; border-radius:8px; padding:12px; margin-bottom:14px;">
+              <p style="margin:0 0 8px; font-size:13px; color:#92400e; font-weight:600;">
+                Confirme seu <strong>nome completo</strong> (nome e sobrenome).
+              </p>
+              <label for="rapido-nome">Nome completo *</label>
+              <input type="text" id="rapido-nome" placeholder="Ex: João da Silva" autocomplete="name" />
+            </div>
+
+            <div id="rapido-atualizar-endereco" class="hidden" style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:12px; margin-bottom:14px;">
+              <p style="margin:0 0 8px; font-size:13px; color:#1e40af; font-weight:600;">
+                Complete o <strong>endereço do prestador/empresa</strong> antes de confirmar.
+              </p>
+              <div class="grid grid-2">
+                <div>
+                  <label for="rapido-cep">CEP *</label>
+                  <input type="text" id="rapido-cep" placeholder="00000-000" maxlength="9" />
+                  <span id="rapido-msg-cep" class="text-muted" style="display:block; margin-top:4px; font-size:12px;"></span>
+                </div>
+                <div>
+                  <label for="rapido-end-numero">Número *</label>
+                  <input type="text" id="rapido-end-numero" placeholder="Ex: 123" />
+                </div>
+                <div>
+                  <label for="rapido-end-logradouro">Logradouro *</label>
+                  <input type="text" id="rapido-end-logradouro" placeholder="Rua / Avenida" />
+                </div>
+                <div>
+                  <label for="rapido-end-bairro">Bairro *</label>
+                  <input type="text" id="rapido-end-bairro" />
+                </div>
+                <div>
+                  <label for="rapido-end-cidade">Cidade / UF *</label>
+                  <div class="row-inline">
+                    <input type="text" id="rapido-end-cidade" placeholder="Cidade" style="flex:3;" />
+                    <input type="text" id="rapido-end-uf" placeholder="UF" maxlength="2" style="flex:1; min-width:56px; text-transform:uppercase;" />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <label for="acesso_tipo_rapido">Como vai acessar? *</label>
             <select id="acesso_tipo_rapido" onchange="togglePlacaRapido()">
               <option value="carro">🚗 Acesso de carro</option>
@@ -347,6 +388,9 @@
           }
           togglePlacaRapido();
 
+          // Detecta dados incompletos para pedir atualização ANTES de confirmar.
+          prepararAtualizacaoCadastro(res.visitante);
+
           document.getElementById('etapa-cpf').classList.add('hidden');
           document.getElementById('etapa-novo-cadastro').classList.add('hidden');
           document.getElementById('etapa-ja-cadastrado').classList.remove('hidden');
@@ -386,6 +430,62 @@
       document.getElementById('wrap-placa-rapido').classList.toggle('hidden', !ehCarro);
     }
 
+    // Decide se o visitante precisa completar dados (nome completo / endereço do prestador)
+    // ANTES de confirmar. Só vale no fluxo do link do morador.
+    function nomeEhSimples(nome) {
+      const partes = (nome || '').trim().split(/\s+/).filter(Boolean);
+      return partes.length < 2; // sem sobrenome
+    }
+
+    function prepararAtualizacaoCadastro(visitante) {
+      const boxNome = document.getElementById('rapido-atualizar-nome');
+      const boxEnd = document.getElementById('rapido-atualizar-endereco');
+      const inpNome = document.getElementById('rapido-nome');
+
+      // Nome simples (sem sobrenome): pede o nome completo.
+      if (nomeEhSimples(visitante.nome)) {
+        inpNome.value = visitante.nome || '';
+        boxNome.classList.remove('hidden');
+      } else {
+        boxNome.classList.add('hidden');
+      }
+
+      // Prestador sem endereço cadastrado: pede o endereço.
+      const ehPrestador = (tipo === 'Prestador') || (visitante.tipo === 'Prestador');
+      const semEndereco = !((visitante.endereco_visitante || '').trim()) && !((visitante.cep_visitante || '').trim());
+      if (ehPrestador && semEndereco) {
+        boxEnd.classList.remove('hidden');
+      } else {
+        boxEnd.classList.add('hidden');
+      }
+    }
+
+    // Busca CEP do bloco de atualização rápida (ViaCEP).
+    (function vincularCepRapido() {
+      const campo = document.getElementById('rapido-cep');
+      if (!campo) return;
+      campo.addEventListener('input', async () => {
+        let v = campo.value.replace(/\D/g, '').slice(0, 8);
+        if (v.length > 5) v = v.slice(0, 5) + '-' + v.slice(5);
+        campo.value = v;
+        if (v.replace(/\D/g, '').length === 8) {
+          const msgCep = document.getElementById('rapido-msg-cep');
+          msgCep.textContent = 'Buscando...';
+          try {
+            const resp = await fetch(`https://viacep.com.br/ws/${v.replace(/\D/g, '')}/json/`);
+            const d = await resp.json();
+            if (d.erro) { msgCep.textContent = 'CEP não encontrado.'; return; }
+            document.getElementById('rapido-end-logradouro').value = d.logradouro || '';
+            document.getElementById('rapido-end-bairro').value = d.bairro || '';
+            document.getElementById('rapido-end-cidade').value = d.localidade || '';
+            document.getElementById('rapido-end-uf').value = d.uf || '';
+            msgCep.textContent = 'Endereço preenchido. Informe o número.';
+            document.getElementById('rapido-end-numero').focus();
+          } catch (e) { msgCep.textContent = 'Não foi possível consultar o CEP.'; }
+        }
+      });
+    })();
+
     // Confirmação para visitante já cadastrado
     async function enviarAvisoExistente() {
       if (!visitanteCadastradoCache) return;
@@ -416,6 +516,42 @@
         return;
       }
 
+      // Atualização de nome completo (se o bloco estiver visível).
+      let nomeFinal = visitanteCadastradoCache.nome;
+      const boxNome = document.getElementById('rapido-atualizar-nome');
+      if (boxNome && !boxNome.classList.contains('hidden')) {
+        const nv = document.getElementById('rapido-nome').value.trim();
+        if (nomeEhSimples(nv)) {
+          msgRapido.textContent = 'Informe seu nome completo (nome e sobrenome).';
+          msgRapido.className = 'msg erro';
+          msgRapido.classList.remove('hidden');
+          document.getElementById('rapido-nome').focus();
+          return;
+        }
+        nomeFinal = nv;
+      }
+
+      // Atualização de endereço (prestador sem endereço).
+      let enderecoFinal = visitanteCadastradoCache.endereco_visitante || null;
+      let cepFinal = visitanteCadastradoCache.cep_visitante || null;
+      const boxEnd = document.getElementById('rapido-atualizar-endereco');
+      if (boxEnd && !boxEnd.classList.contains('hidden')) {
+        const cep = document.getElementById('rapido-cep').value.trim();
+        const num = document.getElementById('rapido-end-numero').value.trim();
+        const log = document.getElementById('rapido-end-logradouro').value.trim();
+        const bairro = document.getElementById('rapido-end-bairro').value.trim();
+        const cidade = document.getElementById('rapido-end-cidade').value.trim();
+        const uf = document.getElementById('rapido-end-uf').value.trim();
+        if (!cep || !num || !log || !bairro || !cidade || !uf) {
+          msgRapido.textContent = 'Preencha todos os dados do endereço do prestador.';
+          msgRapido.className = 'msg erro';
+          msgRapido.classList.remove('hidden');
+          return;
+        }
+        enderecoFinal = `${log}, ${num} - ${bairro} - ${cidade}/${uf}`;
+        cepFinal = cep.replace(/\D/g, '');
+      }
+
       btnRapido.disabled = true;
       btnRapido.textContent = 'Enviando...';
 
@@ -424,19 +560,19 @@
           method: 'POST',
           body: JSON.stringify({
             morador_id: morador_id,
-            nome_visitante: visitanteCadastradoCache.nome,
+            nome_visitante: nomeFinal,
             tipo: tipo,
             documento_visitante: formatarDocumento(visitanteCadastradoCache.documento || inpCpfConsulta.value.trim()) || null,
             veiculo_placa: placa || null,
             data_prevista: dt ? new Date(dt).toISOString() : null,
-            endereco_visitante: visitanteCadastradoCache.endereco_visitante || null,
-            cep_visitante: visitanteCadastradoCache.cep_visitante || null,
+            endereco_visitante: enderecoFinal,
+            cep_visitante: cepFinal,
             link_exp: linkExp,
             link_sig: linkSig,
           }),
         });
 
-        mostrarSucesso(visitanteCadastradoCache.nome);
+        mostrarSucesso(nomeFinal);
       } catch (err) {
         if (ehErroDeBloqueio(err)) {
           mostrarBloqueio();

@@ -1157,11 +1157,10 @@
         };
 
         const fonte = r.origem === 'aviso' ? 'Aviso anterior' : 'Visita anterior';
-        msg.textContent = 'Cadastro encontrado (' + fonte + '). Clique em "Registrar entrada" na linha abaixo.';
-        msg.className = 'msg ok';
-        msg.classList.remove('hidden');
+        msg.textContent = '';
+        msg.className = 'msg hidden';
 
-        // Preenche a linha de visitante encontrado acima de "Visitas avisadas pelos moradores"
+        // Preenche a linha de visitante encontrado (fica oculta; mantida para compatibilidade).
         document.getElementById('vis-encontrado-nome').textContent = visitanteEncontradoAtual.nome;
         document.getElementById('vis-encontrado-placa-sub').textContent = visitanteEncontradoAtual.veiculo_placa
           ? ('Placa: ' + visitanteEncontradoAtual.veiculo_placa)
@@ -1172,27 +1171,18 @@
         badgeTipo.className = 'badge ' + (visitanteEncontradoAtual.tipo || '').toLowerCase();
         document.getElementById('vis-encontrado-fonte').textContent = fonte;
 
-        // Exibe a área do visitante encontrado
-        const areaVis = document.getElementById('area-visitante-encontrado');
-        if (areaVis) areaVis.classList.remove('hidden');
-
-        // Oculta a lista de visitas avisadas pelos moradores enquanto este visitante estiver em destaque
+        // Mantém a lista de previstas visível ao fundo (o pop-up cobre a tela).
         const painelPrev = document.getElementById('painel-previstas');
-        if (painelPrev) painelPrev.classList.add('hidden');
+        if (painelPrev) painelPrev.classList.remove('hidden');
+        const areaVis = document.getElementById('area-visitante-encontrado');
+        if (areaVis) areaVis.classList.add('hidden');
 
-        // Exibe observação cadastral fixa se existir
-        const alertaObs = document.getElementById('alerta-obs-visitante');
-        const alertaObsTexto = document.getElementById('alerta-obs-visitante-texto');
-        if (visitanteEncontradoAtual.observacao_cadastro) {
-          if (alertaObsTexto) alertaObsTexto.textContent = visitanteEncontradoAtual.observacao_cadastro;
-          if (alertaObs) alertaObs.classList.remove('hidden');
-        } else if (alertaObs) {
-          alertaObs.classList.add('hidden');
-        }
-
-        // Se o visitante está BLOQUEADO, avisa na tela
+        // Visitante bloqueado: não abre o pop-up de entrada, só avisa.
         if (visitanteEncontradoAtual.bloqueado) {
           mostrarAlertaSistema('Visitante bloqueado pela administração. Entrada não permitida.', 'Visitante Bloqueado');
+        } else {
+          // Abre direto o POP-UP destacado de confirmação de entrada.
+          abrirModalEntradaVisitanteEncontrado();
         }
       } catch (err) {
         msg.textContent = err.message;
@@ -1342,38 +1332,63 @@
       const cep = tipo === 'Prestador' ? document.getElementById('popup-vis-cep').value.trim() : null;
       const endereco = tipo === 'Prestador' ? document.getElementById('popup-vis-endereco').value.trim() : null;
 
-      const btn = document.getElementById('btn-confirmar-popup-vis');
-      const originalTexto = btn.textContent;
-      btn.disabled = true;
-      btn.textContent = 'Registrando...';
+      // Guarda os dados preenchidos e abre o seletor de morador do lote.
+      // A entrada só é registrada depois que o porteiro escolher o morador (ou "não listado").
+      dadosEntradaVisitanteEncontrado = {
+        nome: visitanteEncontradoAtual.nome,
+        documento: visitanteEncontradoAtual.documento || '',
+        tipo: tipo || 'Visitante',
+        veiculo_placa: placa,
+        destino_bloco: destino,
+        endereco_visitante: endereco,
+        cep_visitante: cep,
+        observacao_cadastro: visitanteEncontradoAtual.observacao_cadastro || '',
+      };
+      fecharModalEntradaVisitanteEncontrado();
+      abrirSeletorMorador(destino, {
+        titulo: '👤 Com qual morador ' + visitanteEncontradoAtual.nome + ' vai falar?',
+        corBotao: 'var(--verde)',
+        permitirPular: true,
+        onSelecionar: (m) => registrarEntradaVisitanteComMorador(m),
+      });
+    }
 
+    // Guarda temporário dos dados da entrada do visitante encontrado (entre escolher o lote e o morador).
+    let dadosEntradaVisitanteEncontrado = null;
+
+    async function registrarEntradaVisitanteComMorador(morador) {
+      const d = dadosEntradaVisitanteEncontrado;
+      if (!d) return;
+      let observacaoFinal = d.observacao_cadastro || '';
+      if (morador && morador.nome) {
+        const tag = `[Falou com: ${morador.nome}]`;
+        observacaoFinal = observacaoFinal ? `${tag} ${observacaoFinal}` : tag;
+      }
       try {
         await api('/api/portaria/entrada', {
           method: 'POST',
           body: JSON.stringify({
             aviso_id: null,
-            nome_pessoa: visitanteEncontradoAtual.nome,
-            tipo: tipo || 'Visitante',
-            documento: visitanteEncontradoAtual.documento || '',
-            veiculo_placa: placa,
-            destino_bloco: destino,
-            endereco_visitante: endereco,
-            cep_visitante: cep,
-            observacao: visitanteEncontradoAtual.observacao_cadastro || null,
+            nome_pessoa: d.nome,
+            tipo: d.tipo || 'Visitante',
+            documento: d.documento || '',
+            veiculo_placa: d.veiculo_placa,
+            destino_bloco: d.destino_bloco,
+            destino_morador: (morador && morador.id) || null,
+            endereco_visitante: d.endereco_visitante,
+            cep_visitante: d.cep_visitante,
+            observacao: observacaoFinal || null,
           }),
         });
-
-        const nomeRegistrado = visitanteEncontradoAtual.nome;
-        fecharModalEntradaVisitanteEncontrado();
+        const complemento = morador && morador.nome ? ` (Falou com: ${morador.nome})` : '';
         limparFormEntrada(); // Limpa e restaura a lista de moradores
-        msgEntrada.textContent = `Entrada de ${nomeRegistrado} (Destino: ${destino}) registrada com sucesso.`;
+        msgEntrada.textContent = `Entrada de ${d.nome} (Destino: ${d.destino_bloco}) registrada com sucesso.${complemento}`;
         msgEntrada.className = 'msg ok';
         msgEntrada.classList.remove('hidden');
       } catch (err) {
         mostrarAlertaSistema(err.message, 'Erro ao Registrar');
       } finally {
-        btn.disabled = false;
-        btn.textContent = originalTexto;
+        dadosEntradaVisitanteEncontrado = null;
       }
     }
 
@@ -1798,6 +1813,9 @@
 
       seletorMoradorOnSelecionar = typeof opcoes.onSelecionar === 'function' ? opcoes.onSelecionar : null;
       seletorMoradorCorBotao = opcoes.corBotao || 'var(--verde)';
+      // Botão "Registrar sem informar o morador" (opcional; só para entrada de visitante).
+      const btnPular = document.getElementById('btn-seletor-pular');
+      if (btnPular) btnPular.classList.toggle('hidden', !opcoes.permitirPular);
       tituloEl.innerHTML = opcoes.titulo || '&#128100; Selecione o morador';
       loteEl.textContent = lote;
       busca.value = '';
@@ -1860,6 +1878,13 @@
       const cb = seletorMoradorOnSelecionar;
       fecharSeletorMorador();
       if (cb) cb(morador);
+    }
+
+    // Prossegue sem vincular um morador (ex.: lote sem morador cadastrado).
+    function pularSeletorMorador() {
+      const cb = seletorMoradorOnSelecionar;
+      fecharSeletorMorador();
+      if (cb) cb(null);
     }
 
     function fecharSeletorMorador() {
@@ -3036,8 +3061,10 @@
 
       <div id="escolher-morador-msg" class="msg hidden" style="margin:0;"></div>
 
-      <div class="row-inline" style="justify-content:flex-start; padding-top:10px; border-top:1px solid var(--cinza-borda);">
+      <div class="row-inline" style="justify-content:space-between; align-items:center; padding-top:10px; border-top:1px solid var(--cinza-borda);">
         <button type="button" class="secundario" onclick="fecharSeletorMorador()">Cancelar</button>
+        <button type="button" id="btn-seletor-pular" class="hidden" onclick="pularSeletorMorador()"
+          style="background:#64748b; color:#fff;">Registrar sem informar o morador &rarr;</button>
       </div>
     </div>
   </div>
