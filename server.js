@@ -1202,9 +1202,12 @@ app.post('/api/morador/avisos', requireAuth, requireRole('morador', 'admin'), as
     return res.status(400).json({ error: 'Informe o nome do visitante.' });
   }
 
-  // CPF obrigatório e válido (11 dígitos) em todos os cadastros.
+  // CPF obrigatório e válido (11 dígitos) para Visitante/Prestador.
+  // Entregador (iFood) e Encomenda não têm CPF do visitante — isentos.
   const cpfAviso = (documento_visitante || '').replace(/\D/g, '');
-  if (cpfAviso.length !== 11 || !cpfValido(cpfAviso)) {
+  const tipoAviso = tipo || 'Visitante';
+  const exigeCpfAviso = (tipoAviso === 'Visitante' || tipoAviso === 'Prestador');
+  if (exigeCpfAviso && (cpfAviso.length !== 11 || !cpfValido(cpfAviso))) {
     return res.status(400).json({ error: 'Informe um CPF válido (11 dígitos) para o visitante.' });
   }
 
@@ -2642,10 +2645,10 @@ app.get('/api/portaria/mapa/casas', requireAuth, requireRole('porteiro', 'admin'
     const cidade = (p.endereco_cidade || '').trim();
     const uf = (p.endereco_uf || '').trim();
 
-    // Sem número nem logradouro: o lote fica sem endereço exibido.
-    if (!numero && !logradouro) return;
+    // O mapa exibe apenas o número da casa; sem número, nada a mostrar.
+    if (!numero) return;
 
-    // Monta "Rua X, 33 - Bairro - Cidade/UF" ignorando partes vazias.
+    // Mantém também o endereço completo no retorno (uso futuro), mas o mapa usa só o número.
     const linha1 = [logradouro, numero].filter(Boolean).join(', ');
     const localidade = cidade && uf ? `${cidade}/${uf}` : (cidade || uf);
     const partes = [linha1, bairro, localidade].filter(Boolean);

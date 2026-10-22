@@ -379,6 +379,14 @@ body.tela-porteiro td {
   vertical-align: middle;
 }
 
+/* Aba "No condomínio": linhas com separador bem escuro para destacar cada pessoa. */
+body.tela-porteiro #lista-presentes td {
+  border-bottom: 2px solid #334155;
+}
+body.tela-porteiro #lista-presentes tr:last-child td {
+  border-bottom: none;
+}
+
 body.tela-porteiro tr:hover td {
   background-color: #f8fafc;
 }

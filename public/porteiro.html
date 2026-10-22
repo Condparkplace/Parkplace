@@ -5,8 +5,8 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Portaria - Park Place</title>
-  <link rel="stylesheet" href="/css/style.css?v=3" />
-  <link rel="stylesheet" href="/css/porteiro.css?v=3" />
+  <link rel="stylesheet" href="/css/style.css?v=5" />
+  <link rel="stylesheet" href="/css/porteiro.css?v=5" />
 </head>
 
 <body class="tela-porteiro">
@@ -406,7 +406,7 @@
 
       // 3) Não atualizar se algum modal estiver aberto (iFood, Encomenda, Seleção de Morador, etc.).
       const modaisAbertos = document.querySelectorAll(
-        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-escolher-morador:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #modal-entrada-visitante-encontrado:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
+        '#modal-ifood:not(.hidden), #modal-encomenda:not(.hidden), #modal-escolher-morador:not(.hidden), #modal-selecionar-morador:not(.hidden), #modal-cancelar:not(.hidden), #modal-frequencia-entrada:not(.hidden), #modal-alerta-sistema:not(.hidden), #modal-entrada-visitante-encontrado:not(.hidden), #modal-entrada-morador:not(.hidden), #modal-visita-prevista:not(.hidden), #overlay-troca-turno:not(.hidden), #overlay-notif-porteiro:not(.hidden)'
       );
       if (modaisAbertos.length > 0) return false;
 
@@ -1097,34 +1097,11 @@
           (a) => (a.documento_visitante || '').replace(/\D/g, '') === docLimpo && docLimpo
         );
         if (avisoHoje) {
-          // Busca observação ou status de morador para exibir os alertas
-          try {
-            const r = await api('/api/portaria/buscar?documento=' + encodeURIComponent(doc));
-            if (r && r.eh_morador) {
-              const m = r.morador || {};
-              const loteTxt = m.bloco ? `do ${escapeHtml(m.bloco)}` : 'cadastrado no condomínio';
-              if (alertaMoradorTexto) alertaMoradorTexto.innerHTML = `Esta pessoa é moradora <strong>${loteTxt}</strong> (<strong>${escapeHtml(m.nome)}</strong>).`;
-              if (alertaMorador) alertaMorador.classList.remove('hidden');
-              mostrarBotaoEntradaMorador(m, r.pessoa);
-            } else {
-              if (alertaMorador) alertaMorador.classList.add('hidden');
-              esconderBotaoEntradaMorador();
-            }
-            const obsTexto = (r?.observacao_cadastro || '').trim();
-            if (obsTexto) {
-              if (alertaObsTexto) alertaObsTexto.textContent = obsTexto;
-              if (alertaObs) alertaObs.classList.remove('hidden');
-            } else {
-              if (alertaObs) alertaObs.classList.add('hidden');
-            }
-          } catch (_) { }
-
-          // Destaca a linha deste documento e NAO abre o formulario.
+          // Abre um POP-UP destacado com a visita prevista (sem precisar rolar a tela).
           formEntrada.classList.add('hidden');
-          await carregarPrevistas(doc, true);
-          msg.textContent = 'Visita prevista para hoje encontrada na lista abaixo. Use "Registrar entrada" na linha correspondente.';
-          msg.className = 'msg ok';
-          document.getElementById('painel-previstas').scrollIntoView({ behavior: 'smooth' });
+          abrirModalVisitaPrevista(avisoHoje);
+          msg.textContent = '';
+          msg.className = 'msg hidden';
           return;
         }
 
@@ -1152,28 +1129,12 @@
         // botão verde de entrada direta (mesmo procedimento do Fabio).
         if (r.eh_morador) {
           const m = r.morador || {};
-          const loteTxt = m.bloco ? `do ${escapeHtml(m.bloco)}` : 'cadastrado no condomínio';
-          if (alertaMoradorTexto) {
-            alertaMoradorTexto.innerHTML = `Esta pessoa é moradora <strong>${loteTxt}</strong> (<strong>${escapeHtml(m.nome)}</strong>).`;
-          }
-          if (alertaMorador) {
-            alertaMorador.classList.remove('hidden');
-            alertaMorador.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-          }
-          // Observação do cadastro do morador (se houver).
-          const alertaObsM = document.getElementById('alerta-obs-visitante');
-          const alertaObsTextoM = document.getElementById('alerta-obs-visitante-texto');
           const obsM = (p.observacao_cadastro || r.observacao_cadastro || '').trim();
-          if (obsM) {
-            if (alertaObsTextoM) alertaObsTextoM.textContent = obsM;
-            if (alertaObsM) alertaObsM.classList.remove('hidden');
-          } else if (alertaObsM) {
-            alertaObsM.classList.add('hidden');
-          }
-          mostrarBotaoEntradaMorador(m, p);
-          formEntrada.classList.add('hidden'); // não mostra o formulário para morador
-          msg.textContent = `Morador identificado (${m.bloco || 'Residência'}). Use o botão para registrar a entrada.`;
-          msg.className = 'msg ok';
+          // Abre um POP-UP destacado com os dados do morador (sem rolar a tela).
+          formEntrada.classList.add('hidden');
+          abrirModalEntradaMorador(m, p, obsM);
+          msg.textContent = '';
+          msg.className = 'msg hidden';
           return;
         }
 
@@ -1450,6 +1411,94 @@
       moradorParaEntrada = null;
       const btn = document.getElementById('btn-entrada-morador');
       if (btn) btn.classList.add('hidden');
+    }
+
+    // ---------- Pop-up: entrada de MORADOR (busca por CPF) ----------
+    function abrirModalEntradaMorador(m, pessoa, obs) {
+      // Prepara os dados do morador para o POST (sem revelar o botão inline antigo).
+      moradorParaEntrada = {
+        nome_pessoa: (pessoa && pessoa.nome_pessoa) || (m && m.nome) || 'Morador',
+        documento: (pessoa && pessoa.documento) || (m && m.cpf) || null,
+        destino_bloco: (m && m.bloco) || (pessoa && pessoa.destino_bloco) || '',
+      };
+      document.getElementById('morador-pop-nome').textContent = (m && m.nome) || (pessoa && pessoa.nome_pessoa) || 'Morador';
+      document.getElementById('morador-pop-lote').textContent = (m && m.bloco) ? m.bloco : 'Residência';
+      const doc = (pessoa && pessoa.documento) || (m && m.cpf) || '';
+      document.getElementById('morador-pop-doc').textContent = doc ? ('CPF: ' + (formatarCpf(doc) || doc)) : '';
+      const obsEl = document.getElementById('morador-pop-obs');
+      const obsTxt = (obs || '').trim();
+      if (obsTxt) { obsEl.textContent = '📝 ' + obsTxt; obsEl.classList.remove('hidden'); }
+      else { obsEl.textContent = ''; obsEl.classList.add('hidden'); }
+      const modal = document.getElementById('modal-entrada-morador');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    }
+
+    function fecharModalEntradaMorador() {
+      const modal = document.getElementById('modal-entrada-morador');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+
+    async function confirmarEntradaMoradorPopup() {
+      const btn = document.getElementById('btn-confirmar-morador-pop');
+      btn.disabled = true;
+      const txt = btn.textContent;
+      btn.textContent = 'Registrando...';
+      try {
+        await abrirEntradaMorador(); // já faz o POST e mostra msg de sucesso
+        fecharModalEntradaMorador();
+        document.getElementById('busca-doc').value = '';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = txt;
+      }
+    }
+
+    // ---------- Pop-up: VISITA PREVISTA de hoje (busca por CPF) ----------
+    let visitaPrevistaPopupAtual = null;
+
+    function abrirModalVisitaPrevista(aviso) {
+      visitaPrevistaPopupAtual = aviso;
+      const m = aviso.morador || {};
+      document.getElementById('prev-pop-nome').textContent = aviso.nome_visitante || 'Visitante';
+      const placaEl = document.getElementById('prev-pop-placa');
+      placaEl.textContent = aviso.veiculo_placa ? ('Placa: ' + aviso.veiculo_placa) : '';
+      document.getElementById('prev-pop-tipo').textContent = aviso.tipo || 'Visitante';
+      const destino = m.nome ? `${m.nome}${m.bloco ? ' (' + m.bloco + ')' : ''}` : (aviso.destino_bloco || '-');
+      document.getElementById('prev-pop-morador').textContent = destino;
+      document.getElementById('prev-pop-previsto').textContent = aviso.data_prevista ? formatarData(aviso.data_prevista) : 'Hoje';
+      const obsEl = document.getElementById('prev-pop-obs');
+      const obsTxt = (aviso.observacao || '').trim();
+      if (obsTxt) { obsEl.textContent = '📝 ' + obsTxt; obsEl.classList.remove('hidden'); }
+      else { obsEl.textContent = ''; obsEl.classList.add('hidden'); }
+      const modal = document.getElementById('modal-visita-prevista');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+    }
+
+    function fecharModalVisitaPrevista() {
+      const modal = document.getElementById('modal-visita-prevista');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+      visitaPrevistaPopupAtual = null;
+    }
+
+    async function confirmarEntradaVisitaPrevista() {
+      if (!visitaPrevistaPopupAtual) return;
+      const aviso = visitaPrevistaPopupAtual;
+      fecharModalVisitaPrevista();
+      document.getElementById('busca-doc').value = '';
+      // registrarDeAviso já trata iFood/recorrência e faz o POST + msg de sucesso.
+      await registrarDeAviso(aviso);
+    }
+
+    async function naoVeioVisitaPrevista() {
+      if (!visitaPrevistaPopupAtual) return;
+      const id = visitaPrevistaPopupAtual.id;
+      fecharModalVisitaPrevista();
+      document.getElementById('busca-doc').value = '';
+      await marcarNaoVeio(id);
     }
 
     // Registra a entrada do morador diretamente (sem precisar preencher o formulário).
@@ -1954,7 +2003,7 @@
           const destino = r.destino_bloco || '-';
           return `
                   <tr>
-                    <td data-label="Nome">${escapeHtml(r.nome_pessoa)}<br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
+                    <td data-label="Nome"><strong>${escapeHtml(r.nome_pessoa)}</strong><br><span class="text-muted">${escapeHtml(r.veiculo_placa || '')}</span></td>
                     <td data-label="Tipo">${escapeHtml(r.tipo)}</td>
                     <td data-label="Destino">
                       <strong>${escapeHtml(destino || '-')}</strong>
@@ -2398,12 +2447,11 @@
         const cy = l.y + l.h / 2;
         // Dados do morador que liberou "ver_lote" neste lote (pode ter endereço completo).
         const info = casasMapa[String(l.n)];
-        // Texto do endereço completo (ou só "Casa Nº X" se não houver endereço montado).
+        // Mostra apenas "Casa Nº X" (número da casa), como na primeira versão.
         let enderecoTxt = '';
         if (info) {
-          if (typeof info === 'string') enderecoTxt = 'Casa Nº ' + info; // compat. formato antigo
-          else if (info.enderecoCompleto) enderecoTxt = info.enderecoCompleto;
-          else if (info.numero) enderecoTxt = 'Casa Nº ' + info.numero;
+          const numeroCasa = (typeof info === 'string') ? info : (info.numero || '');
+          if (numeroCasa) enderecoTxt = 'Casa Nº ' + numeroCasa;
         }
 
         // Quebra o endereço em linhas curtas para caber dentro do quadrado do lote.
@@ -2606,6 +2654,77 @@
   </div>
 
   <!-- Modal Entrada de Visitante Cadastrado Encontrado por CPF -->
+  <!-- Modal: MORADOR identificado na busca por CPF -->
+  <div id="modal-entrada-morador" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
+    <div
+      style="background:#fff; border-radius:12px; width:100%; max-width:460px; padding:22px 24px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:6px solid #f59e0b; box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="margin:0; font-size:20px; color:#92400e; display:flex; align-items:center; gap:8px;">
+          <span style="font-size:26px;">🏠</span> Morador identificado
+        </h3>
+        <button type="button" onclick="fecharModalEntradaMorador()"
+          style="background:none; border:none; font-size:26px; line-height:1; padding:0 4px; cursor:pointer; color:#64748b;">&times;</button>
+      </div>
+
+      <div style="background:#fffbeb; border:2px solid #f59e0b; border-radius:10px; padding:16px; margin-bottom:16px; text-align:center;">
+        <div id="morador-pop-nome" style="font-size:22px; font-weight:800; color:#0f172a;">-</div>
+        <div id="morador-pop-lote" style="font-size:16px; font-weight:700; color:#b45309; margin-top:4px;">-</div>
+        <div id="morador-pop-doc" style="font-size:14px; color:#475569; margin-top:4px;">-</div>
+      </div>
+
+      <div id="morador-pop-obs" class="hidden"
+        style="background:#fefce8; border:2px solid #eab308; border-radius:8px; padding:12px 14px; margin-bottom:16px; font-size:14px; color:#713f12; font-weight:600; white-space:pre-wrap;"></div>
+
+      <button type="button" id="btn-confirmar-morador-pop" onclick="confirmarEntradaMoradorPopup()"
+        style="width:100%; background:var(--verde); color:#fff; padding:16px; font-size:18px; font-weight:800; border:none; border-radius:10px; cursor:pointer;">
+        &#9989; Registrar entrada do morador
+      </button>
+      <button type="button" class="secundario block" style="margin-top:10px;" onclick="fecharModalEntradaMorador()">Cancelar</button>
+    </div>
+  </div>
+
+  <!-- Modal: VISITA PREVISTA encontrada na busca por CPF -->
+  <div id="modal-visita-prevista" class="hidden"
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
+    <div
+      style="background:#fff; border-radius:12px; width:100%; max-width:460px; padding:22px 24px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:6px solid var(--verde); box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+        <h3 style="margin:0; font-size:20px; color:var(--verde-escuro); display:flex; align-items:center; gap:8px;">
+          <span style="font-size:26px;">🗓️</span> Visita prevista para hoje
+        </h3>
+        <button type="button" onclick="fecharModalVisitaPrevista()"
+          style="background:none; border:none; font-size:26px; line-height:1; padding:0 4px; cursor:pointer; color:#64748b;">&times;</button>
+      </div>
+
+      <div style="background:#f0fdf4; border:2px solid #86efac; border-radius:10px; padding:16px; margin-bottom:16px;">
+        <div id="prev-pop-nome" style="font-size:22px; font-weight:800; color:#0f172a;">-</div>
+        <div id="prev-pop-placa" style="font-size:14px; color:#475569; margin-top:2px;"></div>
+        <div style="margin-top:8px; font-size:15px; color:#334155;">
+          <strong>Tipo:</strong> <span id="prev-pop-tipo">-</span>
+        </div>
+        <div style="margin-top:2px; font-size:15px; color:#334155;">
+          <strong>Morador / destino:</strong> <span id="prev-pop-morador">-</span>
+        </div>
+        <div style="margin-top:2px; font-size:15px; color:#334155;">
+          <strong>Previsto:</strong> <span id="prev-pop-previsto">-</span>
+        </div>
+      </div>
+
+      <div id="prev-pop-obs" class="hidden"
+        style="background:#fefce8; border:2px solid #eab308; border-radius:8px; padding:12px 14px; margin-bottom:16px; font-size:14px; color:#713f12; font-weight:600; white-space:pre-wrap;"></div>
+
+      <button type="button" id="btn-confirmar-prev-pop" onclick="confirmarEntradaVisitaPrevista()"
+        style="width:100%; background:var(--verde); color:#fff; padding:16px; font-size:18px; font-weight:800; border:none; border-radius:10px; cursor:pointer;">
+        &#9989; Registrar entrada
+      </button>
+      <div class="row-inline" style="margin-top:10px; gap:10px;">
+        <button type="button" class="secundario block" style="margin:0; flex:1;" onclick="fecharModalVisitaPrevista()">Cancelar</button>
+        <button type="button" class="block" style="margin:0; flex:1; background:#64748b;" onclick="naoVeioVisitaPrevista()">Não veio</button>
+      </div>
+    </div>
+  </div>
+
   <div id="modal-entrada-visitante-encontrado" class="hidden"
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
     <div
