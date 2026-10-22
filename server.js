@@ -388,6 +388,27 @@ function formatarDocumento(doc) {
 // NUNCA podem virar maiúsculas, senão quebram as comparações.
 const SENTINELAS_NOME = ['Encomenda', 'Troca de turno'];
 
+// Comparador para ordenar perfis por número do lote (Lote 01, 02, 03...),
+// deixando quem NÃO tem lote (porteiro/admin) no final, ordenado por nome.
+// Usa o campo `bloco` (ex.: "Lote 07", "7", "07"). Extrai os dígitos.
+function ordenarPorLote(a, b) {
+  const numLote = (p) => {
+    const digitos = (p && p.bloco ? String(p.bloco) : '').replace(/\D/g, '');
+    return digitos ? parseInt(digitos, 10) : null;
+  };
+  const la = numLote(a);
+  const lb = numLote(b);
+  // Ambos sem lote: ordena por nome.
+  if (la === null && lb === null) {
+    return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+  }
+  if (la === null) return 1;  // a (sem lote) vai depois
+  if (lb === null) return -1; // b (sem lote) vai depois
+  if (la !== lb) return la - lb; // ordem numérica do lote
+  // Mesmo lote: desempata por nome.
+  return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+}
+
 // Coloca um texto de CONTEÚDO em MAIÚSCULAS (nome, observação, endereço, placa, etc.).
 // Preserva null/vazio e os valores sentinela. Não use em e-mail, senha, cpf, telefone, cep ou enums.
 function maiuscula(valor) {
@@ -1122,6 +1143,16 @@ app.get('/api/morador/link-visita', requireAuth, requireRole('morador', 'admin')
 
   const tokenCurto = gerarTokenCurtoVisita(moradorId, tipo, exp);
   const caminhoCurto = tokenCurto ? `/c/${tokenCurto}` : `/cadastro-visita.html?${params.toString()}`;
+
+  // Registra o compartilhamento do link (por morador + tipo) para o relatório
+  // do admin. Não conta quando o admin está "vendo como morador" (impersonação),
+  // para não inflar o contador. Dispara-e-esquece; tolera tabela ainda não criada.
+  if (!req.impersonando) {
+    supabaseAdmin
+      .from('compartilhamentos_link')
+      .insert({ morador_id: moradorId, tipo })
+      .then(() => {}, () => {});
+  }
 
   res.json({
     caminho: caminhoCurto,
@@ -3840,6 +3871,155 @@ app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res)
     presentes: presentes || 0,
     avisosPendentes: avisosPendentes || 0,
   });
+});
+
+// Relatório de Sessões / Acessos (só admin).
+// - Separa quem está "online agora" (acesso nos últimos N minutos) de quem está
+//   offline, usando perfis.ultimo_acesso (carimbado pelo requireAuth).
+// - Identifica o porteiro de plantão pela última "Troca de turno".
+app.get('/api/admin/sessoes', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const JANELA_MIN = Math.min(Math.max(parseInt(req.query.janela, 10) || 5, 1), 120);
+    const agora = Date.now();
+    const limiteOnline = agora - JANELA_MIN * 60 * 1000;
+
+    // 1) Todos os perfis com o carimbo de último acesso.
+    const { data: perfis, error } = await supabaseAdmin
+      .from('perfis')
+      .select('id, nome, tipo, bloco, ativo, ultimo_acesso')
+      .order('ultimo_acesso', { ascending: false, nullsFirst: false });
+    if (error) throw error;
+
+    // 2) Porteiro de plantão: último registro "Troca de turno".
+    let porteiroPlantao = null;
+    const { data: trocas } = await supabaseAdmin
+      .from('registros_portaria')
+      .select('registrado_por, entrada, observacao')
+      .eq('nome_pessoa', 'Troca de turno')
+      .order('entrada', { ascending: false })
+      .limit(1);
+    if (trocas && trocas.length > 0) {
+      const t = trocas[0];
+      const perfilPort = (perfis || []).find((p) => p.id === t.registrado_por);
+      porteiroPlantao = {
+        id: t.registrado_por || null,
+        nome: perfilPort ? perfilPort.nome : null,
+        desde: t.entrada || null,
+        online: perfilPort && perfilPort.ultimo_acesso
+          ? new Date(perfilPort.ultimo_acesso).getTime() >= limiteOnline
+          : false,
+      };
+    }
+
+    const mapear = (p) => ({
+      id: p.id,
+      nome: p.nome,
+      tipo: p.tipo,
+      bloco: p.bloco || null,
+      ativo: p.ativo !== false,
+      ultimo_acesso: p.ultimo_acesso || null,
+    });
+
+    const online = [];
+    const offline = [];
+    (perfis || []).forEach((p) => {
+      const ts = p.ultimo_acesso ? new Date(p.ultimo_acesso).getTime() : 0;
+      if (ts && ts >= limiteOnline) online.push(mapear(p));
+      else offline.push(mapear(p));
+    });
+
+    // Ordena por lote (Lote 01, 02, ...) e joga quem não tem lote
+    // (porteiro/admin) para o final da lista.
+    online.sort(ordenarPorLote);
+    offline.sort(ordenarPorLote);
+
+    res.json({
+      janelaMinutos: JANELA_MIN,
+      agora: new Date(agora).toISOString(),
+      porteiroPlantao,
+      totalOnline: online.length,
+      totalOffline: offline.length,
+      online,
+      offline,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Histórico de acessos de um perfil (só admin). Usado no pop-up do relatório
+// de Sessões ao passar o mouse sobre uma pessoa.
+app.get('/api/admin/sessoes/:id/acessos', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const perfilId = req.params.id;
+    const limite = Math.min(Math.max(parseInt(req.query.limite, 10) || 20, 1), 200);
+
+    const { data, error } = await supabaseAdmin
+      .from('acessos_log')
+      .select('acesso_em')
+      .eq('perfil_id', perfilId)
+      .order('acesso_em', { ascending: false })
+      .limit(limite);
+    if (error) throw error;
+
+    res.json({ total: (data || []).length, acessos: (data || []).map((a) => a.acesso_em) });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Relatório: quantas vezes cada morador compartilhou o link do WhatsApp,
+// separado por tipo (Visitante / Prestador). Só admin.
+app.get('/api/admin/relatorio/compartilhamentos', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { data: eventos, error } = await supabaseAdmin
+      .from('compartilhamentos_link')
+      .select('morador_id, tipo, criado_em')
+      .order('criado_em', { ascending: false })
+      .limit(20000);
+    if (error) throw error;
+
+    // Agrupa por morador.
+    const agrupado = new Map(); // morador_id -> { visitante, prestador, total, ultima }
+    (eventos || []).forEach((e) => {
+      const id = e.morador_id;
+      if (!id) return;
+      let g = agrupado.get(id);
+      if (!g) { g = { visitante: 0, prestador: 0, total: 0, ultima: null }; agrupado.set(id, g); }
+      if (e.tipo === 'Prestador') g.prestador += 1; else g.visitante += 1;
+      g.total += 1;
+      if (e.criado_em && (!g.ultima || new Date(e.criado_em) > new Date(g.ultima))) g.ultima = e.criado_em;
+    });
+
+    // Resolve nome/lote dos moradores envolvidos.
+    const ids = [...agrupado.keys()];
+    let mapaPerfis = new Map();
+    if (ids.length > 0) {
+      const { data: perfis } = await supabaseAdmin
+        .from('perfis')
+        .select('id, nome, bloco')
+        .in('id', ids);
+      mapaPerfis = new Map((perfis || []).map((p) => [p.id, p]));
+    }
+
+    const linhas = ids.map((id) => {
+      const g = agrupado.get(id);
+      const p = mapaPerfis.get(id) || {};
+      return {
+        morador_id: id,
+        nome: p.nome || '(morador removido)',
+        bloco: p.bloco || null,
+        visitante: g.visitante,
+        prestador: g.prestador,
+        total: g.total,
+        ultima: g.ultima,
+      };
+    }).sort((a, b) => b.total - a.total || a.nome.localeCompare(b.nome, 'pt-BR'));
+
+    res.json({ total: (eventos || []).length, moradores: linhas });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Relatório: entradas em que o porteiro DIGITOU o nome do morador manualmente

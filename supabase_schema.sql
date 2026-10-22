@@ -65,6 +65,11 @@ alter table public.perfis add column if not exists endereco_complemento text;
 -- as notificacoes push funcionarem (/api/push/subscribe e notificarLote).
 alter table public.perfis add column if not exists push_subscription jsonb;
 
+-- Migracao: carimbo do ultimo acesso autenticado (atualizado pelo requireAuth,
+-- com throttle). Usado no relatorio de "Sessoes / Acessos" do admin para
+-- inferir quem esta online agora (acesso recente) e o ultimo acesso de cada um.
+alter table public.perfis add column if not exists ultimo_acesso timestamptz;
+
 -- ------------------------------------------------------------
 -- 3) Avisos de visita (morador avisa a portaria)
 -- ------------------------------------------------------------
@@ -340,3 +345,50 @@ create policy recorrentes_update on public.visitas_recorrentes
 drop policy if exists recorrentes_delete on public.visitas_recorrentes;
 create policy recorrentes_delete on public.visitas_recorrentes
   for delete using (morador_id = auth.uid() or public.meu_tipo() = 'admin');
+
+-- ------------------------------------------------------------
+-- 10) Historico de acessos (log de login/uso autenticado)
+-- ------------------------------------------------------------
+-- Cada linha registra UM acesso autenticado de um perfil (gravado pelo
+-- requireAuth, com throttle de ~1 por minuto por usuario). Alimenta o
+-- pop-up "todos os acessos" no relatorio de Sessoes do admin.
+create table if not exists public.acessos_log (
+  id         bigint generated always as identity primary key,
+  perfil_id  uuid not null references public.perfis(id) on delete cascade,
+  acesso_em  timestamptz not null default now()
+);
+
+create index if not exists idx_acessos_perfil on public.acessos_log(perfil_id);
+create index if not exists idx_acessos_em on public.acessos_log(acesso_em);
+
+alter table public.acessos_log enable row level security;
+
+-- Apenas o admin le o historico de acessos. A escrita e feita via service role
+-- (requireAuth), que ignora RLS, entao nao precisamos de policy de insert.
+drop policy if exists acessos_log_admin_select on public.acessos_log;
+create policy acessos_log_admin_select on public.acessos_log
+  for select using (public.meu_tipo() = 'admin');
+
+-- ------------------------------------------------------------
+-- 11) Compartilhamentos de link do WhatsApp (convite de visita/prestador)
+-- ------------------------------------------------------------
+-- Cada linha registra UMA geração de link de convite pelo morador (ao clicar
+-- em "Convidar via WhatsApp" ou "Copiar link"). tipo = 'Visitante' | 'Prestador'.
+-- Alimenta o relatorio do admin de quantas vezes cada morador compartilhou.
+create table if not exists public.compartilhamentos_link (
+  id         bigint generated always as identity primary key,
+  morador_id uuid not null references public.perfis(id) on delete cascade,
+  tipo       text not null,
+  criado_em  timestamptz not null default now()
+);
+
+create index if not exists idx_compart_morador on public.compartilhamentos_link(morador_id);
+create index if not exists idx_compart_tipo on public.compartilhamentos_link(tipo);
+
+alter table public.compartilhamentos_link enable row level security;
+
+-- Apenas o admin le os compartilhamentos. A escrita e feita via service role
+-- (endpoint link-visita), que ignora RLS, entao nao precisamos de policy de insert.
+drop policy if exists compart_admin_select on public.compartilhamentos_link;
+create policy compart_admin_select on public.compartilhamentos_link
+  for select using (public.meu_tipo() = 'admin');

@@ -2,6 +2,46 @@ const { supabaseForToken, supabaseAdmin, supabaseAnon } = require('./supabase');
 
 const COOKIE_NAME = 'pp_session';
 
+// Throttle do carimbo de "ultimo_acesso": evita escrever no banco a cada
+// requisição. Guarda, por usuário, o momento do último update feito.
+const _ultimoAcessoThrottle = new Map(); // userId -> timestamp(ms) do último write
+const ULTIMO_ACESSO_INTERVALO_MS = 60 * 1000; // no máx. 1 write por minuto por usuário
+
+// Atualiza perfis.ultimo_acesso de forma leve ("dispara e esquece"):
+// - só escreve se passou mais de 1 min desde o último write daquele usuário;
+// - nunca bloqueia a requisição (sem await no fluxo principal);
+// - falha silenciosa (ex.: coluna ainda não migrada no banco).
+function marcarUltimoAcesso(userId) {
+  if (!userId) return;
+  const agora = Date.now();
+  const anterior = _ultimoAcessoThrottle.get(userId) || 0;
+  if (agora - anterior < ULTIMO_ACESSO_INTERVALO_MS) return;
+  _ultimoAcessoThrottle.set(userId, agora);
+
+  // Limpeza oportunista para o Map não crescer indefinidamente.
+  if (_ultimoAcessoThrottle.size > 5000) {
+    for (const [k, v] of _ultimoAcessoThrottle) {
+      if (agora - v > ULTIMO_ACESSO_INTERVALO_MS * 10) _ultimoAcessoThrottle.delete(k);
+    }
+  }
+
+  const iso = new Date(agora).toISOString();
+
+  // Carimba o último acesso (sobrescreve) para o status online/offline.
+  supabaseAdmin
+    .from('perfis')
+    .update({ ultimo_acesso: iso })
+    .eq('id', userId)
+    .then(() => {}, () => {}); // ignora sucesso e erro (ex.: coluna ausente)
+
+  // Registra uma linha no histórico de acessos (acumula). Throttle acima já
+  // garante no máx. ~1 por minuto por usuário. Tolera tabela ainda não migrada.
+  supabaseAdmin
+    .from('acessos_log')
+    .insert({ perfil_id: userId, acesso_em: iso })
+    .then(() => {}, () => {});
+}
+
 const cookieOptions = {
   httpOnly: true,
   sameSite: 'lax',
@@ -100,6 +140,10 @@ async function requireAuth(req, res, next) {
   req.user = userData.user;
   req.perfil = perfil;
   req.supabase = client;
+
+  // Carimba o último acesso do usuário REAL (antes da troca por impersonação),
+  // com throttle e sem bloquear a requisição. Alimenta o relatório de sessões.
+  marcarUltimoAcesso(userData.user.id);
 
   // Impersonação ("ver como morador"): só o ADMIN pode, via header
   // x-impersonar-morador = id do morador alvo. Troca a identidade efetiva

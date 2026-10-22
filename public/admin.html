@@ -43,16 +43,22 @@
     <!-- Guias / Botões de Navegação -->
     <div class="tabs" style="margin-bottom:18px;">
       <button type="button" data-tab="tab-cadastrar" onclick="trocarGuiaAdmin('tab-cadastrar')">
-        ➕ Cadastrar usuário
+        ➕ Criar usuário
       </button>
       <button type="button" class="ativo" data-tab="tab-moradores" onclick="trocarGuiaAdmin('tab-moradores')">
-        🏠 Moradores cadastrados
+        🏠 Cadastrados
       </button>
       <button type="button" data-tab="tab-visitantes" onclick="trocarGuiaAdmin('tab-visitantes')">
-        👥 Visitantes cadastrados
+        👥 Visitantes 
       </button>
       <button type="button" data-tab="tab-manuais" onclick="trocarGuiaAdmin('tab-manuais')">
-        ✍️ Moradores digitados manualmente
+        ✍️ Digitados
+      </button>
+      <button type="button" data-tab="tab-sessoes" onclick="trocarGuiaAdmin('tab-sessoes')">
+        🟢 Sessões
+      </button>
+      <button type="button" data-tab="tab-compart" onclick="trocarGuiaAdmin('tab-compart')">
+        📲 WhatsApp
       </button>
     </div>
 
@@ -314,6 +320,44 @@
         <p class="vazio">Carregando...</p>
       </div>
     </div>
+
+    <!-- Guia 5: Sessões / Acessos -->
+    <div id="tab-sessoes" class="tab-admin-conteudo card hidden">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <h2 style="margin:0;">🟢 Sessões / Acessos</h2>
+        <span id="total-sessoes" class="text-muted" style="font-size:13px;"></span>
+      </div>
+      <p class="text-muted" style="margin:0 0 12px; font-size:13px;">
+        Quem está <strong>online agora</strong> (acesso nos últimos minutos) e quem está offline, com o último acesso de cada um.
+        O <strong>porteiro de plantão</strong> é identificado pela última troca de turno.
+      </p>
+      <div class="row-inline" style="margin-bottom:16px;">
+        <button type="button" class="secundario mini" onclick="carregarSessoes()">&#128260; Atualizar</button>
+      </div>
+      <div id="lista-sessoes">
+        <p class="vazio">Carregando...</p>
+      </div>
+    </div>
+
+    <!-- Guia 6: Convites WhatsApp (compartilhamentos de link) -->
+    <div id="tab-compart" class="tab-admin-conteudo card hidden">
+      <div
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+        <h2 style="margin:0;">📲 Convites WhatsApp</h2>
+        <span id="total-compart" class="text-muted" style="font-size:13px;"></span>
+      </div>
+      <p class="text-muted" style="margin:0 0 12px; font-size:13px;">
+        Quantas vezes cada morador <strong>compartilhou o link de convite</strong> (botões "Convidar via WhatsApp" / "Copiar link"),
+        separado entre <strong>Visitante</strong> e <strong>Prestador</strong>.
+      </p>
+      <div class="row-inline" style="margin-bottom:16px;">
+        <button type="button" class="secundario mini" onclick="carregarCompartilhamentos()">&#128260; Atualizar</button>
+      </div>
+      <div id="lista-compart">
+        <p class="vazio">Carregando...</p>
+      </div>
+    </div>
   </div>
 
   <script src="/js/api.js"></script>
@@ -359,6 +403,222 @@
       if (tabId === 'tab-manuais') {
         carregarManuais();
       }
+      if (tabId === 'tab-sessoes') {
+        carregarSessoes();
+      }
+      if (tabId === 'tab-compart') {
+        carregarCompartilhamentos();
+      }
+    }
+
+    // Relatório de convites por WhatsApp compartilhados por cada morador.
+    async function carregarCompartilhamentos() {
+      const alvo = document.getElementById('lista-compart');
+      const total = document.getElementById('total-compart');
+      alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const d = await api('/api/admin/relatorio/compartilhamentos');
+        const moradores = d.moradores || [];
+        if (total) total.textContent = `${d.total || 0} compartilhamento(s) · ${moradores.length} morador(es)`;
+
+        if (!moradores.length) {
+          alvo.innerHTML = '<p class="vazio">Nenhum link de convite foi compartilhado ainda.</p>';
+          return;
+        }
+
+        const linhas = moradores.map((m) => `
+          <tr>
+            <td data-label="Morador"><strong>${escapeHtml(m.nome)}</strong></td>
+            <td data-label="Lote">${escapeHtml(m.bloco || '—')}</td>
+            <td data-label="Visitante" style="text-align:center;">${m.visitante}</td>
+            <td data-label="Prestador" style="text-align:center;">${m.prestador}</td>
+            <td data-label="Total" style="text-align:center; font-weight:700;">${m.total}</td>
+            <td data-label="Última vez">${m.ultima ? formatarData(m.ultima) : '—'}</td>
+          </tr>`).join('');
+
+        alvo.innerHTML = `
+          <div style="overflow-x:auto;">
+            <table>
+              <thead>
+                <tr><th>Morador</th><th>Lote</th><th style="text-align:center;">Visitante</th><th style="text-align:center;">Prestador</th><th style="text-align:center;">Total</th><th>Última vez</th></tr>
+              </thead>
+              <tbody>${linhas}</tbody>
+            </table>
+          </div>`;
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    // Relatório de Sessões / Acessos: online agora, offline e último acesso.
+    async function carregarSessoes() {
+      const alvo = document.getElementById('lista-sessoes');
+      const total = document.getElementById('total-sessoes');
+      alvo.innerHTML = '<p class="vazio">Carregando...</p>';
+      try {
+        const d = await api('/api/admin/sessoes');
+        if (total) total.textContent = `${d.totalOnline} online · ${d.totalOffline} offline`;
+
+        const tipoLabel = (t) => t === 'admin' ? 'Administrador' : (t === 'porteiro' ? 'Porteiro' : 'Morador');
+        const localDe = (p) => p.bloco ? escapeHtml(p.bloco) : (p.tipo === 'morador' ? '—' : tipoLabel(p.tipo));
+
+        // Bloco do porteiro de plantão.
+        let htmlPlantao = '';
+        const pp = d.porteiroPlantao;
+        if (pp && pp.nome) {
+          // "Conexão" = se a sessão dele teve atividade nos últimos minutos.
+          // É independente de ele ser o porteiro do plantão atual.
+          const pill = pp.online
+            ? '<span class="badge" style="background:#dcfce7; color:#166534; font-weight:700;">🟢 Conectado agora</span>'
+            : '<span class="badge" style="background:#f1f5f9; color:#64748b; font-weight:700;">⚪ Sem conexão no momento</span>';
+          const explica = pp.online
+            ? 'Está no plantão e com o sistema aberto agora.'
+            : 'É o responsável pelo plantão atual, mas o sistema dele não registra atividade nos últimos ' + d.janelaMinutos + ' min.';
+          htmlPlantao = `
+            <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px 16px; margin-bottom:18px;">
+              <div style="font-size:12px; font-weight:700; text-transform:uppercase; letter-spacing:.5px; color:#1e40af; margin-bottom:6px;">🛡️ Porteiro responsável pelo plantão</div>
+              <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+                <strong style="font-size:16px; color:#0f172a;">${escapeHtml(pp.nome)}</strong>
+                ${pill}
+                <span class="text-muted" style="font-size:12px; margin-left:auto;">Assumiu o turno em ${pp.desde ? formatarData(pp.desde) : '—'}</span>
+              </div>
+              <div class="text-muted" style="font-size:12px; margin-top:8px;">${explica}</div>
+            </div>`;
+        } else {
+          htmlPlantao = `
+            <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:10px; padding:12px 16px; margin-bottom:18px; font-size:13px; color:#92400e;">
+              🛡️ Nenhuma troca de turno registrada — não há porteiro de plantão identificado.
+            </div>`;
+        }
+
+        // Tabela de uma lista (online ou offline).
+        const tabela = (lista, mostrarOnline) => {
+          if (!lista.length) return '<p class="vazio" style="margin:4px 0 16px;">Ninguém nesta lista.</p>';
+          const linhas = lista.map((p) => {
+            const statusAcesso = p.ativo
+              ? ''
+              : ' <span class="badge" style="background:#fee2e2; color:#991b1b; font-size:11px;">bloqueado</span>';
+            const temAcesso = !!p.ultimo_acesso;
+            const nomeAttr = escapeAttr(p.nome || '—');
+            return `
+              <tr class="linha-acessos" style="cursor:${temAcesso ? 'help' : 'default'};"
+                  data-perfil-id="${escapeAttr(p.id)}" data-nome="${nomeAttr}"
+                  onmouseenter="mostrarPopupAcessos(event, this)" onmouseleave="esconderPopupAcessos()">
+                <td data-label="Nome"><strong>${escapeHtml(p.nome || '—')}</strong>${statusAcesso}</td>
+                <td data-label="Perfil"><span class="badge ${escapeHtml((p.tipo || '').toLowerCase())}">${tipoLabel(p.tipo)}</span></td>
+                <td data-label="Local">${localDe(p)}</td>
+                <td data-label="Último acesso">${temAcesso ? '🕘 ' + formatarData(p.ultimo_acesso) : '<span class="text-muted">Nunca</span>'}</td>
+              </tr>`;
+          }).join('');
+          return `
+            <div style="overflow-x:auto; margin-bottom:22px;">
+              <table>
+                <thead><tr><th>Nome</th><th>Perfil</th><th>Local</th><th>Último acesso</th></tr></thead>
+                <tbody>${linhas}</tbody>
+              </table>
+            </div>`;
+        };
+
+        alvo.innerHTML = htmlPlantao
+          + `<h3 style="margin:4px 0 8px; font-size:15px; color:var(--verde-escuro, #166534);">🟢 Online agora (${d.totalOnline}) <span class="text-muted" style="font-weight:400; font-size:12px;">· ativos nos últimos ${d.janelaMinutos} min</span></h3>`
+          + tabela(d.online, true)
+          + `<h3 style="margin:4px 0 8px; font-size:15px; color:#64748b;">⚪ Offline (${d.totalOffline})</h3>`
+          + tabela(d.offline, false);
+      } catch (err) {
+        alvo.innerHTML = `<p class="msg erro">${escapeHtml(err.message)}</p>`;
+      }
+    }
+
+    // ---------- Pop-up de histórico de acessos (hover no relatório de Sessões) ----------
+    let _popupAcessosEl = null;
+    let _acessosCache = {};      // perfilId -> array de ISO
+    let _popupHoverTimer = null;
+    let _popupPerfilAtual = null;
+
+    function garantirPopupAcessos() {
+      if (_popupAcessosEl) return _popupAcessosEl;
+      const el = document.createElement('div');
+      el.id = 'popup-acessos';
+      el.style.cssText = 'position:fixed; z-index:11000; max-width:300px; max-height:320px; overflow-y:auto; '
+        + 'background:#0f172a; color:#e2e8f0; border-radius:10px; padding:12px 14px; font-size:13px; '
+        + 'box-shadow:0 12px 30px rgba(0,0,0,0.35); display:none; line-height:1.5; pointer-events:none;';
+      document.body.appendChild(el);
+      _popupAcessosEl = el;
+      return el;
+    }
+
+    function posicionarPopup(ev) {
+      const el = garantirPopupAcessos();
+      const margem = 14;
+      let x = ev.clientX + margem;
+      let y = ev.clientY + margem;
+      // Evita sair da tela à direita/baixo.
+      const w = el.offsetWidth || 280;
+      const h = el.offsetHeight || 160;
+      if (x + w > window.innerWidth) x = window.innerWidth - w - margem;
+      if (y + h > window.innerHeight) y = ev.clientY - h - margem;
+      el.style.left = Math.max(8, x) + 'px';
+      el.style.top = Math.max(8, y) + 'px';
+    }
+
+    function renderPopupAcessos(nome, lista) {
+      const el = garantirPopupAcessos();
+      let html = '<div style="font-weight:700; margin-bottom:8px; color:#fff;">🕘 Acessos de ' + escapeHtml(nome) + '</div>';
+      if (!lista || lista.length === 0) {
+        html += '<div style="color:#94a3b8;">Nenhum acesso registrado ainda.</div>';
+      } else {
+        html += '<div style="color:#94a3b8; font-size:11px; margin-bottom:6px;">Últimos ' + lista.length + ' acessos</div>';
+        html += lista.map(iso => '<div style="border-bottom:1px solid #1e293b; padding:3px 0;">' + escapeHtml(formatarData(iso)) + '</div>').join('');
+      }
+      el.innerHTML = html;
+    }
+
+    async function mostrarPopupAcessos(ev, tr) {
+      const perfilId = tr.getAttribute('data-perfil-id');
+      const nome = tr.getAttribute('data-nome') || '—';
+      if (!perfilId) return;
+      _popupPerfilAtual = perfilId;
+
+      const el = garantirPopupAcessos();
+      el.style.display = 'block';
+      posicionarPopup(ev);
+
+      // Reposiciona enquanto o mouse se move sobre a linha.
+      tr.onmousemove = (e) => { if (el.style.display === 'block') posicionarPopup(e); };
+
+      // Cache: evita refazer a busca para a mesma pessoa.
+      if (_acessosCache[perfilId]) {
+        renderPopupAcessos(nome, _acessosCache[perfilId]);
+        posicionarPopup(ev);
+        return;
+      }
+
+      renderPopupAcessos(nome, null);
+      el.innerHTML = '<div style="font-weight:700; color:#fff;">🕘 Acessos de ' + escapeHtml(nome) + '</div>'
+        + '<div style="color:#94a3b8; margin-top:6px;">Carregando...</div>';
+
+      clearTimeout(_popupHoverTimer);
+      _popupHoverTimer = setTimeout(async () => {
+        try {
+          const d = await api('/api/admin/sessoes/' + encodeURIComponent(perfilId) + '/acessos');
+          _acessosCache[perfilId] = d.acessos || [];
+          // Só atualiza se o mouse ainda está na mesma pessoa.
+          if (_popupPerfilAtual === perfilId && el.style.display === 'block') {
+            renderPopupAcessos(nome, _acessosCache[perfilId]);
+            posicionarPopup(ev);
+          }
+        } catch (err) {
+          if (_popupPerfilAtual === perfilId) {
+            el.innerHTML = '<div style="color:#fca5a5;">Erro ao carregar acessos.</div>';
+          }
+        }
+      }, 150);
+    }
+
+    function esconderPopupAcessos() {
+      _popupPerfilAtual = null;
+      clearTimeout(_popupHoverTimer);
+      if (_popupAcessosEl) _popupAcessosEl.style.display = 'none';
     }
 
     // Relatório de moradores digitados manualmente pelo porteiro na entrada.
@@ -912,7 +1172,8 @@
 
     let todosUsuarios = [];
     // Estado de ordenação da lista de usuários (campo e direção).
-    let ordenacaoUsuarios = { campo: null, dir: 'asc' };
+    // Padrão: por LOCAL (lote) crescente — Lote 01, 02, 03... e porteiros/admins no fim.
+    let ordenacaoUsuarios = { campo: 'local', dir: 'asc' };
 
     // Alterna a ordenação ao clicar no cabeçalho (Nome ou Local) e re-renderiza.
     function ordenarUsuarios(campo) {
@@ -929,13 +1190,26 @@
       const { campo, dir } = ordenacaoUsuarios;
       if (!campo) return lista;
       const fator = dir === 'asc' ? 1 : -1;
+
+      // Ordenação por LOCAL: por número do lote; quem não tem lote
+      // (porteiro/admin) vai SEMPRE para o final, independente da direção.
+      if (campo === 'local') {
+        const numLote = (u) => {
+          const d = (u.bloco || '').replace(/\D/g, '');
+          return d ? parseInt(d, 10) : null;
+        };
+        return [...lista].sort((a, b) => {
+          const la = numLote(a), lb = numLote(b);
+          if (la === null && lb === null) return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+          if (la === null) return 1;   // sem lote vai para o fim
+          if (lb === null) return -1;
+          if (la !== lb) return (la - lb) * fator;
+          return (a.nome || '').localeCompare(b.nome || '', 'pt-BR');
+        });
+      }
+
       const valor = (u) => {
         if (campo === 'nome') return (u.nome || '').toLowerCase();
-        if (campo === 'local') {
-          // Ordena lote por número quando possível (Lote 06 < Lote 20), senão alfabético.
-          const n = parseInt((u.bloco || '').replace(/\D/g, ''), 10);
-          return Number.isFinite(n) ? n : (u.bloco || '').toLowerCase();
-        }
         return '';
       };
       return [...lista].sort((a, b) => {
