@@ -42,10 +42,10 @@
 
     <!-- Guias / Botões de Navegação -->
     <div class="tabs" style="margin-bottom:18px;">
-      <button type="button" class="ativo" data-tab="tab-cadastrar" onclick="trocarGuiaAdmin('tab-cadastrar')">
+      <button type="button" data-tab="tab-cadastrar" onclick="trocarGuiaAdmin('tab-cadastrar')">
         ➕ Cadastrar usuário
       </button>
-      <button type="button" data-tab="tab-moradores" onclick="trocarGuiaAdmin('tab-moradores')">
+      <button type="button" class="ativo" data-tab="tab-moradores" onclick="trocarGuiaAdmin('tab-moradores')">
         🏠 Moradores cadastrados
       </button>
       <button type="button" data-tab="tab-visitantes" onclick="trocarGuiaAdmin('tab-visitantes')">
@@ -57,7 +57,7 @@
     </div>
 
     <!-- Guia 1: Cadastrar usuário -->
-    <div id="tab-cadastrar" class="tab-admin-conteudo card">
+    <div id="tab-cadastrar" class="tab-admin-conteudo card hidden">
       <h2>Cadastrar usuário</h2>
           <form id="form-usuario">
             <label for="tipo">Perfil *</label>
@@ -260,7 +260,7 @@
     </div>
 
     <!-- Guia 2: Moradores cadastrados -->
-    <div id="tab-moradores" class="tab-admin-conteudo card hidden">
+    <div id="tab-moradores" class="tab-admin-conteudo card">
       <div
         style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
         <h2 style="margin:0;">Moradores cadastrados</h2>

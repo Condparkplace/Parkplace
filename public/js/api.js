@@ -53,17 +53,61 @@ function navAdmin(perfil, atual) {
     { id: 'admin', href: '/admin.html', txt: '&#9881;&#65039; Administração' },
     { id: 'porteiro', href: '/porteiro.html', txt: '&#128682; Portaria' },
     { id: 'morador', href: '/morador.html', txt: '&#127968; Área do morador' },
-    { id: 'cadastro', href: '/cadastro.html', txt: '&#128221; Cadastro de morador', novaAba: true },
+    { id: 'cadastro', href: '/cadastro.html', txt: '&#128221; Cadastro de morador', copiarLink: true },
     { id: 'site', href: '/', txt: '&#127760; Site' },
   ];
   const nav = document.createElement('nav');
   nav.className = 'admin-nav';
   nav.setAttribute('aria-label', 'Navegacao do administrador');
   nav.innerHTML = links
-    .map((l) => `<a id="nav-${l.id}" href="${l.href}"${l.id === atual ? ' class="ativo" aria-current="page"' : ''}${l.novaAba ? ' target="_blank"' : ''}>${l.txt}</a>`)
+    .map((l) => {
+      if (l.copiarLink) {
+        // Em vez de navegar, copia o link público de cadastro para compartilhar.
+        return `<a id="nav-${l.id}" href="${l.href}" data-copiar-link="${l.href}" role="button"
+          onclick="return copiarLinkCadastro(event, this);" title="Clique para copiar o link do cadastro de morador">${l.txt}</a>`;
+      }
+      return `<a id="nav-${l.id}" href="${l.href}"${l.id === atual ? ' class="ativo" aria-current="page"' : ''}${l.novaAba ? ' target="_blank"' : ''}>${l.txt}</a>`;
+    })
     .join('');
   const userArea = topbar.querySelector('.user-area');
   topbar.insertBefore(nav, userArea);
+}
+
+// Copia o link público de cadastro de morador para a área de transferência e
+// dá um feedback visual rápido no próprio botão. Usado no menu do admin.
+async function copiarLinkCadastro(ev, el) {
+  if (ev) ev.preventDefault();
+  if (!el) return false;
+  const caminho = el.getAttribute('data-copiar-link') || '/cadastro.html';
+  const link = window.location.origin + caminho;
+
+  try {
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      await navigator.clipboard.writeText(link);
+    } else {
+      // Fallback para navegadores sem a Clipboard API.
+      const tmp = document.createElement('textarea');
+      tmp.value = link;
+      tmp.style.position = 'fixed';
+      tmp.style.opacity = '0';
+      document.body.appendChild(tmp);
+      tmp.select();
+      document.execCommand('copy');
+      document.body.removeChild(tmp);
+    }
+
+    const textoOriginal = el.innerHTML;
+    el.innerHTML = '&#9989; Link copiado!';
+    el.classList.add('copiado');
+    setTimeout(() => {
+      el.innerHTML = textoOriginal;
+      el.classList.remove('copiado');
+    }, 2000);
+  } catch (e) {
+    // Se nem o fallback funcionar, ao menos mostra o link para copiar manualmente.
+    window.prompt('Copie o link do cadastro de morador:', link);
+  }
+  return false;
 }
 
 // Para paginas sem barra superior (Site, Cadastro): se o admin estiver logado,
