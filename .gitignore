@@ -5,6 +5,10 @@ node_modules/
 *.log
 .DS_Store
 
-
 # Caches locais com dados pessoais (nunca versionar - contem CPF/observacoes)
 scratch/*.json
+
+# Arquivos duplicados e temporários de sincronização do OneDrive / Nuvem
+*-Dealer*
+*-Dealer.*
+*-[A-Za-z0-9]*.tmp
