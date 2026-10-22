@@ -60,6 +60,11 @@ alter table public.perfis add column if not exists endereco_cidade text;
 alter table public.perfis add column if not exists endereco_uf text;
 alter table public.perfis add column if not exists endereco_complemento text;
 
+-- Migracao: inscricao de Web Push (VAPID) do morador. Guarda o objeto de
+-- subscription do navegador (endpoint + chaves) como JSONB. Necessaria para
+-- as notificacoes push funcionarem (/api/push/subscribe e notificarLote).
+alter table public.perfis add column if not exists push_subscription jsonb;
+
 -- ------------------------------------------------------------
 -- 3) Avisos de visita (morador avisa a portaria)
 -- ------------------------------------------------------------

@@ -450,14 +450,33 @@
         boxNome.classList.add('hidden');
       }
 
-      // Prestador sem endereço cadastrado: pede o endereço.
+      // Prestador com endereço vazio, nulo OU incompleto: pede atualização.
       const ehPrestador = (tipo === 'Prestador') || (visitante.tipo === 'Prestador');
-      const semEndereco = !((visitante.endereco_visitante || '').trim()) && !((visitante.cep_visitante || '').trim());
-      if (ehPrestador && semEndereco) {
+      if (ehPrestador && enderecoIncompleto(visitante.endereco_visitante, visitante.cep_visitante)) {
         boxEnd.classList.remove('hidden');
       } else {
         boxEnd.classList.add('hidden');
       }
+    }
+
+    // Considera o endereço do prestador "incompleto" se estiver vazio/nulo ou se
+    // faltar qualquer parte essencial (logradouro, número ou cidade). O endereço
+    // é salvo como uma string única no formato "Logradouro, Número - Bairro - Cidade/UF".
+    function enderecoIncompleto(endereco, cep) {
+      const end = (endereco || '').trim();
+      const cepLimpo = (cep || '').replace(/\D/g, '');
+      // Totalmente vazio: incompleto.
+      if (!end && !cepLimpo) return true;
+      // Sem CEP válido (8 dígitos): consideramos incompleto.
+      if (cepLimpo.length !== 8) return true;
+      // String de endereço muito curta ou sem separadores (sem logradouro/cidade).
+      if (end.length < 8) return true;
+      // Precisa ter pelo menos um número (número da casa) e uma vírgula/traço
+      // separando as partes; senão tratamos como incompleto.
+      const temNumero = /\d/.test(end);
+      const temSeparadores = /[,\-\/]/.test(end);
+      if (!temNumero || !temSeparadores) return true;
+      return false;
     }
 
     // Busca CEP do bloco de atualização rápida (ViaCEP).

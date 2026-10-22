@@ -167,38 +167,18 @@
         </div>
 
         <!-- Endereco do visitante (busca por CEP) -->
-        <div id="area-endereco" class="hidden">
-          <h3 style="margin:18px 0 4px;">Endereço do visitante</h3>
-          <div class="grid grid-2">
-            <div>
-              <label for="cep">CEP</label>
-              <div class="row-inline" style="align-items:center;">
-                <input type="text" id="cep" placeholder="00000-000" maxlength="9" style="flex:1; min-width:120px;" />
-                <button type="button" class="mini" id="btn-buscar-cep" onclick="buscarPorCep()">Buscar CEP</button>
-              </div>
-              <span id="msg-cep" class="text-muted"></span>
-            </div>
-            <div>
-              <label for="end_numero">Número</label>
-              <input type="text" id="end_numero" placeholder="Ex: 123" />
-            </div>
-            <div>
-              <label for="end_logradouro">Logradouro</label>
-              <input type="text" id="end_logradouro" placeholder="Rua / Avenida" />
-            </div>
-            <div>
-              <label for="end_bairro">Bairro</label>
-              <input type="text" id="end_bairro" />
-            </div>
-            <div>
-              <label for="end_cidade">Cidade / UF</label>
-              <div class="row-inline">
-                <input type="text" id="end_cidade" placeholder="Cidade" style="flex:3;" />
-                <input type="text" id="end_uf" placeholder="UF" maxlength="2"
-                  style="flex:1; min-width:56px; text-transform:uppercase;" />
-              </div>
-            </div>
-          </div>
+        <!-- Endereço do visitante REMOVIDO da portaria: é cadastrado apenas no
+             perfil do morador. Campos mantidos como hidden para compatibilidade
+             com o JS existente (sempre vazios => endereço vai nulo no registro). -->
+        <div id="area-endereco" class="hidden" style="display:none;">
+          <input type="hidden" id="cep" value="" />
+          <input type="hidden" id="end_numero" value="" />
+          <input type="hidden" id="end_logradouro" value="" />
+          <input type="hidden" id="end_bairro" value="" />
+          <input type="hidden" id="end_cidade" value="" />
+          <input type="hidden" id="end_uf" value="" />
+          <span id="msg-cep" style="display:none;"></span>
+          <button type="button" id="btn-buscar-cep" style="display:none;" tabindex="-1" aria-hidden="true"></button>
         </div>
 
         <input type="hidden" id="aviso_id" />
@@ -548,13 +528,11 @@
     }
 
     function toggleEndereco() {
-      const tipo = document.getElementById('tipo').value;
+      // O endereço do visitante/prestador não é mais solicitado na portaria.
+      // Ele é cadastrado apenas no perfil do morador. Mantemos o bloco sempre
+      // oculto (inclusive para Prestador).
       const areaEndereco = document.getElementById('area-endereco');
-      if (tipo === 'Prestador') {
-        areaEndereco.classList.remove('hidden');
-      } else {
-        areaEndereco.classList.add('hidden');
-      }
+      if (areaEndereco) areaEndereco.classList.add('hidden');
     }
 
     // Monta um link clicável de WhatsApp a partir de um telefone.
@@ -1283,11 +1261,10 @@
     }
 
     function togglePopupEndereco() {
-      const tipo = document.getElementById('popup-vis-tipo').value;
+      // Endereço não é mais solicitado na portaria (só no cadastro do morador).
+      // Mantém a seção sempre oculta, inclusive para Prestador.
       const areaEnd = document.getElementById('popup-area-endereco');
-      if (areaEnd) {
-        areaEnd.classList.toggle('hidden', tipo !== 'Prestador');
-      }
+      if (areaEnd) areaEnd.classList.add('hidden');
     }
 
     async function buscarCepPopup() {
@@ -2826,14 +2803,11 @@
             style="width:100%; box-sizing:border-box; font-size:14px; font-weight:600; padding:7px 10px; border:2px solid #3b82f6; border-radius:6px;" />
         </div>
 
-        <!-- Endereço do Prestador (se prestador selecionado) -->
-        <div id="popup-area-endereco" class="hidden" style="margin-bottom:10px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px;">
-          <h4 style="margin:0 0 6px; font-size:12px; color:#1e293b;">Endereço do Prestador</h4>
-          <div style="display:flex; gap:6px; margin-bottom:6px;">
-            <input type="text" id="popup-vis-cep" placeholder="CEP (00000-000)" maxlength="9" style="flex:1; padding:6px 8px; font-size:13px;" />
-            <button type="button" class="mini" onclick="buscarCepPopup()" style="padding:6px 12px;">Buscar</button>
-          </div>
-          <input type="text" id="popup-vis-endereco" placeholder="Rua, Número, Bairro, Cidade/UF" style="width:100%; box-sizing:border-box; font-size:12px; padding:6px 8px;" />
+        <!-- Endereço do Prestador REMOVIDO da portaria (só no cadastro do morador).
+             Campos mantidos como hidden para o JS existente não quebrar. -->
+        <div id="popup-area-endereco" class="hidden" style="display:none;">
+          <input type="hidden" id="popup-vis-cep" value="" />
+          <input type="hidden" id="popup-vis-endereco" value="" />
         </div>
 
         <div id="msg-popup-vis" class="msg hidden" style="margin-bottom:10px;"></div>
