@@ -35,6 +35,8 @@
         </div>
         <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
           <span class="badge porteiro">&#128110; Porteiro de plantão: <strong id="porteiro-plantao"></strong></span>
+          <button type="button" class="secundario mini" id="btn-ocorrencia" onclick="abrirModalOcorrencia()"
+            style="white-space:nowrap; background:#fef3c7; color:#92400e; border-color:#fcd34d;">&#9888;&#65039; Registrar ocorrência</button>
           <button type="button" class="secundario mini" id="btn-trocar-turno" onclick="abrirTrocaTurno()"
             style="white-space:nowrap;">&#128260; Trocar turno</button>
         </div>
@@ -3514,6 +3516,61 @@
       }
     }
 
+    // ---------- Registrar ocorrência ----------
+    function abrirModalOcorrencia() {
+      document.getElementById('ocorrencia-lote').value = '';
+      document.getElementById('ocorrencia-texto').value = '';
+      const msg = document.getElementById('msg-ocorrencia');
+      if (msg) { msg.classList.add('hidden'); msg.textContent = ''; }
+      const modal = document.getElementById('modal-ocorrencia');
+      modal.classList.remove('hidden');
+      modal.style.display = 'flex';
+      setTimeout(() => document.getElementById('ocorrencia-texto').focus(), 50);
+    }
+
+    function fecharModalOcorrencia() {
+      const modal = document.getElementById('modal-ocorrencia');
+      modal.classList.add('hidden');
+      modal.style.display = 'none';
+    }
+
+    async function salvarOcorrencia() {
+      const texto = document.getElementById('ocorrencia-texto').value.trim();
+      const lote = document.getElementById('ocorrencia-lote').value.trim();
+      const msg = document.getElementById('msg-ocorrencia');
+      const btn = document.getElementById('btn-salvar-ocorrencia');
+      if (!texto) {
+        msg.textContent = 'Descreva a ocorrência.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+        document.getElementById('ocorrencia-texto').focus();
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = 'Registrando...';
+      try {
+        await api('/api/portaria/ocorrencia', {
+          method: 'POST',
+          body: JSON.stringify({ texto, lote: lote || null }),
+        });
+        fecharModalOcorrencia();
+        if (typeof carregarPresentes === 'function') carregarPresentes();
+        const msgEntrada = document.getElementById('msg-entrada');
+        if (msgEntrada) {
+          msgEntrada.textContent = 'Ocorrência registrada no histórico.';
+          msgEntrada.className = 'msg ok';
+          msgEntrada.classList.remove('hidden');
+        }
+      } catch (err) {
+        msg.textContent = err.message || 'Erro ao registrar ocorrência.';
+        msg.className = 'msg erro';
+        msg.classList.remove('hidden');
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Registrar';
+      }
+    }
+
     // ---------- Troca de turno ----------
     // Desloga imediatamente o porteiro atual e abre a tela de login sobreposta
     // para que o próximo porteiro assuma o plantão.
@@ -3625,6 +3682,35 @@
       }
     }
   </script>
+
+  <!-- Modal de Registrar Ocorrência -->
+  <div id="modal-ocorrencia" class="hidden"
+    style="position:fixed; inset:0; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:9999; display:flex; align-items:center; justify-content:center; padding:16px; box-sizing:border-box;">
+    <div style="background:#fff; border-radius:14px; width:100%; max-width:480px; padding:22px 24px; box-shadow:0 20px 40px rgba(0,0,0,0.25);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+        <h3 style="margin:0; font-size:18px; color:#92400e; display:flex; align-items:center; gap:8px;">
+          <span>⚠️</span> Registrar ocorrência
+        </h3>
+        <button type="button" class="secundario mini" onclick="fecharModalOcorrencia()"
+          style="border:none; font-size:20px; line-height:1; padding:4px 10px; cursor:pointer;">&times;</button>
+      </div>
+      <p class="text-muted" style="margin:0 0 14px; font-size:13px;">
+        Anote um acontecimento relevante da portaria (pessoa suspeita, barulho, dano, etc.). Fica salvo no histórico com data e hora.
+      </p>
+      <label for="ocorrencia-lote" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Lote / local (opcional)</label>
+      <input type="text" id="ocorrencia-lote" placeholder="Ex: Lote 12, Portaria, Garagem..."
+        style="width:100%; box-sizing:border-box; margin-bottom:12px;" />
+      <label for="ocorrencia-texto" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Descrição da ocorrência *</label>
+      <textarea id="ocorrencia-texto" rows="4" placeholder="Descreva o que aconteceu..."
+        style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+      <div id="msg-ocorrencia" class="msg hidden" style="margin-top:12px;"></div>
+      <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+        <button type="button" class="secundario" onclick="fecharModalOcorrencia()">Cancelar</button>
+        <button type="button" id="btn-salvar-ocorrencia" onclick="salvarOcorrencia()"
+          style="background:#f59e0b; color:#fff;">Registrar</button>
+      </div>
+    </div>
+  </div>
 
   <!-- Overlay de Troca de Turno (bloqueia o sistema até o próximo porteiro logar) -->
   <div id="overlay-troca-turno" class="hidden"

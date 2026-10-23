@@ -386,7 +386,7 @@ function formatarDocumento(doc) {
 
 // Valores sentinela de nome_pessoa comparados com === em várias partes do código.
 // NUNCA podem virar maiúsculas, senão quebram as comparações.
-const SENTINELAS_NOME = ['Encomenda', 'Troca de turno'];
+const SENTINELAS_NOME = ['Encomenda', 'Troca de turno', 'Ocorrência'];
 
 // Comparador para ordenar perfis por número do lote (Lote 01, 02, 03...),
 // deixando quem NÃO tem lote (porteiro/admin) no final, ordenado por nome.
@@ -2576,6 +2576,38 @@ app.post('/api/portaria/troca-turno', requireAuth, requireRole('porteiro', 'admi
   res.status(201).json({ registro: data });
 });
 
+// Registra uma OCORRÊNCIA de segurança/portaria (evento pontual com timestamp).
+// Ex.: "Pessoa suspeita na portaria", "Barulho no lote 12". Fica no histórico.
+app.post('/api/portaria/ocorrencia', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
+  const { texto, lote } = req.body || {};
+  const descricao = (texto || '').trim();
+  if (!descricao) {
+    return res.status(400).json({ error: 'Descreva a ocorrência.' });
+  }
+  const agora = new Date().toISOString();
+  const loteLimpo = maiuscula((lote || '').trim()) || null;
+
+  const insertPayload = {
+    nome_pessoa: 'Ocorrência',
+    tipo: 'Outro',
+    destino_bloco: loteLimpo,
+    entrada: agora,
+    saida: agora, // evento pontual: não fica "no local"
+    registrado_por: req.user.id,
+    saida_por: req.user.id,
+    observacao: `[OCORRÊNCIA] ${maiuscula(descricao)}` + (loteLimpo ? ` | Local: ${loteLimpo}` : ''),
+  };
+
+  const { data, error } = await supabaseAdmin
+    .from('registros_portaria')
+    .insert(insertPayload)
+    .select()
+    .single();
+
+  if (error) return res.status(400).json({ error: error.message });
+  res.status(201).json({ registro: data });
+});
+
 // Registra retirada de encomenda com nome de quem retirou
 app.post('/api/portaria/encomendas/:id/retirada', requireAuth, requireRole('porteiro', 'admin'), async (req, res) => {
   const { id } = req.params;
@@ -3948,6 +3980,49 @@ app.get('/api/admin/dashboard', requireAuth, requireRole('admin'), async (req, r
       picoQtd,
       porHora,        // array[24] com a contagem por hora
     });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Lista central de visitantes BLOQUEADOS (só admin).
+// Um bloqueio é uma observação ATIVA (exibir_alerta) cujo texto começa com
+// "[BLOQUEADO]". Retorna os dados + a chave e o id da observação, para o
+// desbloqueio reusar /api/admin/visitantes/observacao/toggle-alerta.
+app.get('/api/admin/bloqueados', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const todas = await obterTodasObservacoesVisitantes();
+    const lista = [];
+
+    for (const item of todas.values()) {
+      if (!item || !Array.isArray(item.historico)) continue;
+      // Pega a observação de bloqueio ATIVA mais recente.
+      const bloqueios = item.historico.filter(
+        (h) => h && h.exibir_alerta && (h.texto || '').trim().toUpperCase().startsWith('[BLOQUEADO]')
+      );
+      if (bloqueios.length === 0) continue;
+
+      bloqueios.sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+      const b = bloqueios[0];
+
+      // Extrai motivo e quem solicitou do texto "[BLOQUEADO] Solicitado por X. Motivo: Y".
+      const texto = (b.texto || '').trim();
+      const mMotivo = texto.match(/motivo:\s*(.+)$/i);
+      const mPor = texto.match(/solicitado por\s*([^.]+)\./i);
+
+      lista.push({
+        chave: item.chave,
+        obs_id: b.id,
+        nome: item.nome || '(sem nome)',
+        documento: item.documento || null,
+        motivo: mMotivo ? mMotivo[1].trim() : texto.replace(/^\[bloqueado\]\s*/i, ''),
+        solicitado_por: mPor ? mPor[1].trim() : (b.autor_nome || null),
+        data: b.data || null,
+      });
+    }
+
+    lista.sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+    res.json({ total: lista.length, bloqueados: lista });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
