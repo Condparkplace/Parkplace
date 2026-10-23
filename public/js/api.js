@@ -23,6 +23,18 @@ async function api(path, options = {}) {
     body = {};
   }
   if (!res.ok) {
+    // Sessão inválida/expirada: o backend responde 401. Em vez de só mostrar
+    // "Não autenticado" na tela, leva o usuário de volta ao login — exceto se
+    // já estiver na própria tela de login (evita loop de redirecionamento).
+    if (res.status === 401) {
+      const naPaginaLogin = /\/login(\.html)?$/i.test(window.location.pathname);
+      if (!naPaginaLogin) {
+        window.location.href = '/login.html';
+        // Lança um erro "silencioso" para interromper o fluxo sem a tela
+        // renderizar mensagens de erro durante o redirecionamento.
+        throw new Error('__REDIRECT_LOGIN__');
+      }
+    }
     throw new Error(body.error || `Erro ${res.status}`);
   }
   return body;
