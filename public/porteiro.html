@@ -23,20 +23,22 @@
     <!-- Registrar entrada (unificada com busca) -->
     <section id="tab-entrada" class="card">
       <div
-        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; margin:0 0 16px;">
-        <div style="display:flex; align-items:center; gap:14px; flex-wrap:wrap;">
+        style="display:flex; justify-content:space-between; align-items:center; flex-wrap:nowrap; gap:10px; margin:0 0 16px; overflow-x:auto;">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:nowrap;">
           <h2 style="margin:0; white-space:nowrap;">Registrar entrada</h2>
-          <div class="botoes-topo-acoes" style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+          <div class="botoes-topo-acoes" style="display:flex; gap:8px; align-items:center; flex-wrap:nowrap;">
             <button type="button" class="btn-acao-destaque btn-ifood btn-acao-compacto"
+              style="white-space:nowrap; padding:8px 12px; font-size:13px;"
               onclick="abrirModalIfood()">&#128757; iFood / Ubber</button>
             <button type="button" class="btn-acao-destaque btn-encomenda btn-acao-compacto"
-              onclick="abrirModalEncomenda()">&#128230; Recebimento de Encomenda</button>
+              style="white-space:nowrap; padding:8px 12px; font-size:13px;"
+              onclick="abrirModalEncomenda()">&#128230; Encomenda</button>
           </div>
         </div>
-        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
-          <span class="badge porteiro">&#128110; Porteiro de plantão: <strong id="porteiro-plantao"></strong></span>
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:nowrap;">
+          <span class="badge porteiro" style="white-space:nowrap;">&#128110; Plantão: <strong id="porteiro-plantao"></strong></span>
           <button type="button" class="secundario mini" id="btn-ocorrencia" onclick="abrirModalOcorrencia()"
-            style="white-space:nowrap; background:#fef3c7; color:#92400e; border-color:#fcd34d;">&#9888;&#65039; Registrar ocorrência</button>
+            style="white-space:nowrap; background:#fef3c7; color:#92400e; border-color:#fcd34d;">&#9888;&#65039; Ocorrência</button>
           <button type="button" class="secundario mini" id="btn-trocar-turno" onclick="abrirTrocaTurno()"
             style="white-space:nowrap;">&#128260; Trocar turno</button>
         </div>
