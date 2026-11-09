@@ -259,6 +259,17 @@ create table if not exists public.observacoes_visitantes (
 -- Workers tem filesystem efêmero/somente leitura; o Supabase é a fonte real).
 alter table public.observacoes_visitantes add column if not exists historico jsonb not null default '[]'::jsonb;
 
+-- Migracao: modelo NOVO de observação cadastral.
+--   observacao    = TEXTO ÚNICO editável (fonte da verdade; editar substitui).
+--   alerta_ativo  = liga/desliga a exibição do alerta na portaria (suspender).
+--   bloqueado     = flag de bloqueio (substitui a heurística de texto [BLOQUEADO]).
+--   bloqueio_motivo / bloqueado_por = detalhes do bloqueio.
+--   historico     = passa a ser SOMENTE auditoria (não entra mais no texto).
+alter table public.observacoes_visitantes add column if not exists alerta_ativo boolean not null default true;
+alter table public.observacoes_visitantes add column if not exists bloqueado boolean not null default false;
+alter table public.observacoes_visitantes add column if not exists bloqueio_motivo text;
+alter table public.observacoes_visitantes add column if not exists bloqueado_por text;
+
 alter table public.observacoes_visitantes enable row level security;
 
 drop policy if exists observacoes_visitantes_all on public.observacoes_visitantes;

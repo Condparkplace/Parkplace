@@ -1182,13 +1182,12 @@ app.post('/api/morador/visitantes/bloquear', requireAuth, requireRole('morador',
       ? `${req.perfil.nome}${req.perfil.bloco ? ' (' + req.perfil.bloco + ')' : ''}`
       : 'Morador';
 
-    const texto = `[BLOQUEADO] Solicitado por ${origemMorador}. Motivo: ${motivoLimpo}`;
-
-    const salvo = await adicionarObservacaoAoHistorico({
+    const salvo = await definirBloqueioVisitante({
       nome: nomeLimpo,
       documento: documento || null,
-      texto,
-      exibir_alerta: true,
+      bloqueado: true,
+      motivo: motivoLimpo,
+      por: origemMorador,
       userId: req.user.id,
       origem: 'bloqueio_morador',
     });
@@ -1932,36 +1931,83 @@ function formatarDataHoraSimples(iso) {
   });
 }
 
+// Normaliza um registro de observação para o MODELO NOVO:
+//  - observacao  = texto único editável (fonte da verdade)
+//  - alerta_ativo = liga/desliga o alerta na portaria
+//  - bloqueado   = flag de bloqueio (+ bloqueio_motivo / bloqueado_por)
+//  - historico   = somente auditoria (não deriva mais o texto)
+// Migra registros antigos: se vier só com texto concatenado no historico,
+// consolida num texto único e deriva o estado de bloqueio/alerta.
 function normalizarRegistroObs(item) {
   if (!item) return null;
-  if (!Array.isArray(item.historico)) {
-    item.historico = [];
-    if (item.observacao && item.observacao.trim()) {
-      item.historico.push({
-        id: 'obs_inicial',
-        data: item.atualizado_em || new Date().toISOString(),
-        autor_id: item.atualizado_por || null,
-        autor_nome: 'Cadastro',
-        texto: item.observacao.trim(),
-        exibir_alerta: true,
-        origem: 'cadastro',
-      });
+  if (!Array.isArray(item.historico)) item.historico = [];
+
+  // Garante os novos campos com valores coerentes quando ausentes (registro legado).
+  if (item.alerta_ativo === undefined || item.alerta_ativo === null) {
+    // No legado, "havia alerta" se algum item do histórico tinha exibir_alerta.
+    const algumAtivo = item.historico.some((h) => h && h.exibir_alerta && (h.texto || '').trim());
+    // Se tem texto de observação, considera o alerta ativo por padrão.
+    item.alerta_ativo = algumAtivo || !!(item.observacao && item.observacao.trim());
+  }
+  if (item.bloqueado === undefined || item.bloqueado === null) {
+    // Legado: bloqueado se há item ativo com texto [BLOQUEADO].
+    const bloq = item.historico.find(
+      (h) => h && h.exibir_alerta && (h.texto || '').trim().toUpperCase().startsWith('[BLOQUEADO]')
+    );
+    item.bloqueado = !!bloq;
+    if (bloq && !item.bloqueio_motivo) {
+      const t = (bloq.texto || '').trim();
+      const mMot = t.match(/motivo:\s*(.+)$/i);
+      const mPor = t.match(/solicitado por\s*([^.]+)\./i);
+      item.bloqueio_motivo = mMot ? mMot[1].trim() : t.replace(/^\[bloqueado\]\s*/i, '');
+      item.bloqueado_por = mPor ? mPor[1].trim() : (bloq.autor_nome || null);
     }
   }
   return item;
 }
 
-function montarTextoObservacaoAtiva(historico) {
-  if (!Array.isArray(historico)) return '';
-  const ativas = historico.filter((h) => h && h.exibir_alerta && (h.texto || '').trim());
-  if (!ativas.length) return '';
-  return ativas
-    .map((h) => {
-      const dataStr = formatarDataHoraSimples(h.data);
-      const autorStr = h.autor_nome ? ` (${h.autor_nome})` : '';
-      return `• ${dataStr}${autorStr}: ${h.texto.trim()}`;
-    })
-    .join('\n');
+// Persiste um registro de observação no cache local + Supabase, com fallback
+// progressivo caso colunas novas ainda não existam no banco.
+async function persistirObsVisitante(item) {
+  const chaves = [item.chave];
+  const docLimpo = (item.documento || '').replace(/\D/g, '');
+  if (docLimpo && docLimpo !== item.chave) chaves.push(docLimpo);
+  const nomeNorm = (item.nome || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+  if (nomeNorm) chaves.push('nome:' + nomeNorm);
+  for (const c of chaves) cacheObsVisitantes.set(c, item);
+  salvarCacheObsVisitantes();
+
+  const payloadCompleto = {
+    chave: item.chave,
+    nome: item.nome,
+    documento: item.documento,
+    observacao: item.observacao,
+    historico: item.historico,
+    alerta_ativo: item.alerta_ativo,
+    bloqueado: item.bloqueado,
+    bloqueio_motivo: item.bloqueio_motivo || null,
+    bloqueado_por: item.bloqueado_por || null,
+    atualizado_em: item.atualizado_em,
+    atualizado_por: item.atualizado_por,
+  };
+  try {
+    const { error } = await supabaseAdmin
+      .from('observacoes_visitantes')
+      .upsert(payloadCompleto, { onConflict: 'chave' });
+    if (error) {
+      // Fallback 1: sem as colunas novas (alerta_ativo/bloqueado/...).
+      const { alerta_ativo, bloqueado, bloqueio_motivo, bloqueado_por, ...semFlags } = payloadCompleto;
+      const r2 = await supabaseAdmin.from('observacoes_visitantes').upsert(semFlags, { onConflict: 'chave' });
+      if (r2.error) {
+        // Fallback 2: sem historico também.
+        const { historico: _, ...base } = semFlags;
+        await supabaseAdmin.from('observacoes_visitantes').upsert(base, { onConflict: 'chave' });
+      }
+    }
+  } catch (err) {
+    console.warn('[Obs Visitantes] Erro ao sincronizar com Supabase:', err.message);
+  }
+  return item;
 }
 
 // Telefone/mensagem do administrador exibidos quando um visitante bloqueado
@@ -1969,14 +2015,20 @@ function montarTextoObservacaoAtiva(historico) {
 const ADMIN_TELEFONE_BLOQUEIO = '11971537119';
 const MENSAGEM_BLOQUEIO = `Sua entrada encontra-se bloqueada. Favor ligar para o Administrador no telefone ${ADMIN_TELEFONE_BLOQUEIO} para liberar.`;
 
-// Um visitante está bloqueado se houver no histórico uma observação ATIVA
-// (exibir_alerta) cujo texto começa com "[BLOQUEADO]". Desmarcar o alerta ou
-// excluir a observação (pelo admin) remove o bloqueio.
+// Um visitante está bloqueado quando o flag "bloqueado" do registro é true.
+// (Modelo novo.) Mantém fallback para registros legados ainda não migrados,
+// onde o bloqueio vivia como item ativo com texto "[BLOQUEADO]".
 function visitanteEstaBloqueado(obsItem) {
-  if (!obsItem || !Array.isArray(obsItem.historico)) return false;
-  return obsItem.historico.some(
-    (h) => h && h.exibir_alerta && (h.texto || '').trim().toUpperCase().startsWith('[BLOQUEADO]')
-  );
+  if (!obsItem) return false;
+  if (obsItem.bloqueado === true) return true;
+  if (obsItem.bloqueado === false) return false;
+  // Legado (flag ainda indefinida): varre o histórico.
+  if (Array.isArray(obsItem.historico)) {
+    return obsItem.historico.some(
+      (h) => h && h.exibir_alerta && (h.texto || '').trim().toUpperCase().startsWith('[BLOQUEADO]')
+    );
+  }
+  return false;
 }
 
 carregarCacheObsVisitantes();
@@ -1995,9 +2047,7 @@ async function obterTodasObservacoesVisitantes() {
           if (cached && Array.isArray(cached.historico) && cached.historico.length > (item.historico || []).length) {
             item.historico = cached.historico;
           }
-          if (!item.observacao && Array.isArray(item.historico)) {
-            item.observacao = montarTextoObservacaoAtiva(item.historico);
-          }
+          // Observação agora é texto próprio (não deriva mais do histórico).
           mapa.set(item.chave, item);
           cacheObsVisitantes.set(item.chave, item);
         }
@@ -2049,16 +2099,15 @@ async function obterObservacaoVisitante(chave, docLimpo, nomeNorm) {
   return item;
 }
 
-async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, exibir_alerta = true, userId = null, origem = 'manual' }) {
+// Resolve/cria o registro de observação a partir de chave/nome/documento.
+async function obterOuCriarRegistroObs({ chave, nome, documento, userId }) {
   const agora = new Date().toISOString();
   const docLimpo = (documento || '').replace(/\D/g, '');
   const docFormatado = formatarDocumento(documento);
   const nomeLimpo = maiuscula((nome || '').trim()) || '';
   const nomeNorm = nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  // chave pode vir como número/objeto em chamadas antigas; força para string.
   const chaveStr = (chave === null || chave === undefined || typeof chave === 'object') ? '' : String(chave);
   const finalChave = chaveStr.trim() || docLimpo || ('nome:' + nomeNorm);
-
   if (!finalChave && !nomeLimpo) {
     throw new Error('Identificação do visitante não informada.');
   }
@@ -2071,162 +2120,151 @@ async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, e
       documento: docFormatado || null,
       observacao: '',
       historico: [],
+      alerta_ativo: false,
+      bloqueado: false,
+      bloqueio_motivo: null,
+      bloqueado_por: null,
       atualizado_em: agora,
       atualizado_por: userId || null,
     };
   } else {
     normalizarRegistroObs(item);
+    if (nomeLimpo && !item.nome) item.nome = nomeLimpo;
+    if (docFormatado && !item.documento) item.documento = docFormatado;
   }
+  return item;
+}
 
+// Acrescenta uma entrada SOMENTE ao histórico de auditoria (não mexe no texto
+// exibido). Usado por eventos automáticos: saída da portaria, bloqueios, etc.
+async function registrarEventoHistorico(item, { texto, origem, userId }) {
   let autorNome = origem === 'saida_portaria' ? 'Porteiro' : 'Administração';
   if (userId) {
     const nomes = await mapaNomes([userId]);
     if (nomes[userId]) autorNome = nomes[userId];
   }
-
-  const novoItem = {
+  const evento = {
     id: 'obs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
-    data: agora,
+    data: new Date().toISOString(),
     autor_id: userId || null,
     autor_nome: autorNome,
     texto: maiuscula((texto || '').trim()) || '',
-    exibir_alerta: Boolean(exibir_alerta),
-    origem: origem,
+    origem: origem || 'auditoria',
   };
+  item.historico = [evento, ...(item.historico || [])];
+  return evento;
+}
 
-  item.historico = [novoItem, ...(item.historico || [])];
-  item.observacao = montarTextoObservacaoAtiva(item.historico);
-  item.atualizado_em = agora;
+// MODELO NOVO — define (substitui) a OBSERVAÇÃO CADASTRAL de um visitante e o
+// estado do alerta. Texto único editável; registra a alteração no histórico
+// (auditoria). Não concatena nada.
+async function definirObservacaoVisitante({ chave, nome, documento, observacao, alerta_ativo, userId, origem = 'admin' }) {
+  const item = await obterOuCriarRegistroObs({ chave, nome, documento, userId });
+  const textoNovo = maiuscula((observacao || '').trim()) || '';
+  const textoAntigo = (item.observacao || '').trim();
+
+  item.observacao = textoNovo;
+  if (alerta_ativo !== undefined) {
+    item.alerta_ativo = Boolean(alerta_ativo);
+  } else if (textoNovo && !textoAntigo) {
+    // Observação criada agora e sem escolha explícita: alerta ligado por padrão.
+    item.alerta_ativo = true;
+  }
+  // Se não há texto, não faz sentido manter alerta ativo.
+  if (!textoNovo) item.alerta_ativo = false;
+
+  item.atualizado_em = new Date().toISOString();
   item.atualizado_por = userId || item.atualizado_por;
-  if (nomeLimpo && !item.nome) item.nome = nomeLimpo;
-  if (docFormatado && !item.documento) item.documento = docFormatado;
 
-  cacheObsVisitantes.set(finalChave, item);
-  if (docLimpo && docLimpo !== finalChave) cacheObsVisitantes.set(docLimpo, item);
-  if (nomeNorm) cacheObsVisitantes.set('nome:' + nomeNorm, item);
-  salvarCacheObsVisitantes();
-
-  try {
-    const payload = {
-      chave: item.chave,
-      nome: item.nome,
-      documento: item.documento,
-      observacao: item.observacao,
-      historico: item.historico,
-      atualizado_em: item.atualizado_em,
-      atualizado_por: item.atualizado_por,
-    };
-    const { error: errUp } = await supabaseAdmin
-      .from('observacoes_visitantes')
-      .upsert(payload, { onConflict: 'chave' });
-    if (errUp) {
-      console.warn(
-        '[Obs Visitantes] Upsert com histórico falhou (a coluna "historico" jsonb existe no Supabase? rode supabase_schema.sql). ' +
-        'Salvando sem histórico como fallback. Detalhe:', errUp.message
-      );
-      const { historico: _, ...basePayload } = payload;
-      await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
-    }
-  } catch (err) {
-    console.warn('[Obs Visitantes] Erro ao sincronizar com Supabase:', err.message);
+  // Auditoria: registra o que mudou.
+  if (textoNovo !== textoAntigo) {
+    const resumo = textoNovo
+      ? (textoAntigo ? 'Observação alterada' : 'Observação criada')
+      : 'Observação removida';
+    await registrarEventoHistorico(item, {
+      texto: `[${resumo}] ${textoNovo || textoAntigo}`.trim(),
+      origem,
+      userId,
+    });
   }
 
-  return item;
+  return persistirObsVisitante(item);
 }
 
-async function alternarAlertaObservacao({ chave, obs_id, exibir_alerta }) {
-  let item = await obterObservacaoVisitante(chave, chave, null);
+// Liga/desliga apenas o alerta (suspender notificação sem apagar o texto).
+async function definirAlertaAtivo({ chave, alerta_ativo, userId }) {
+  const item = await obterObservacaoVisitante(chave, chave, null);
   if (!item) throw new Error('Cadastro do visitante não encontrado.');
-
   normalizarRegistroObs(item);
-  const obs = item.historico.find((h) => h.id === obs_id);
-  if (!obs) throw new Error('Observação não encontrada no histórico.');
-
-  obs.exibir_alerta = Boolean(exibir_alerta);
-  item.observacao = montarTextoObservacaoAtiva(item.historico);
+  item.alerta_ativo = Boolean(alerta_ativo);
   item.atualizado_em = new Date().toISOString();
-
-  cacheObsVisitantes.set(item.chave, item);
-  salvarCacheObsVisitantes();
-
-  try {
-    const payload = {
-      chave: item.chave,
-      nome: item.nome,
-      documento: item.documento,
-      observacao: item.observacao,
-      historico: item.historico,
-      atualizado_em: item.atualizado_em,
-      atualizado_por: item.atualizado_por,
-    };
-    const { error: errUp } = await supabaseAdmin.from('observacoes_visitantes').upsert(payload, { onConflict: 'chave' });
-    if (errUp) {
-      const { historico: _, ...basePayload } = payload;
-      await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
-    }
-  } catch (err) {}
-
-  return item;
+  item.atualizado_por = userId || item.atualizado_por;
+  await registrarEventoHistorico(item, {
+    texto: `[Alerta ${item.alerta_ativo ? 'ativado' : 'suspenso'}]`,
+    origem: 'admin',
+    userId,
+  });
+  return persistirObsVisitante(item);
 }
 
-async function excluirObservacaoDoHistorico({ chave, obs_id }) {
-  let item = await obterObservacaoVisitante(chave, chave, null);
-  if (!item) throw new Error('Cadastro do visitante não encontrado.');
-
-  normalizarRegistroObs(item);
-  item.historico = item.historico.filter((h) => h.id !== obs_id);
-  item.observacao = montarTextoObservacaoAtiva(item.historico);
+// Bloqueia/desbloqueia o visitante (flag no registro).
+async function definirBloqueioVisitante({ chave, nome, documento, bloqueado, motivo, por, userId, origem = 'admin' }) {
+  const item = await obterOuCriarRegistroObs({ chave, nome, documento, userId });
+  item.bloqueado = Boolean(bloqueado);
+  item.bloqueio_motivo = bloqueado ? (maiuscula((motivo || '').trim()) || null) : null;
+  item.bloqueado_por = bloqueado ? (por || null) : null;
   item.atualizado_em = new Date().toISOString();
-
-  cacheObsVisitantes.set(item.chave, item);
-  salvarCacheObsVisitantes();
-
-  try {
-    const payload = {
-      chave: item.chave,
-      nome: item.nome,
-      documento: item.documento,
-      observacao: item.observacao,
-      historico: item.historico,
-      atualizado_em: item.atualizado_em,
-      atualizado_por: item.atualizado_por,
-    };
-    const { error: errUp } = await supabaseAdmin.from('observacoes_visitantes').upsert(payload, { onConflict: 'chave' });
-    if (errUp) {
-      const { historico: _, ...basePayload } = payload;
-      await supabaseAdmin.from('observacoes_visitantes').upsert(basePayload, { onConflict: 'chave' });
-    }
-  } catch (err) {}
-
-  return item;
+  item.atualizado_por = userId || item.atualizado_por;
+  await registrarEventoHistorico(item, {
+    texto: bloqueado
+      ? `[BLOQUEADO] Solicitado por ${por || 'Administração'}. Motivo: ${(motivo || '').trim()}`
+      : `[DESBLOQUEADO] por ${por || 'Administração'}`,
+    origem,
+    userId,
+  });
+  return persistirObsVisitante(item);
 }
 
-// Aceita DOIS formatos de chamada (compatibilidade):
-//  - posicional: salvarObservacaoVisitante(chave, nome, documento, observacao, userId)
-//  - objeto:     salvarObservacaoVisitante({ chave, nome, documento|doc, texto|observacao, userId, exibirAlerta })
+// Compat: antigas chamadas de "adicionar ao histórico" (saída da portaria,
+// bloqueio do morador). Agora registram no histórico de auditoria; se o texto
+// indicar bloqueio, acionam o flag de bloqueio.
+async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, exibir_alerta = true, userId = null, origem = 'manual' }) {
+  const t = (texto || '').trim();
+  const ehBloqueio = t.toUpperCase().startsWith('[BLOQUEADO]');
+  if (ehBloqueio) {
+    const mMot = t.match(/motivo:\s*(.+)$/i);
+    const mPor = t.match(/solicitado por\s*([^.]+)\./i);
+    return definirBloqueioVisitante({
+      chave, nome, documento,
+      bloqueado: true,
+      motivo: mMot ? mMot[1].trim() : t.replace(/^\[bloqueado\]\s*/i, ''),
+      por: mPor ? mPor[1].trim() : null,
+      userId, origem,
+    });
+  }
+  // Evento comum (ex.: ocorrência registrada na saída): vai só para auditoria.
+  const item = await obterOuCriarRegistroObs({ chave, nome, documento, userId });
+  await registrarEventoHistorico(item, { texto: t, origem, userId });
+  item.atualizado_em = new Date().toISOString();
+  item.atualizado_por = userId || item.atualizado_por;
+  return persistirObsVisitante(item);
+}
+
+// Compat para chamadas antigas (posicional ou objeto). Agora SUBSTITUI o texto.
 async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
-  // Se o primeiro argumento for um objeto, extrai os campos dele.
   if (chave && typeof chave === 'object') {
     const o = chave;
-    return adicionarObservacaoAoHistorico({
+    return definirObservacaoVisitante({
       chave: o.chave,
       nome: o.nome,
       documento: o.documento !== undefined ? o.documento : o.doc,
-      texto: o.texto !== undefined ? o.texto : o.observacao,
-      exibir_alerta: o.exibir_alerta !== undefined ? o.exibir_alerta : (o.exibirAlerta !== undefined ? o.exibirAlerta : true),
+      observacao: o.observacao !== undefined ? o.observacao : o.texto,
+      alerta_ativo: o.alerta_ativo !== undefined ? o.alerta_ativo : (o.exibirAlerta !== undefined ? o.exibirAlerta : undefined),
       userId: o.userId,
       origem: o.origem || 'admin_direto',
     });
   }
-  return adicionarObservacaoAoHistorico({
-    chave,
-    nome,
-    documento,
-    texto: observacao,
-    exibir_alerta: true,
-    userId,
-    origem: 'admin_direto',
-  });
+  return definirObservacaoVisitante({ chave, nome, documento, observacao, userId, origem: 'admin_direto' });
 }
 
 // Busca o cadastro de uma pessoa pelo documento (CPF).
@@ -2284,9 +2322,12 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
     : (achoReg ? achoReg.nome_pessoa : (achoAviso ? achoAviso.nome_visitante : null));
   const nomeNorm = (nomeCandidato || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
 
-  // Busca observação fixa no cadastro (se existir)
+  // Busca observação fixa no cadastro (se existir). Só expõe o texto como ALERTA
+  // quando alerta_ativo !== false (admin pode ter suspendido a notificação).
   const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNorm);
-  const obsCad = obsVisitante ? (obsVisitante.observacao || '').trim() : '';
+  const obsCad = (obsVisitante && obsVisitante.alerta_ativo !== false)
+    ? (obsVisitante.observacao || '').trim()
+    : '';
   const estaBloqueado = visitanteEstaBloqueado(obsVisitante);
 
   // SE FOR MORADOR: Unifica o cadastro pelo perfil oficial do morador
@@ -3467,6 +3508,7 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
       endereco_visitante,
       cep_visitante,
       observacao,
+      alerta_ativo,
     } = req.body || {};
 
     const novoNome = maiuscula((nome || '').trim()) || '';
@@ -3579,18 +3621,18 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
     const novaChave = novoDocLimpo || ('nome:' + novoNomeNorm);
     const chaveAntiga = chaveOriginal || docLimpoOriginal || ('nome:' + nomeNormOriginal);
 
+    // Observação cadastral: SUBSTITUI o texto (não acumula). alerta_ativo vem do
+    // switch do admin; se não vier, liga por padrão quando há texto.
     if (observacao !== undefined && observacao !== null) {
-      const textoObs = observacao.trim();
-      if (textoObs) {
-        await salvarObservacaoVisitante({
-          chave: novaChave,
-          doc: novoDocFormatado,
-          nome: novoNome,
-          texto: textoObs,
-          userId: req.user.id,
-          exibirAlerta: true,
-        });
-      }
+      await definirObservacaoVisitante({
+        chave: novaChave,
+        documento: novoDocFormatado,
+        nome: novoNome,
+        observacao: observacao.trim(),
+        alerta_ativo: (alerta_ativo !== undefined ? alerta_ativo : undefined),
+        userId: req.user.id,
+        origem: 'admin',
+      });
     }
 
     // Se a chave mudou e existia observação com a chave antiga, migra para a nova chave
@@ -3820,6 +3862,9 @@ app.get('/api/admin/visitantes/detalhes', requireAuth, requireRole('admin'), asy
         tipo: tipoFinal,
         observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
         observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
+        alerta_ativo: obsObj ? (obsObj.alerta_ativo !== false) : false,
+        bloqueado: obsObj ? visitanteEstaBloqueado(obsObj) : false,
+        bloqueio_motivo: obsObj ? (obsObj.bloqueio_motivo || null) : null,
         historico_observacoes: obsObj ? (obsObj.historico || []) : [],
       },
       kpis: {
@@ -3856,19 +3901,16 @@ app.post('/api/admin/visitantes/observacao', requireAuth, requireRole('admin'), 
   }
 });
 
-// Adiciona nova observação ao histórico de um visitante
+// Define (substitui) a observação cadastral única + estado do alerta.
 app.post('/api/admin/visitantes/observacao/adicionar', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { chave, nome, documento, texto, exibir_alerta } = req.body || {};
-    if (!texto || !texto.trim()) {
-      return res.status(400).json({ error: 'Digite o texto da observação.' });
-    }
-    const salvo = await adicionarObservacaoAoHistorico({
+    const salvo = await definirObservacaoVisitante({
       chave,
       nome,
       documento,
-      texto,
-      exibir_alerta: exibir_alerta !== false,
+      observacao: texto || '',
+      alerta_ativo: exibir_alerta !== false,
       userId: req.user.id,
       origem: 'admin',
     });
@@ -3878,28 +3920,28 @@ app.post('/api/admin/visitantes/observacao/adicionar', requireAuth, requireRole(
   }
 });
 
-// Alterna checkbox exibir_alerta de uma ocorrência no histórico
+// Liga/desliga o alerta na portaria (suspender notificação sem apagar o texto).
 app.post('/api/admin/visitantes/observacao/toggle-alerta', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const { chave, obs_id, exibir_alerta } = req.body || {};
-    if (!chave || !obs_id) {
-      return res.status(400).json({ error: 'Chave e ID da observação são obrigatórios.' });
+    const { chave, exibir_alerta } = req.body || {};
+    if (!chave) {
+      return res.status(400).json({ error: 'Chave do visitante é obrigatória.' });
     }
-    const salvo = await alternarAlertaObservacao({ chave, obs_id, exibir_alerta });
+    const salvo = await definirAlertaAtivo({ chave, alerta_ativo: exibir_alerta, userId: req.user.id });
     res.json({ ok: true, visitante: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Exclui uma ocorrência do histórico do visitante
+// Limpa a observação cadastral (apagar o texto único).
 app.post('/api/admin/visitantes/observacao/excluir', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const { chave, obs_id } = req.body || {};
-    if (!chave || !obs_id) {
-      return res.status(400).json({ error: 'Chave e ID da observação são obrigatórios.' });
+    const { chave } = req.body || {};
+    if (!chave) {
+      return res.status(400).json({ error: 'Chave do visitante é obrigatória.' });
     }
-    const salvo = await excluirObservacaoDoHistorico({ chave, obs_id });
+    const salvo = await definirObservacaoVisitante({ chave, observacao: '', alerta_ativo: false, userId: req.user.id, origem: 'admin' });
     res.json({ ok: true, visitante: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
@@ -4013,34 +4055,35 @@ app.get('/api/admin/bloqueados', requireAuth, requireRole('admin'), async (req, 
     const lista = [];
 
     for (const item of todas.values()) {
-      if (!item || !Array.isArray(item.historico)) continue;
-      // Pega a observação de bloqueio ATIVA mais recente.
-      const bloqueios = item.historico.filter(
-        (h) => h && h.exibir_alerta && (h.texto || '').trim().toUpperCase().startsWith('[BLOQUEADO]')
-      );
-      if (bloqueios.length === 0) continue;
-
-      bloqueios.sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
-      const b = bloqueios[0];
-
-      // Extrai motivo e quem solicitou do texto "[BLOQUEADO] Solicitado por X. Motivo: Y".
-      const texto = (b.texto || '').trim();
-      const mMotivo = texto.match(/motivo:\s*(.+)$/i);
-      const mPor = texto.match(/solicitado por\s*([^.]+)\./i);
+      if (!item) continue;
+      normalizarRegistroObs(item);
+      if (!visitanteEstaBloqueado(item)) continue;
 
       lista.push({
         chave: item.chave,
-        obs_id: b.id,
         nome: item.nome || '(sem nome)',
         documento: item.documento || null,
-        motivo: mMotivo ? mMotivo[1].trim() : texto.replace(/^\[bloqueado\]\s*/i, ''),
-        solicitado_por: mPor ? mPor[1].trim() : (b.autor_nome || null),
-        data: b.data || null,
+        motivo: item.bloqueio_motivo || null,
+        solicitado_por: item.bloqueado_por || null,
+        data: item.atualizado_em || null,
       });
     }
 
     lista.sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
     res.json({ total: lista.length, bloqueados: lista });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+// Desbloqueia um visitante (admin). Remove o flag de bloqueio.
+app.post('/api/admin/visitantes/desbloquear', requireAuth, requireRole('admin'), async (req, res) => {
+  try {
+    const { chave } = req.body || {};
+    if (!chave) return res.status(400).json({ error: 'Chave do visitante é obrigatória.' });
+    const porNome = req.perfil?.nome || 'Administração';
+    const salvo = await definirBloqueioVisitante({ chave, bloqueado: false, por: porNome, userId: req.user.id, origem: 'admin' });
+    res.json({ ok: true, visitante: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

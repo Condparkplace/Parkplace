@@ -515,7 +515,7 @@
               <td data-label="Quando">${b.data ? formatarData(b.data) : '—'}</td>
               <td data-label="Ação" style="text-align:right; white-space:nowrap;">
                 <button type="button" class="mini" style="background:#16a34a; color:#fff;"
-                  onclick="desbloquearVisitante('${chaveAttr}', '${b.obs_id}', '${nomeAttr}')">&#9989; Desbloquear</button>
+                  onclick="desbloquearVisitante('${chaveAttr}', '${nomeAttr}')">&#9989; Desbloquear</button>
               </td>
             </tr>`;
         }).join('');
@@ -534,13 +534,13 @@
       }
     }
 
-    async function desbloquearVisitante(chave, obsId, nome) {
+    async function desbloquearVisitante(chave, nome) {
       if (!confirm(`Desbloquear ${nome}? A pessoa poderá voltar a ser avisada e ter entrada registrada.`)) return;
       try {
-        // Desmarca o alerta da observação [BLOQUEADO] (reusa o toggle existente).
-        await api('/api/admin/visitantes/observacao/toggle-alerta', {
+        // Remove o flag de bloqueio do registro.
+        await api('/api/admin/visitantes/desbloquear', {
           method: 'POST',
-          body: JSON.stringify({ chave, obs_id: obsId, exibir_alerta: false }),
+          body: JSON.stringify({ chave }),
         });
         carregarBloqueados();
       } catch (err) {
@@ -2148,8 +2148,10 @@
         } else {
           obsData.textContent = '';
         }
-        document.getElementById('modal-vis-nova-obs').value = '';
-        document.getElementById('modal-vis-nova-obs-alerta').checked = true;
+        // Texto único + estado do alerta (modelo novo).
+        document.getElementById('modal-vis-nova-obs').value = vis.observacao_cadastro || '';
+        document.getElementById('modal-vis-nova-obs-alerta').checked = (vis.alerta_ativo !== false);
+        atualizarSwitchAlertaLabel();
         document.getElementById('modal-vis-obs-msg').style.display = 'none';
 
         // Tabela do histórico de acessos na portaria
@@ -2198,115 +2200,53 @@
       document.getElementById('modal-visitante').classList.add('hidden');
     }
 
+    // Atualiza o rótulo/cor do switch de alerta conforme o estado.
+    function atualizarSwitchAlertaLabel() {
+      const chk = document.getElementById('modal-vis-nova-obs-alerta');
+      const label = document.getElementById('modal-vis-switch-label');
+      const texto = document.getElementById('modal-vis-switch-texto');
+      if (!chk || !label || !texto) return;
+      if (chk.checked) {
+        texto.textContent = '⚠️ Exibir alerta na portaria';
+        label.style.background = '#fef3c7';
+        label.style.color = '#92400e';
+      } else {
+        texto.textContent = '⚪ Alerta suspenso (não exibe na portaria)';
+        label.style.background = '#f1f5f9';
+        label.style.color = '#64748b';
+      }
+    }
+
+    // Histórico de alterações = SOMENTE auditoria (read-only). Sem checkbox/excluir.
     function renderizarHistoricoObs(historico, vis) {
       const container = document.getElementById('modal-vis-lista-obs');
       if (!historico || !historico.length) {
         container.innerHTML = `
-          <div style="background:#fff; border:1px dashed #fcd34d; border-radius:8px; padding:12px; text-align:center; color:#92400e; font-size:13px;">
-            Nenhuma observação ou ocorrência registrada até o momento.
+          <div style="color:#92400e; font-size:12px; font-style:italic;">
+            Nenhuma alteração registrada ainda.
           </div>
         `;
         return;
       }
 
       container.innerHTML = historico.map(h => {
-        const isAtivo = Boolean(h.exibir_alerta);
         const dataFmt = formatarData(h.data);
         const autor = h.autor_nome || 'Portaria';
-        const origemBadge = h.origem === 'saida_portaria'
-          ? '<span style="background:#fee2e2; color:#b91c1c; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:600;">Registrado na Saída</span>'
-          : '<span style="background:#e0f2fe; color:#0369a1; font-size:11px; padding:2px 6px; border-radius:4px; font-weight:600;">Administração</span>';
-
+        const origemLabel = h.origem === 'saida_portaria' ? 'Saída da portaria'
+          : (h.origem === 'bloqueio_morador' ? 'Bloqueio (morador)' : 'Administração');
         return `
-          <div style="background:#fff; border:1px solid ${isAtivo ? '#f59e0b' : '#e2e8f0'}; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05); transition:border 0.2s;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
-              <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-                <strong style="font-size:12px; color:#1e293b;">📅 ${dataFmt}</strong>
-                <span style="font-size:12px; color:#64748b;">• Por: <strong>${escapeHtml(autor)}</strong></span>
-                ${origemBadge}
-              </div>
-              <button type="button" onclick="excluirObservacaoModal('${escapeHtml(h.id)}')" title="Excluir do histórico"
-                style="background:transparent; border:none; color:#ef4444; cursor:pointer; font-size:15px; padding:2px 6px;">
-                🗑️
-              </button>
+          <div style="background:#fff; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+              <strong style="font-size:11px; color:#1e293b;">📅 ${dataFmt}</strong>
+              <span style="font-size:11px; color:#64748b;">• ${escapeHtml(autor)} • ${origemLabel}</span>
             </div>
-
-            <div style="font-size:13px; color:#334155; line-height:1.5; white-space:pre-wrap; margin-bottom:10px; font-weight:500;">
-              ${escapeHtml(h.texto || '-')}
-            </div>
-
-            <div style="border-top:1px dashed #f1f5f9; padding-top:8px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:6px;">
-              <label style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:12px; font-weight:700; padding:4px 10px; border-radius:6px; background:${isAtivo ? '#fef3c7' : '#f1f5f9'}; color:${isAtivo ? '#92400e' : '#64748b'};">
-                <input type="checkbox" ${isAtivo ? 'checked' : ''} onchange="toggleAlertaObs('${escapeHtml(h.id)}', this.checked)" style="cursor:pointer;" />
-                ${isAtivo ? '⚠️ Alerta ATIVO na portaria' : '⚪ Alerta INATIVO (não exibe na portaria)'}
-              </label>
-              ${isAtivo ? '<span style="font-size:11px; color:#b45309; font-weight:500;">Aparecerá no alerta ao dar nova entrada</span>' : ''}
-            </div>
+            <div style="font-size:12px; color:#475569; line-height:1.4; white-space:pre-wrap;">${escapeHtml(h.texto || '-')}</div>
           </div>
         `;
       }).join('');
     }
 
-    async function toggleAlertaObs(obsId, checked) {
-      if (!visitanteModalAtual) return;
-      try {
-        const res = await api('/api/admin/visitantes/observacao/toggle-alerta', {
-          method: 'POST',
-          body: JSON.stringify({
-            chave: visitanteModalAtual.chave,
-            obs_id: obsId,
-            exibir_alerta: checked,
-          }),
-        });
-
-        visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
-        visitanteModalAtual.observacao_cadastro = res.visitante?.observacao || '';
-        renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
-
-        const item = todosVisitantes.find(v =>
-          (v.chave && v.chave === visitanteModalAtual.chave) ||
-          (v.documento && v.documento === visitanteModalAtual.documento) ||
-          (v.nome === visitanteModalAtual.nome)
-        );
-        if (item) {
-          item.observacao_cadastro = res.visitante?.observacao || '';
-          filtrarVisitantes();
-        }
-      } catch (err) {
-        alert('Erro ao atualizar alerta: ' + err.message);
-      }
-    }
-
-    async function excluirObservacaoModal(obsId) {
-      if (!visitanteModalAtual) return;
-      if (!confirm('Deseja realmente excluir esta observação do histórico?')) return;
-      try {
-        const res = await api('/api/admin/visitantes/observacao/excluir', {
-          method: 'POST',
-          body: JSON.stringify({
-            chave: visitanteModalAtual.chave,
-            obs_id: obsId,
-          }),
-        });
-
-        visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
-        visitanteModalAtual.observacao_cadastro = res.visitante?.observacao || '';
-        renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
-
-        const item = todosVisitantes.find(v =>
-          (v.chave && v.chave === visitanteModalAtual.chave) ||
-          (v.documento && v.documento === visitanteModalAtual.documento) ||
-          (v.nome === visitanteModalAtual.nome)
-        );
-        if (item) {
-          item.observacao_cadastro = res.visitante?.observacao || '';
-          filtrarVisitantes();
-        }
-      } catch (err) {
-        alert('Erro ao excluir: ' + err.message);
-      }
-    }
-
+    // Salva (SUBSTITUI) a observação cadastral única + estado do alerta.
     async function adicionarObservacaoModal() {
       if (!visitanteModalAtual) return;
       const btn = document.getElementById('btn-adicionar-obs-visitante');
@@ -2314,14 +2254,6 @@
       const textarea = document.getElementById('modal-vis-nova-obs');
       const checkboxAlerta = document.getElementById('modal-vis-nova-obs-alerta');
       const texto = textarea.value.trim();
-
-      if (!texto) {
-        msg.textContent = 'Por favor, digite o texto da observação.';
-        msg.className = 'msg erro';
-        msg.style.display = 'block';
-        textarea.focus();
-        return;
-      }
 
       btn.disabled = true;
       btn.textContent = 'Salvando...';
@@ -2339,31 +2271,62 @@
           }),
         });
 
-        textarea.value = '';
         visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
         visitanteModalAtual.observacao_cadastro = res.visitante?.observacao || '';
         renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
 
-        msg.textContent = 'Observação adicionada com sucesso ao histórico!';
+        msg.textContent = 'Observação salva com sucesso!';
         msg.className = 'msg ok';
         msg.style.display = 'block';
 
-        const item = todosVisitantes.find(v =>
-          (v.chave && v.chave === visitanteModalAtual.chave) ||
-          (v.documento && v.documento === visitanteModalAtual.documento) ||
-          (v.nome === visitanteModalAtual.nome)
-        );
-        if (item) {
-          item.observacao_cadastro = res.visitante?.observacao || '';
-          filtrarVisitantes();
-        }
+        sincronizarObsNaLista(res.visitante?.observacao || '');
       } catch (err) {
         msg.textContent = 'Erro ao salvar: ' + err.message;
         msg.className = 'msg erro';
         msg.style.display = 'block';
       } finally {
         btn.disabled = false;
-        btn.textContent = 'Salvar Observação';
+        btn.textContent = 'Salvar observação';
+      }
+    }
+
+    // Apaga a observação cadastral (limpa o texto e suspende o alerta).
+    async function limparObservacaoModal() {
+      if (!visitanteModalAtual) return;
+      if (!confirm('Apagar a observação cadastral deste visitante? O alerta deixará de aparecer na portaria.')) return;
+      const msg = document.getElementById('modal-vis-obs-msg');
+      try {
+        const res = await api('/api/admin/visitantes/observacao/excluir', {
+          method: 'POST',
+          body: JSON.stringify({ chave: visitanteModalAtual.chave }),
+        });
+        document.getElementById('modal-vis-nova-obs').value = '';
+        document.getElementById('modal-vis-nova-obs-alerta').checked = false;
+        atualizarSwitchAlertaLabel();
+        visitanteModalAtual.historico_observacoes = res.visitante?.historico || [];
+        visitanteModalAtual.observacao_cadastro = '';
+        renderizarHistoricoObs(visitanteModalAtual.historico_observacoes, visitanteModalAtual);
+        msg.textContent = 'Observação apagada.';
+        msg.className = 'msg ok';
+        msg.style.display = 'block';
+        sincronizarObsNaLista('');
+      } catch (err) {
+        msg.textContent = 'Erro ao apagar: ' + err.message;
+        msg.className = 'msg erro';
+        msg.style.display = 'block';
+      }
+    }
+
+    // Reflete a observação na linha da lista de visitantes (coluna Observação).
+    function sincronizarObsNaLista(novaObs) {
+      const item = todosVisitantes.find(v =>
+        (v.chave && v.chave === visitanteModalAtual.chave) ||
+        (v.documento && v.documento === visitanteModalAtual.documento) ||
+        (v.nome === visitanteModalAtual.nome)
+      );
+      if (item) {
+        item.observacao_cadastro = novaObs || '';
+        filtrarVisitantes();
       }
     }
   </script>
@@ -2422,44 +2385,44 @@
           </div>
         </div>
 
-        <!-- HISTÓRICO DE OBSERVAÇÕES E ALERTAS (OCORRÊNCIAS) -->
+        <!-- OBSERVAÇÃO CADASTRAL (texto único) + ALERTA -->
         <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:10px; padding:16px;">
           <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
-            <label style="font-weight:700; color:#92400e; margin:0; display:flex; align-items:center; gap:6px; font-size:15px;">
-              📝 Histórico de Observações e Alertas do Visitante
+            <label for="modal-vis-nova-obs" style="font-weight:700; color:#92400e; margin:0; display:flex; align-items:center; gap:6px; font-size:15px;">
+              📝 Observação Cadastral (alerta)
             </label>
             <span id="modal-vis-obs-data" style="font-size:11px; color:#b45309;"></span>
           </div>
-          <p style="font-size:12px; color:#78350f; margin:0 0 14px;">
-            Ocorrências registradas na saída da portaria ou cadastradas pela administração.
-            Marque ou desmarque a caixa de seleção (checkbox) para definir o que <strong>vai aparecendo ou não no aviso da portaria</strong> ao dar uma nova entrada.
+          <p style="font-size:12px; color:#78350f; margin:0 0 10px;">
+            Um texto único por visitante. Editar aqui <strong>substitui</strong> a observação atual.
+            Use o botão abaixo para <strong>suspender</strong> a exibição na portaria sem apagar o texto.
           </p>
 
-          <!-- Lista do Histórico de Observações com Checkbox -->
-          <div id="modal-vis-lista-obs" style="display:flex; flex-direction:column; gap:10px; margin-bottom:16px;">
-          </div>
+          <textarea id="modal-vis-nova-obs" rows="3"
+            placeholder="Observação importante exibida como alerta na portaria..."
+            style="width:100%; box-sizing:border-box; border:1px solid #e2e8f0; border-radius:6px; padding:10px; font-size:14px; background:#fff;"></textarea>
 
-          <!-- Adicionar Nova Observação / Ocorrência Manualmente -->
-          <div style="background:#fff; border:1px solid #fcd34d; border-radius:8px; padding:12px;">
-            <label for="modal-vis-nova-obs" style="font-weight:600; color:#854d0e; font-size:13px; margin:0 0 6px; display:block;">
-              + Adicionar nova observação ou ocorrência:
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:10px;">
+            <label id="modal-vis-switch-label" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:700; padding:6px 12px; border-radius:8px; background:#fef3c7; color:#92400e;">
+              <input type="checkbox" id="modal-vis-nova-obs-alerta" checked style="width:16px; height:16px; cursor:pointer;" onchange="atualizarSwitchAlertaLabel()" />
+              <span id="modal-vis-switch-texto">⚠️ Exibir alerta na portaria</span>
             </label>
-            <textarea id="modal-vis-nova-obs" rows="2"
-              placeholder="Escreva aqui caso queira cadastrar uma ocorrência, aviso ou observação para este perfil..."
-              style="width:100%; box-sizing:border-box; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px; font-size:13px; background:#fff;"></textarea>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-top:10px; flex-wrap:wrap; gap:10px;">
-              <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:600; color:#1e293b;">
-                <input type="checkbox" id="modal-vis-nova-obs-alerta" checked style="width:16px; height:16px; cursor:pointer;" />
-                Exibir no aviso da portaria ao dar nova entrada
-              </label>
-
+            <div style="display:flex; gap:8px;">
+              <button type="button" class="secundario mini" onclick="limparObservacaoModal()"
+                style="padding:8px 14px; border-radius:6px; cursor:pointer;">Apagar observação</button>
               <button type="button" class="primario mini" id="btn-adicionar-obs-visitante" onclick="adicionarObservacaoModal()"
                 style="background:var(--verde); color:#fff; border:none; padding:8px 16px; border-radius:6px; cursor:pointer; font-weight:600;">
-                Salvar Observação
+                Salvar observação
               </button>
             </div>
-            <div id="modal-vis-obs-msg" class="msg" style="margin-top:10px; padding:6px 12px; font-size:12px; display:none;"></div>
+          </div>
+          <div id="modal-vis-obs-msg" class="msg" style="margin-top:10px; padding:6px 12px; font-size:12px; display:none;"></div>
+
+          <!-- Histórico (somente auditoria) -->
+          <div style="margin-top:16px; border-top:1px dashed #fcd34d; padding-top:12px;">
+            <div style="font-size:12px; font-weight:700; color:#92400e; margin-bottom:8px;">🕘 Histórico de alterações (auditoria)</div>
+            <div id="modal-vis-lista-obs" style="display:flex; flex-direction:column; gap:8px; max-height:220px; overflow-y:auto;">
+            </div>
           </div>
         </div>
 
