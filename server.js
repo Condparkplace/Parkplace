@@ -1966,6 +1966,54 @@ function normalizarRegistroObs(item) {
   return item;
 }
 
+// ----- MODELO TIMELINE -----------------------------------------------------
+// item.historico passa a ser a LINHA DO TEMPO de observações. Cada entrada:
+//   { id, data, autor_id, autor_nome, texto, ativo }
+// - ativo = true  -> candidata a alerta na portaria
+// - ativo = false -> suspensa (continua na timeline, não alerta)
+// O alerta exibido na portaria é SEMPRE a observação ATIVA MAIS RECENTE
+// (nunca concatena). Itens de auditoria (saída, etc.) entram com ativo=false.
+
+// Normaliza a timeline: garante array e migra o campo legado exibir_alerta->ativo.
+// Se não houver nenhum item mas existir item.observacao (texto migrado), cria um
+// item inicial ativo a partir dele, para não perder a observação atual.
+function normalizarTimelineObs(item) {
+  if (!item) return [];
+  if (!Array.isArray(item.historico)) item.historico = [];
+  for (const h of item.historico) {
+    if (!h) continue;
+    if (h.ativo === undefined) {
+      // Legado: exibir_alerta virou ativo. Eventos de auditoria ficam inativos.
+      h.ativo = (h.exibir_alerta !== undefined) ? !!h.exibir_alerta : false;
+    }
+    if (!h.id) h.id = 'obs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  }
+  const textoUnico = (item.observacao || '').trim();
+  if (textoUnico && !item.historico.some((h) => h && (h.texto || '').trim() === textoUnico)) {
+    // Texto do modelo anterior ainda não representado na timeline: vira item ativo.
+    item.historico.unshift({
+      id: 'obs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+      data: item.atualizado_em || new Date().toISOString(),
+      autor_id: item.atualizado_por || null,
+      autor_nome: null,
+      texto: maiuscula(textoUnico),
+      ativo: item.alerta_ativo !== false,
+    });
+  }
+  return item.historico;
+}
+
+// Retorna o TEXTO do alerta da portaria: a observação ATIVA mais recente.
+// '' quando não há nenhuma ativa. Ordena por data desc.
+function obterAlertaAtivoMaisRecente(item) {
+  if (!item) return '';
+  const timeline = normalizarTimelineObs(item);
+  const ativos = timeline
+    .filter((h) => h && h.ativo && (h.texto || '').trim())
+    .sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+  return ativos.length ? (ativos[0].texto || '').trim() : '';
+}
+
 // Persiste um registro de observação no cache local + Supabase, com fallback
 // progressivo caso colunas novas ainda não existam no banco.
 async function persistirObsVisitante(item) {
@@ -2043,11 +2091,9 @@ async function obterTodasObservacoesVisitantes() {
       data.forEach((item) => {
         if (item.chave) {
           normalizarRegistroObs(item);
-          const cached = cacheObsVisitantes.get(item.chave);
-          if (cached && Array.isArray(cached.historico) && cached.historico.length > (item.historico || []).length) {
-            item.historico = cached.historico;
-          }
-          // Observação agora é texto próprio (não deriva mais do histórico).
+          // O Supabase é a FONTE DA VERDADE. Não mesclamos mais o histórico do
+          // cache local (isso revertia desativações/exclusões recém-gravadas,
+          // fazendo o alerta "ressuscitar"). O cache é só espelho de leitura.
           mapa.set(item.chave, item);
           cacheObsVisitantes.set(item.chave, item);
         }
@@ -2150,60 +2196,72 @@ async function registrarEventoHistorico(item, { texto, origem, userId }) {
     autor_nome: autorNome,
     texto: maiuscula((texto || '').trim()) || '',
     origem: origem || 'auditoria',
+    ativo: false, // eventos de auditoria nunca alertam na portaria
   };
   item.historico = [evento, ...(item.historico || [])];
   return evento;
 }
 
-// MODELO NOVO — define (substitui) a OBSERVAÇÃO CADASTRAL de um visitante e o
-// estado do alerta. Texto único editável; registra a alteração no histórico
-// (auditoria). Não concatena nada.
-async function definirObservacaoVisitante({ chave, nome, documento, observacao, alerta_ativo, userId, origem = 'admin' }) {
+// MODELO TIMELINE — adiciona uma NOVA observação à linha do tempo (item novo,
+// nunca substitui/concatena). Por padrão entra ATIVA (vira candidata a alerta).
+// Retorna o item persistido. Atualiza item.observacao com o alerta derivado
+// (ativa mais recente) só para compatibilidade com telas/listagens antigas.
+async function adicionarObservacaoTimeline({ chave, nome, documento, texto, ativo = true, userId, origem = 'admin' }) {
   const item = await obterOuCriarRegistroObs({ chave, nome, documento, userId });
-  const textoNovo = maiuscula((observacao || '').trim()) || '';
-  const textoAntigo = (item.observacao || '').trim();
+  normalizarTimelineObs(item);
+  const t = maiuscula((texto || '').trim()) || '';
+  if (!t) throw new Error('Informe o texto da observação.');
 
-  item.observacao = textoNovo;
-  if (alerta_ativo !== undefined) {
-    item.alerta_ativo = Boolean(alerta_ativo);
-  } else if (textoNovo && !textoAntigo) {
-    // Observação criada agora e sem escolha explícita: alerta ligado por padrão.
-    item.alerta_ativo = true;
+  let autorNome = 'Administração';
+  if (userId) {
+    const nomes = await mapaNomes([userId]);
+    if (nomes[userId]) autorNome = nomes[userId];
   }
-  // Se não há texto, não faz sentido manter alerta ativo.
-  if (!textoNovo) item.alerta_ativo = false;
-
+  const novo = {
+    id: 'obs_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6),
+    data: new Date().toISOString(),
+    autor_id: userId || null,
+    autor_nome: autorNome,
+    texto: t,
+    ativo: ativo !== false,
+    origem,
+  };
+  item.historico = [novo, ...(item.historico || [])];
+  item.observacao = obterAlertaAtivoMaisRecente(item);
+  item.alerta_ativo = !!item.observacao;
   item.atualizado_em = new Date().toISOString();
   item.atualizado_por = userId || item.atualizado_por;
-
-  // Auditoria: registra o que mudou.
-  if (textoNovo !== textoAntigo) {
-    const resumo = textoNovo
-      ? (textoAntigo ? 'Observação alterada' : 'Observação criada')
-      : 'Observação removida';
-    await registrarEventoHistorico(item, {
-      texto: `[${resumo}] ${textoNovo || textoAntigo}`.trim(),
-      origem,
-      userId,
-    });
-  }
-
   return persistirObsVisitante(item);
 }
 
-// Liga/desliga apenas o alerta (suspender notificação sem apagar o texto).
-async function definirAlertaAtivo({ chave, alerta_ativo, userId }) {
+// Liga/desliga o flag "ativo" de UM item da timeline (por id). Suspender =
+// ativo:false (não some da timeline, só para de alertar na portaria).
+async function alternarAtivoObservacao({ chave, obsId, ativo, userId }) {
   const item = await obterObservacaoVisitante(chave, chave, null);
   if (!item) throw new Error('Cadastro do visitante não encontrado.');
-  normalizarRegistroObs(item);
-  item.alerta_ativo = Boolean(alerta_ativo);
+  normalizarTimelineObs(item);
+  const alvo = (item.historico || []).find((h) => h && h.id === obsId);
+  if (!alvo) throw new Error('Observação não encontrada.');
+  alvo.ativo = Boolean(ativo);
+  item.observacao = obterAlertaAtivoMaisRecente(item);
+  item.alerta_ativo = !!item.observacao;
   item.atualizado_em = new Date().toISOString();
   item.atualizado_por = userId || item.atualizado_por;
-  await registrarEventoHistorico(item, {
-    texto: `[Alerta ${item.alerta_ativo ? 'ativado' : 'suspenso'}]`,
-    origem: 'admin',
-    userId,
-  });
+  return persistirObsVisitante(item);
+}
+
+// Remove UM item da timeline (por id).
+async function excluirObservacaoTimeline({ chave, obsId, userId }) {
+  const item = await obterObservacaoVisitante(chave, chave, null);
+  if (!item) throw new Error('Cadastro do visitante não encontrado.');
+  normalizarTimelineObs(item);
+  const antes = (item.historico || []).length;
+  item.historico = (item.historico || []).filter((h) => h && h.id !== obsId);
+  if (item.historico.length === antes) throw new Error('Observação não encontrada.');
+  item.observacao = obterAlertaAtivoMaisRecente(item);
+  item.alerta_ativo = !!item.observacao;
+  item.atualizado_em = new Date().toISOString();
+  item.atualizado_por = userId || item.atualizado_por;
   return persistirObsVisitante(item);
 }
 
@@ -2250,21 +2308,25 @@ async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, e
   return persistirObsVisitante(item);
 }
 
-// Compat para chamadas antigas (posicional ou objeto). Agora SUBSTITUI o texto.
+// Compat para chamadas antigas (posicional ou objeto). Agora ADICIONA um item
+// novo à timeline (não substitui). Se o texto vier vazio, não faz nada.
 async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
   if (chave && typeof chave === 'object') {
     const o = chave;
-    return definirObservacaoVisitante({
+    const texto = o.observacao !== undefined ? o.observacao : o.texto;
+    if (!((texto || '').trim())) return obterOuCriarRegistroObs({ chave: o.chave, nome: o.nome, documento: o.documento !== undefined ? o.documento : o.doc, userId: o.userId });
+    return adicionarObservacaoTimeline({
       chave: o.chave,
       nome: o.nome,
       documento: o.documento !== undefined ? o.documento : o.doc,
-      observacao: o.observacao !== undefined ? o.observacao : o.texto,
-      alerta_ativo: o.alerta_ativo !== undefined ? o.alerta_ativo : (o.exibirAlerta !== undefined ? o.exibirAlerta : undefined),
+      texto,
+      ativo: o.alerta_ativo !== undefined ? o.alerta_ativo : (o.exibirAlerta !== undefined ? o.exibirAlerta : true),
       userId: o.userId,
       origem: o.origem || 'admin_direto',
     });
   }
-  return definirObservacaoVisitante({ chave, nome, documento, observacao, userId, origem: 'admin_direto' });
+  if (!((observacao || '').trim())) return obterOuCriarRegistroObs({ chave, nome, documento, userId });
+  return adicionarObservacaoTimeline({ chave, nome, documento, texto: observacao, userId, origem: 'admin_direto' });
 }
 
 // Busca o cadastro de uma pessoa pelo documento (CPF).
@@ -2325,9 +2387,8 @@ app.get('/api/portaria/buscar', requireAuth, requireRole('porteiro', 'admin'), a
   // Busca observação fixa no cadastro (se existir). Só expõe o texto como ALERTA
   // quando alerta_ativo !== false (admin pode ter suspendido a notificação).
   const obsVisitante = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNorm);
-  const obsCad = (obsVisitante && obsVisitante.alerta_ativo !== false)
-    ? (obsVisitante.observacao || '').trim()
-    : '';
+  // Alerta da portaria = observação ATIVA mais recente (nunca concatena).
+  const obsCad = obterAlertaAtivoMaisRecente(obsVisitante);
   const estaBloqueado = visitanteEstaBloqueado(obsVisitante);
 
   // SE FOR MORADOR: Unifica o cadastro pelo perfil oficial do morador
@@ -2542,14 +2603,23 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
       try {
         const nomeNormVis = (nome_pessoa || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         const item = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNormVis);
-        if (item && (item.observacao || '').trim()) {
-          await registrarEventoHistorico(item, {
-            texto: 'Porteiro avisou o visitante sobre a observação cadastral na entrada.',
-            origem: 'aviso_portaria',
-            userId: req.user.id,
-          });
-          item.alerta_ativo = false;
-          await persistirObsVisitante(item);
+        if (item) {
+          const timeline = normalizarTimelineObs(item);
+          // Suspende a observação ATIVA mais recente (a que foi exibida ao porteiro).
+          const ativos = timeline
+            .filter((h) => h && h.ativo && (h.texto || '').trim())
+            .sort((a, b) => new Date(b.data || 0) - new Date(a.data || 0));
+          if (ativos.length) {
+            ativos[0].ativo = false;
+            await registrarEventoHistorico(item, {
+              texto: 'Porteiro avisou o visitante sobre a observação cadastral na entrada.',
+              origem: 'aviso_portaria',
+              userId: req.user.id,
+            });
+            item.observacao = obterAlertaAtivoMaisRecente(item);
+            item.alerta_ativo = !!item.observacao;
+            await persistirObsVisitante(item);
+          }
         }
       } catch (e) {
         console.warn('Falha ao registrar aviso da observação:', e.message);
@@ -3493,11 +3563,14 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
       const nomeNorm = v.nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
       const obsObj = (v.chave && mapaObs.get(v.chave)) || (docLimpo && mapaObs.get(docLimpo)) || mapaObs.get('nome:' + nomeNorm);
       const { _endereco_em, ...limpo } = v;
+      const alertaAtivo = obsObj ? obterAlertaAtivoMaisRecente(obsObj) : '';
       return {
         ...limpo,
-        observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
+        // Preview da coluna = alerta ativo mais recente (o que aparece na portaria).
+        observacao_cadastro: alertaAtivo,
         observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
-        alerta_ativo: obsObj ? (obsObj.alerta_ativo !== false) : false,
+        alerta_ativo: !!alertaAtivo,
+        historico_observacoes: obsObj ? (obsObj.historico || []) : [],
       };
     });
 
@@ -3533,8 +3606,6 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
       veiculo_placa,
       endereco_visitante,
       cep_visitante,
-      observacao,
-      alerta_ativo,
     } = req.body || {};
 
     const novoNome = maiuscula((nome || '').trim()) || '';
@@ -3647,19 +3718,9 @@ app.post('/api/admin/visitantes/editar', requireAuth, requireRole('admin'), asyn
     const novaChave = novoDocLimpo || ('nome:' + novoNomeNorm);
     const chaveAntiga = chaveOriginal || docLimpoOriginal || ('nome:' + nomeNormOriginal);
 
-    // Observação cadastral: SUBSTITUI o texto (não acumula). alerta_ativo vem do
-    // switch do admin; se não vier, liga por padrão quando há texto.
-    if (observacao !== undefined && observacao !== null) {
-      await definirObservacaoVisitante({
-        chave: novaChave,
-        documento: novoDocFormatado,
-        nome: novoNome,
-        observacao: observacao.trim(),
-        alerta_ativo: (alerta_ativo !== undefined ? alerta_ativo : undefined),
-        userId: req.user.id,
-        origem: 'admin',
-      });
-    }
+    // Observação cadastral NÃO é mais editada aqui. A fonte única é a TIMELINE
+    // (modal de detalhes), para evitar duas telas gravando a mesma coisa. Este
+    // endpoint cuida só dos dados cadastrais (nome/CPF/placa/endereço).
 
     // Se a chave mudou e existia observação com a chave antiga, migra para a nova chave
     if (chaveAntiga && chaveAntiga !== novaChave) {
@@ -3886,12 +3947,12 @@ app.get('/api/admin/visitantes/detalhes', requireAuth, requireRole('admin'), asy
         nome: nomeFinal,
         documento: docFinal,
         tipo: tipoFinal,
-        observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
+        observacao_cadastro: obsObj ? obterAlertaAtivoMaisRecente(obsObj) : '',
         observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
-        alerta_ativo: obsObj ? (obsObj.alerta_ativo !== false) : false,
+        alerta_ativo: obsObj ? !!obterAlertaAtivoMaisRecente(obsObj) : false,
         bloqueado: obsObj ? visitanteEstaBloqueado(obsObj) : false,
         bloqueio_motivo: obsObj ? (obsObj.bloqueio_motivo || null) : null,
-        historico_observacoes: obsObj ? (obsObj.historico || []) : [],
+        historico_observacoes: obsObj ? normalizarTimelineObs(obsObj) : [],
       },
       kpis: {
         total_visitas: registrosPessoa.length,
@@ -3927,16 +3988,19 @@ app.post('/api/admin/visitantes/observacao', requireAuth, requireRole('admin'), 
   }
 });
 
-// Define (substitui) a observação cadastral única + estado do alerta.
+// TIMELINE — adiciona uma NOVA observação (item novo). Por padrão entra ativa.
 app.post('/api/admin/visitantes/observacao/adicionar', requireAuth, requireRole('admin'), async (req, res) => {
   try {
     const { chave, nome, documento, texto, exibir_alerta } = req.body || {};
-    const salvo = await definirObservacaoVisitante({
+    if (!((texto || '').trim())) {
+      return res.status(400).json({ error: 'Informe o texto da observação.' });
+    }
+    const salvo = await adicionarObservacaoTimeline({
       chave,
       nome,
       documento,
-      observacao: texto || '',
-      alerta_ativo: exibir_alerta !== false,
+      texto,
+      ativo: exibir_alerta !== false,
       userId: req.user.id,
       origem: 'admin',
     });
@@ -3946,28 +4010,34 @@ app.post('/api/admin/visitantes/observacao/adicionar', requireAuth, requireRole(
   }
 });
 
-// Liga/desliga o alerta na portaria (suspender notificação sem apagar o texto).
+// TIMELINE — liga/desliga o alerta de UM item (por id). Suspender = ativo:false.
 app.post('/api/admin/visitantes/observacao/toggle-alerta', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const { chave, exibir_alerta } = req.body || {};
+    const { chave, obs_id, exibir_alerta } = req.body || {};
     if (!chave) {
       return res.status(400).json({ error: 'Chave do visitante é obrigatória.' });
     }
-    const salvo = await definirAlertaAtivo({ chave, alerta_ativo: exibir_alerta, userId: req.user.id });
+    if (!obs_id) {
+      return res.status(400).json({ error: 'Identificador da observação é obrigatório.' });
+    }
+    const salvo = await alternarAtivoObservacao({ chave, obsId: obs_id, ativo: exibir_alerta, userId: req.user.id });
     res.json({ ok: true, visitante: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
 });
 
-// Limpa a observação cadastral (apagar o texto único).
+// TIMELINE — remove UM item da linha do tempo (por id).
 app.post('/api/admin/visitantes/observacao/excluir', requireAuth, requireRole('admin'), async (req, res) => {
   try {
-    const { chave } = req.body || {};
+    const { chave, obs_id } = req.body || {};
     if (!chave) {
       return res.status(400).json({ error: 'Chave do visitante é obrigatória.' });
     }
-    const salvo = await definirObservacaoVisitante({ chave, observacao: '', alerta_ativo: false, userId: req.user.id, origem: 'admin' });
+    if (!obs_id) {
+      return res.status(400).json({ error: 'Identificador da observação é obrigatório.' });
+    }
+    const salvo = await excluirObservacaoTimeline({ chave, obsId: obs_id, userId: req.user.id });
     res.json({ ok: true, visitante: salvo });
   } catch (error) {
     res.status(400).json({ error: error.message });
