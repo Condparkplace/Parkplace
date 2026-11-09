@@ -7,6 +7,30 @@
   <title>Portaria - Park Place</title>
   <link rel="stylesheet" href="/css/style.css?v=6" />
   <link rel="stylesheet" href="/css/porteiro.css?v=6" />
+  <style>
+    /* Grade de seleção de lote (substitui o datalist nativo) */
+    .lote-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 8px; margin-top: 10px; }
+    .lote-chip {
+      min-height: 52px; border: 2px solid #cbd5e1; background: #fff; color: #0f172a;
+      border-radius: 10px; font-size: 19px; font-weight: 800; cursor: pointer;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      line-height: 1.05; padding: 4px 2px; position: relative;
+      transition: background .12s, border-color .12s, transform .08s;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    .lote-chip small { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    .lote-chip:hover { border-color: #16a34a; background: #f0fdf4; }
+    .lote-chip:active { transform: scale(.95); }
+    .lote-chip.selecionado { background: #15803d; border-color: #14532d; color: #fff; box-shadow: 0 0 0 3px rgba(22,163,74,.35); }
+    .lote-chip.selecionado small { color: #dcfce7; }
+    .lote-chip.selecionado::after {
+      content: '✓'; position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
+      background: #fff; color: #15803d; border: 2px solid #15803d; border-radius: 50%;
+      font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+    }
+    .lote-status { font-size: 12px; font-weight: 600; margin-top: 8px; min-height: 16px; color: #64748b; }
+    .lote-input-grande { font-size: 20px !important; font-weight: 700 !important; padding: 12px 14px !important; }
+  </style>
 </head>
 
 <body class="tela-porteiro">
@@ -133,40 +157,13 @@
           </div>
           <div>
             <label for="destino_bloco">Lote de destino *</label>
-            <input type="text" id="destino_bloco" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..."
-              autocomplete="off" required
+            <input type="text" id="destino_bloco" class="lote-input-grande" placeholder="Toque no lote abaixo ou digite o número"
+              autocomplete="off" inputmode="numeric" required
               onkeydown="if(event.key==='Enter'){event.preventDefault(); normalizarLoteDestino(this); confirmarEntradaPeloLote();}"
-              onchange="normalizarLoteDestino(this)" />
-            <datalist id="lotes-list">
-              <option value="Lote 01"></option>
-              <option value="Lote 02"></option>
-              <option value="Lote 03"></option>
-              <option value="Lote 04"></option>
-              <option value="Lote 05"></option>
-              <option value="Lote 06"></option>
-              <option value="Lote 07"></option>
-              <option value="Lote 08"></option>
-              <option value="Lote 09"></option>
-              <option value="Lote 10"></option>
-              <option value="Lote 11"></option>
-              <option value="Lote 12"></option>
-              <option value="Lote 13"></option>
-              <option value="Lote 14"></option>
-              <option value="Lote 15"></option>
-              <option value="Lote 16"></option>
-              <option value="Lote 17"></option>
-              <option value="Lote 18"></option>
-              <option value="Lote 19"></option>
-              <option value="Lote 20"></option>
-              <option value="Lote 21"></option>
-              <option value="Lote 22"></option>
-              <option value="Lote 23"></option>
-              <option value="Lote 24"></option>
-              <option value="Lote 25"></option>
-              <option value="Lote 26"></option>
-              <option value="Lote 27"></option>
-              <option value="Lote 28"></option>
-            </datalist>
+              oninput="aoDigitarLote('destino_bloco','grade-lotes-entrada','status-lote-entrada')"
+              onchange="normalizarLoteDestino(this); aoDigitarLote('destino_bloco','grade-lotes-entrada','status-lote-entrada', true)" />
+            <div id="grade-lotes-entrada" class="lote-grade" role="listbox" aria-label="Lotes"></div>
+            <div id="status-lote-entrada" class="lote-status" aria-live="polite"></div>
           </div>
         </div>
 
@@ -565,6 +562,121 @@
         el.value = 'Lote ' + String(parseInt(num, 10)).padStart(2, '0');
       }
     }
+
+    // ====================================================
+    // Seleção de lote em GRADE + pré-carregamento de moradores
+    // ====================================================
+    const LOTES_GRADE = Array.from({ length: 28 }, (_, i) => 'Lote ' + String(i + 1).padStart(2, '0'));
+    const MORADORES_CACHE_TTL_MS = 5 * 60 * 1000;
+    const moradoresLoteCache = new Map(); // chave do lote -> { promise, ts }
+    const timersLote = {};                // debounce do pré-carregamento ao digitar
+
+    // Busca (ou reaproveita) a lista de moradores de um lote. Devolve uma Promise.
+    function carregarMoradoresLote(lote, forcar = false) {
+      const chave = String(lote || '').trim().toLowerCase();
+      const existente = moradoresLoteCache.get(chave);
+      if (existente && !forcar && (Date.now() - existente.ts) < MORADORES_CACHE_TTL_MS) {
+        return existente.promise;
+      }
+      const promise = api('/api/portaria/moradores?lote=' + encodeURIComponent(lote))
+        .then((r) => (r && r.moradores) || []);
+      const entrada = { promise, ts: Date.now() };
+      moradoresLoteCache.set(chave, entrada);
+      // Se falhar, não deixa o erro preso no cache (a próxima tentativa busca de novo).
+      promise.catch(() => { if (moradoresLoteCache.get(chave) === entrada) moradoresLoteCache.delete(chave); });
+      return promise;
+    }
+
+    // Converte o que foi digitado ("14", "lote 14") para o formato da grade ("Lote 14").
+    function loteDigitadoParaGrade(valor) {
+      const limpo = String(valor || '').replace(/lote/gi, '').trim();
+      if (!/^\d{1,2}$/.test(limpo)) return null;
+      const nome = 'Lote ' + String(parseInt(limpo, 10)).padStart(2, '0');
+      return LOTES_GRADE.includes(nome) ? nome : null;
+    }
+
+    // acao (opcional): nome de uma função global chamada logo após escolher o lote
+    // (ex.: abrir o seletor de moradores no fluxo de iFood/encomenda).
+    function renderGradeLotes(gradeId, inputId, statusId, acao) {
+      const grade = document.getElementById(gradeId);
+      if (!grade) return;
+      grade.innerHTML = LOTES_GRADE.map((lote) => {
+        const num = lote.replace(/\D/g, '');
+        return `<button type="button" class="lote-chip" data-lote="${lote}" role="option" aria-selected="false"
+                  aria-label="${lote}" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${lote}','${acao || ''}')">
+                  <small>Lote</small>${num}</button>`;
+      }).join('');
+    }
+
+    function marcarLoteNaGrade(gradeId, lote) {
+      const grade = document.getElementById(gradeId);
+      if (!grade) return;
+      grade.querySelectorAll('.lote-chip').forEach((chip) => {
+        const sel = chip.dataset.lote === lote;
+        chip.classList.toggle('selecionado', sel);
+        chip.setAttribute('aria-selected', sel ? 'true' : 'false');
+      });
+    }
+
+    // Pré-carrega os moradores do lote e mostra o andamento abaixo da grade.
+    function preCarregarMoradoresLote(lote, statusId) {
+      const st = document.getElementById(statusId);
+      if (st) { st.dataset.lote = lote; st.style.color = '#64748b'; st.textContent = 'Carregando moradores do ' + lote + '...'; }
+      carregarMoradoresLote(lote).then((moradores) => {
+        if (!st || st.dataset.lote !== lote) return; // o porteiro já escolheu outro lote
+        if (moradores.length) {
+          st.style.color = '#15803d';
+          st.textContent = '✓ ' + moradores.length + ' morador(es) do ' + lote + ' prontos';
+        } else {
+          st.style.color = '#b45309';
+          st.textContent = 'Nenhum morador cadastrado no ' + lote;
+        }
+      }).catch(() => {
+        if (!st || st.dataset.lote !== lote) return;
+        st.style.color = '#b91c1c';
+        st.textContent = 'Não deu para pré-carregar os moradores. Será tentado de novo ao confirmar.';
+      });
+    }
+
+    // Clique em um lote da grade: preenche o campo, destaca e já puxa os moradores.
+    function escolherLoteNaGrade(inputId, gradeId, statusId, lote, acao) {
+      const input = document.getElementById(inputId);
+      if (input) input.value = lote;
+      marcarLoteNaGrade(gradeId, lote);
+      preCarregarMoradoresLote(lote, statusId);
+      if (acao && typeof window[acao] === 'function') window[acao]();
+    }
+
+    // Digitação no campo: destaca o lote correspondente e pré-carrega (com debounce).
+    function aoDigitarLote(inputId, gradeId, statusId, imediato = false) {
+      const input = document.getElementById(inputId);
+      const lote = loteDigitadoParaGrade(input ? input.value : '');
+      marcarLoteNaGrade(gradeId, lote);
+      clearTimeout(timersLote[inputId]);
+      const st = document.getElementById(statusId);
+      if (!lote) { if (st) { st.dataset.lote = ''; st.textContent = ''; } return; }
+      if (imediato) preCarregarMoradoresLote(lote, statusId);
+      else timersLote[inputId] = setTimeout(() => preCarregarMoradoresLote(lote, statusId), 350);
+    }
+
+    function limparSelecaoLote(gradeId, statusId) {
+      marcarLoteNaGrade(gradeId, null);
+      const st = document.getElementById(statusId);
+      if (st) { st.dataset.lote = ''; st.textContent = ''; }
+    }
+
+    function iniciarGradesDeLote() {
+      renderGradeLotes('grade-lotes-entrada', 'destino_bloco', 'status-lote-entrada');
+      renderGradeLotes('grade-lotes-popup', 'popup-vis-destino', 'status-lote-popup');
+      // iFood e Encomenda: ao tocar no lote, já abre o seletor de moradores.
+      renderGradeLotes('grade-lotes-ifood', 'ifood-lote', 'status-lote-ifood', 'abrirSeletorMoradorIfood');
+      renderGradeLotes('grade-lotes-encomenda', 'encomenda-lote', 'status-lote-encomenda', 'abrirSeletorMoradorEncomenda');
+      // Formulário principal: ao limpar/resetar, apaga o destaque e o status.
+      const form = document.getElementById('form-entrada');
+      if (form) form.addEventListener('reset', () => limparSelecaoLote('grade-lotes-entrada', 'status-lote-entrada'));
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarGradesDeLote);
+    else iniciarGradesDeLote();
 
     // Ao dar Enter no lote: dispara o fluxo de confirmação da entrada, que valida
     // os campos e abre o pop-up de escolha de morador. Só age se o form estiver visível.
@@ -1232,6 +1344,7 @@
       togglePopupEndereco();
 
       document.getElementById('popup-vis-destino').value = '';
+      limparSelecaoLote('grade-lotes-popup', 'status-lote-popup');
       if (visitanteEncontradoAtual.cep_visitante) {
         document.getElementById('popup-vis-cep').value = visitanteEncontradoAtual.cep_visitante;
       }
@@ -1855,7 +1968,8 @@
       modal.style.display = 'flex';
 
       try {
-        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        // Usa a lista pré-carregada quando o lote já foi escolhido na grade (abre na hora).
+        const moradores = await carregarMoradoresLote(lote);
         seletorMoradorLista = moradores || [];
         if (!seletorMoradorLista.length) {
           lista.innerHTML = '<p class="vazio" style="margin:4px 0;">Nenhum morador cadastrado para este lote.</p>';
@@ -1959,7 +2073,7 @@
       lista.innerHTML = '<p class="text-muted" style="text-align:center; padding:12px 0;">Buscando moradores do ' + escapeHtml(lote) + '...</p>';
 
       try {
-        const { moradores } = await api('/api/portaria/moradores?lote=' + encodeURIComponent(lote));
+        const moradores = await carregarMoradoresLote(lote);
         if (!moradores || moradores.length === 0) {
           lista.innerHTML = '<p class="vazio" style="margin:4px 0;">Nenhum morador cadastrado para este lote.</p>';
           return;
@@ -2854,9 +2968,13 @@
         <!-- Lote de destino -->
         <div style="margin-bottom:10px;">
           <label for="popup-vis-destino" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Lote de destino *</label>
-          <input type="text" id="popup-vis-destino" list="lotes-list" placeholder="Pesquisar ou Selecionar Lote..." required
-            autocomplete="off" onchange="normalizarLoteDestino(this)"
-            style="width:100%; box-sizing:border-box; font-size:14px; font-weight:600; padding:7px 10px; border:2px solid #3b82f6; border-radius:6px;" />
+          <input type="text" id="popup-vis-destino" class="lote-input-grande" placeholder="Toque no lote abaixo ou digite o número" required
+            autocomplete="off" inputmode="numeric"
+            oninput="aoDigitarLote('popup-vis-destino','grade-lotes-popup','status-lote-popup')"
+            onchange="normalizarLoteDestino(this); aoDigitarLote('popup-vis-destino','grade-lotes-popup','status-lote-popup', true)"
+            style="width:100%; box-sizing:border-box; border:2px solid #3b82f6; border-radius:8px;" />
+          <div id="grade-lotes-popup" class="lote-grade" role="listbox" aria-label="Lotes"></div>
+          <div id="status-lote-popup" class="lote-status" aria-live="polite"></div>
         </div>
 
         <!-- Endereço do Prestador REMOVIDO da portaria (só no cadastro do morador).
@@ -2988,41 +3106,14 @@
       <!-- 4. Seleção de Lote -->
       <div id="ifood-area-busca-lote">
         <label for="ifood-lote" style="font-weight:600; font-size:14px; margin-top:0;">Seleção de lote *</label>
-        <input type="text" id="ifood-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
+        <input type="text" id="ifood-lote" class="lote-input-grande" placeholder="Toque no lote abaixo ou digite o número"
+          autocomplete="off" inputmode="numeric"
+          oninput="aoDigitarLote('ifood-lote','grade-lotes-ifood','status-lote-ifood')"
           onchange="abrirSeletorMoradorIfood()"
           onkeydown="if(event.key==='Enter'){event.preventDefault(); abrirSeletorMoradorIfood();}"
-          style="width:100%; font-size:16px; padding:10px 12px;" />
-        <datalist id="ifood-lotes-list">
-          <option value="Lote 01"></option>
-          <option value="Lote 02"></option>
-          <option value="Lote 03"></option>
-          <option value="Lote 04"></option>
-          <option value="Lote 05"></option>
-          <option value="Lote 06"></option>
-          <option value="Lote 07"></option>
-          <option value="Lote 08"></option>
-          <option value="Lote 09"></option>
-          <option value="Lote 10"></option>
-          <option value="Lote 11"></option>
-          <option value="Lote 12"></option>
-          <option value="Lote 13"></option>
-          <option value="Lote 14"></option>
-          <option value="Lote 15"></option>
-          <option value="Lote 16"></option>
-          <option value="Lote 17"></option>
-          <option value="Lote 18"></option>
-          <option value="Lote 19"></option>
-          <option value="Lote 20"></option>
-          <option value="Lote 21"></option>
-          <option value="Lote 22"></option>
-          <option value="Lote 23"></option>
-          <option value="Lote 24"></option>
-          <option value="Lote 25"></option>
-          <option value="Lote 26"></option>
-          <option value="Lote 27"></option>
-          <option value="Lote 28"></option>
-        </datalist>
-
+          style="width:100%; box-sizing:border-box;" />
+        <div id="grade-lotes-ifood" class="lote-grade" role="listbox" aria-label="Lotes"></div>
+        <div id="status-lote-ifood" class="lote-status" aria-live="polite"></div>
       </div>
 
       <div id="msg-ifood" class="msg hidden" style="margin-top:14px;"></div>
@@ -3055,9 +3146,13 @@
 
       <div style="margin-top: 14px;">
         <label for="encomenda-lote">Lote de destino</label>
-        <input type="text" id="encomenda-lote" list="ifood-lotes-list" placeholder="Ex: Lote 12" autocomplete="off"
+        <input type="text" id="encomenda-lote" class="lote-input-grande" placeholder="Toque no lote abaixo ou digite o número"
+          autocomplete="off" inputmode="numeric"
+          oninput="aoDigitarLote('encomenda-lote','grade-lotes-encomenda','status-lote-encomenda')"
           onchange="abrirSeletorMoradorEncomenda()"
-          onkeydown="if(event.key==='Enter'){event.preventDefault(); abrirSeletorMoradorEncomenda();}" style="width:100%;" />
+          onkeydown="if(event.key==='Enter'){event.preventDefault(); abrirSeletorMoradorEncomenda();}" style="width:100%; box-sizing:border-box;" />
+        <div id="grade-lotes-encomenda" class="lote-grade" role="listbox" aria-label="Lotes"></div>
+        <div id="status-lote-encomenda" class="lote-status" aria-live="polite"></div>
       </div>
 
 
@@ -3228,6 +3323,7 @@
     function abrirModalEncomenda() {
       document.getElementById('modal-encomenda').classList.remove('hidden');
       document.getElementById('encomenda-lote').value = '';
+      limparSelecaoLote('grade-lotes-encomenda', 'status-lote-encomenda');
       document.getElementById('encomenda-quantidade').value = '1';
       document.getElementById('msg-encomenda').classList.add('hidden');
     }
@@ -3385,6 +3481,7 @@
       togglePlacaIfood();
 
       document.getElementById('ifood-lote').value = '';
+      limparSelecaoLote('grade-lotes-ifood', 'status-lote-ifood');
       document.getElementById('ifood-area-busca-lote').classList.remove('hidden');
       document.getElementById('ifood-destino-resumo').classList.add('hidden');
 
@@ -3478,6 +3575,7 @@
     function trocarMoradorIfood() {
       document.getElementById('ifood-destino-resumo').classList.add('hidden');
       document.getElementById('ifood-lote').value = '';
+      limparSelecaoLote('grade-lotes-ifood', 'status-lote-ifood');
       document.getElementById('ifood-lote-selecionado').value = '';
       document.getElementById('ifood-morador-id').value = '';
       document.getElementById('ifood-morador-nome').value = '';
