@@ -2055,7 +2055,9 @@ async function adicionarObservacaoAoHistorico({ chave, nome, documento, texto, e
   const docFormatado = formatarDocumento(documento);
   const nomeLimpo = maiuscula((nome || '').trim()) || '';
   const nomeNorm = nomeLimpo.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
-  const finalChave = (chave || '').trim() || docLimpo || ('nome:' + nomeNorm);
+  // chave pode vir como número/objeto em chamadas antigas; força para string.
+  const chaveStr = (chave === null || chave === undefined || typeof chave === 'object') ? '' : String(chave);
+  const finalChave = chaveStr.trim() || docLimpo || ('nome:' + nomeNorm);
 
   if (!finalChave && !nomeLimpo) {
     throw new Error('Identificação do visitante não informada.');
@@ -2199,7 +2201,23 @@ async function excluirObservacaoDoHistorico({ chave, obs_id }) {
   return item;
 }
 
+// Aceita DOIS formatos de chamada (compatibilidade):
+//  - posicional: salvarObservacaoVisitante(chave, nome, documento, observacao, userId)
+//  - objeto:     salvarObservacaoVisitante({ chave, nome, documento|doc, texto|observacao, userId, exibirAlerta })
 async function salvarObservacaoVisitante(chave, nome, documento, observacao, userId) {
+  // Se o primeiro argumento for um objeto, extrai os campos dele.
+  if (chave && typeof chave === 'object') {
+    const o = chave;
+    return adicionarObservacaoAoHistorico({
+      chave: o.chave,
+      nome: o.nome,
+      documento: o.documento !== undefined ? o.documento : o.doc,
+      texto: o.texto !== undefined ? o.texto : o.observacao,
+      exibir_alerta: o.exibir_alerta !== undefined ? o.exibir_alerta : (o.exibirAlerta !== undefined ? o.exibirAlerta : true),
+      userId: o.userId,
+      origem: o.origem || 'admin_direto',
+    });
+  }
   return adicionarObservacaoAoHistorico({
     chave,
     nome,
