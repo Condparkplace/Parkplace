@@ -1242,6 +1242,19 @@
       const msg = document.getElementById('msg-popup-vis');
       if (msg) msg.classList.add('hidden');
 
+      // Tarja vermelha de alerta: mostra a observação cadastral, se houver.
+      const alertaObs = document.getElementById('popup-vis-alerta-obs');
+      const alertaObsTxt = document.getElementById('popup-vis-alerta-obs-texto');
+      const obsCad = (visitanteEncontradoAtual.observacao_cadastro || '').trim();
+      if (alertaObs && alertaObsTxt) {
+        if (obsCad) {
+          alertaObsTxt.textContent = obsCad;
+          alertaObs.classList.remove('hidden');
+        } else {
+          alertaObs.classList.add('hidden');
+        }
+      }
+
       const modal = document.getElementById('modal-entrada-visitante-encontrado');
       modal.classList.remove('hidden');
       modal.style.display = 'flex';
@@ -2818,6 +2831,17 @@
         <div id="popup-area-endereco" class="hidden" style="display:none;">
           <input type="hidden" id="popup-vis-cep" value="" />
           <input type="hidden" id="popup-vis-endereco" value="" />
+        </div>
+
+        <!-- TARJA VERMELHA de alerta: observação cadastral do visitante/prestador. -->
+        <div id="popup-vis-alerta-obs" class="hidden"
+          style="background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:12px 14px; margin-bottom:12px; display:flex; align-items:flex-start; gap:10px; box-shadow:0 3px 10px rgba(220,38,38,0.18);">
+          <span style="font-size:24px; line-height:1;">⚠️</span>
+          <div style="min-width:0;">
+            <strong style="display:block; color:#991b1b; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;">Atenção — Observação cadastral</strong>
+            <span id="popup-vis-alerta-obs-texto"
+              style="color:#7f1d1d; font-size:14px; line-height:1.5; font-weight:600; white-space:pre-wrap; display:block;"></span>
+          </div>
         </div>
 
         <div id="msg-popup-vis" class="msg hidden" style="margin-bottom:10px;"></div>
