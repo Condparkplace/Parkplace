@@ -28,6 +28,7 @@ if (vapidPublicKey && vapidPrivateKey) {
 
 const { supabaseAnon, supabaseAdmin, supabaseForToken } = require('./src/supabase');
 const { whatsappAtivo, enviarTemplateEntrada, descreverEntrada } = require('./src/whatsapp');
+const { formatarTelefone } = require('./src/telefone');
 const {
   setSessionCookie,
   clearSessionCookie,
@@ -441,7 +442,7 @@ app.post('/api/public/cadastro', limitePublico, async (req, res) => {
     return res.status(400).json({ error: 'A senha deve ter no mínimo 6 caracteres.' });
   }
 
-  const meta = { nome: maiuscula(nome.trim()), tipo: 'morador', bloco, telefone: telefone.trim(), pendente: true };
+  const meta = { nome: maiuscula(nome.trim()), tipo: 'morador', bloco, telefone: formatarTelefone(telefone), pendente: true };
   const { data, error } = await supabaseAdmin.auth.admin.createUser({
     email: email.trim().toLowerCase(),
     password,
@@ -495,7 +496,7 @@ app.put('/api/me', requireAuth, async (req, res) => {
   // Monta a atualização apenas com os campos realmente enviados, para não
   // apagar dados que o formulário não envia (ex: o lote, que nunca muda aqui).
   const patch = { nome: maiuscula(nome.trim()) };
-  if (telefone !== undefined) patch.telefone = telefone?.trim() || null;
+  if (telefone !== undefined) patch.telefone = formatarTelefone(telefone);
   if (bloco !== undefined) patch.bloco = bloco?.trim() || null;
   if (apartamento !== undefined) patch.apartamento = maiuscula(apartamento?.trim()) || null;
   if (cep !== undefined) patch.cep = String(cep).replace(/\D/g, '') || null;
@@ -832,7 +833,7 @@ app.post('/api/morador/lote/cadastrar', requireAuth, requireRole('morador', 'adm
     let { nome, email, password, telefone, cpf } = req.body || {};
     nome = maiuscula((nome || '').trim()) || '';
     email = (email || '').trim().toLowerCase();
-    telefone = (telefone || '').trim();
+    telefone = formatarTelefone(telefone) || '';
     const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
 
     if (!nome) return res.status(400).json({ error: 'Informe o nome completo.' });
@@ -3138,6 +3139,7 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
   nome = maiuscula((nome || '').trim()) || '';
   tipo = (tipo || '').trim();
   email = (email || '').trim().toLowerCase();
+  telefone = formatarTelefone(telefone);
   const cpfLimpo = (cpf || '').replace(/\D/g, '') || null;
   const cepLimpo = (cep || '').replace(/\D/g, '') || null;
 
@@ -3309,10 +3311,11 @@ app.post('/api/admin/usuarios', requireAuth, requireRole('admin'), async (req, r
 app.put('/api/admin/usuarios/:id', requireAuth, requireRole('admin'), async (req, res) => {
   const { id } = req.params;
   const {
-    nome, tipo, bloco, telefone, cpf, password, ver_lote,
+    nome, tipo, bloco, telefone: telefoneBruto, cpf, password, ver_lote,
     cep, endereco_logradouro, endereco_numero, endereco_bairro,
     endereco_cidade, endereco_uf, endereco_complemento
   } = req.body || {};
+  const telefone = formatarTelefone(telefoneBruto);
 
   if (!['admin', 'porteiro', 'morador'].includes(tipo)) {
     return res.status(400).json({ error: 'Tipo inválido.' });

@@ -403,3 +403,57 @@ alter table public.compartilhamentos_link enable row level security;
 drop policy if exists compart_admin_select on public.compartilhamentos_link;
 create policy compart_admin_select on public.compartilhamentos_link
   for select using (public.meu_tipo() = 'admin');
+
+-- ------------------------------------------------------------
+-- Padronização de telefone (OPCIONAL, trava no banco)
+-- Formata perfis.telefone sempre que for gravado:
+--   celular -> (11) 9 9999-9999   |   fixo -> (11) 3333-4444
+-- Mesma regra do servidor (src/telefone.js). Se o número não puder ser
+-- padronizado com segurança (ex.: sem DDD), é gravado como veio.
+-- O servidor já formata antes de gravar; isto só garante o padrão para edições
+-- feitas direto no painel do Supabase.
+-- ------------------------------------------------------------
+create or replace function public.formatar_telefone(t text)
+returns text
+language plpgsql
+immutable
+as $$
+declare
+  d text;
+begin
+  if t is null or btrim(t) = '' then
+    return null;
+  end if;
+  d := regexp_replace(t, '\D', '', 'g');
+  if d = '' then
+    return t;
+  end if;
+  if length(d) in (12, 13) and left(d, 2) = '55' then
+    d := substr(d, 3);
+  end if;
+  if length(d) in (11, 12) and left(d, 1) = '0' then
+    d := substr(d, 2);
+  end if;
+  if length(d) = 11 then
+    return '(' || substr(d, 1, 2) || ') ' || substr(d, 3, 1) || ' ' || substr(d, 4, 4) || '-' || substr(d, 8, 4);
+  elsif length(d) = 10 and substr(d, 3, 1) <> '9' then
+    return '(' || substr(d, 1, 2) || ') ' || substr(d, 3, 4) || '-' || substr(d, 7, 4);
+  end if;
+  return t;
+end;
+$$;
+
+create or replace function public.trg_perfis_formatar_telefone()
+returns trigger
+language plpgsql
+as $$
+begin
+  new.telefone := public.formatar_telefone(new.telefone);
+  return new;
+end;
+$$;
+
+drop trigger if exists perfis_formatar_telefone on public.perfis;
+create trigger perfis_formatar_telefone
+  before insert or update of telefone on public.perfis
+  for each row execute function public.trg_perfis_formatar_telefone();

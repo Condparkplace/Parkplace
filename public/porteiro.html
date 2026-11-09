@@ -342,7 +342,7 @@
     </section>
   </div>
 
-  <script src="/js/api.js?v=2"></script>
+  <script src="/js/api.js?v=3"></script>
   <script>
     let perfil = null;
 
@@ -2000,7 +2000,7 @@
                onclick="selecionarNoSeletorMorador(${idxReal})">
             <div style="min-width:0;">
               <strong style="display:block; font-size:15px; color:var(--texto-escuro);">&#128100; ${escapeHtml(m.nome)}</strong>
-              <span class="text-muted" style="font-size:12px;">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
+              <span style="font-size:14px; ${m.telefone ? 'font-weight:700; color:#1d4ed8;' : 'color:#94a3b8;'}">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
             <button type="button" class="mini" style="background-color:${seletorMoradorCorBotao}; color:white; pointer-events:none; font-weight:600; white-space:nowrap;">Selecionar</button>
           </div>`;
@@ -2086,7 +2086,7 @@
                onclick="confirmarEntradaFinal('${escapeHtml(m.nome).replace(/'/g, "\\'")}', '${escapeHtml(m.id)}')">
             <div>
               <strong style="display:block; font-size:15px; color:var(--texto-escuro);">&#128100; ${escapeHtml(m.nome)}</strong>
-              <span class="text-muted" style="font-size:12px;">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
+              <span style="font-size:14px; ${m.telefone ? 'font-weight:700; color:#1d4ed8;' : 'color:#94a3b8;'}">&#128222; ${escapeHtml(m.telefone || 'Sem telefone')}</span>
             </div>
             <button type="button" class="mini" style="background-color:var(--verde); color:white; pointer-events:none; font-weight:600;">
               Selecionar

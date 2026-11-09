@@ -302,3 +302,45 @@ function vincularValidadorCpf(input, msgContainer) {
 
 
 
+
+// ---------------------------------------------------------------
+// Máscara de telefone: celular (11) 9 9999-9999 | fixo (11) 3333-4444
+// Aplica a máscara enquanto digita/cola (aceita +55, 55 e 0 antes do DDD).
+// ---------------------------------------------------------------
+function mascaraTelefone(v) {
+  if (v === null || v === undefined) return '';
+  let d = String(v).replace(/\D/g, '');
+  if ((d.length === 12 || d.length === 13) && d.startsWith('55')) d = d.slice(2);
+  if (d.length > 11 && d.startsWith('0')) d = d.slice(1);
+  d = d.slice(0, 11);
+  if (!d) return '';
+  if (d.length <= 2) return '(' + d;
+  const ddd = d.slice(0, 2);
+  const resto = d.slice(2);
+  if (resto[0] !== '9') {
+    // Fixo: (DD) XXXX-XXXX
+    const f = resto.slice(0, 8);
+    return `(${ddd}) ` + (f.length > 4 ? f.slice(0, 4) + '-' + f.slice(4) : f);
+  }
+  // Celular: (DD) 9 XXXX-XXXX
+  const m = resto.slice(1, 9);
+  return `(${ddd}) 9` + (m ? ' ' + (m.length > 4 ? m.slice(0, 4) + '-' + m.slice(4) : m) : '');
+}
+
+function vincularMascaraTelefone(input) {
+  if (!input || input.dataset.maskTel) return;
+  input.dataset.maskTel = '1';
+  input.setAttribute('inputmode', 'tel');
+  input.setAttribute('placeholder', '(11) 9 9999-9999');
+  input.addEventListener('input', () => { input.value = mascaraTelefone(input.value); });
+  if (input.value) input.value = mascaraTelefone(input.value);
+}
+
+// Liga a máscara automaticamente nos campos de telefone das telas.
+function iniciarMascarasTelefone() {
+  ['telefone', 'cad_telefone', 'cadml_telefone'].forEach((id) => {
+    vincularMascaraTelefone(document.getElementById(id));
+  });
+}
+if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciarMascarasTelefone);
+else iniciarMascarasTelefone();
