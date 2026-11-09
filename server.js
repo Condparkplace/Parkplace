@@ -2421,6 +2421,7 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
     endereco_visitante,
     cep_visitante,
     observacao,
+    avisou_observacao,
   } = req.body || {};
 
   if (!nome_pessoa) {
@@ -2531,6 +2532,30 @@ app.post('/api/portaria/entrada', requireAuth, requireRole('porteiro', 'admin'),
 
   // Dispara o aviso por WhatsApp (dispara-e-esquece; não bloqueia a resposta).
   notificarWhatsappEntrada(data);
+
+  // O porteiro marcou "já avisei o visitante da observação cadastral".
+  // Registra o aviso no histórico (auditoria) e SUSPENDE o alerta para que a
+  // observação não dispare de novo nas próximas entradas (primeira notificação
+  // dada como cumprida). Dispara-e-esquece: não bloqueia a resposta.
+  if (avisou_observacao && nome_pessoa !== 'Encomenda') {
+    (async () => {
+      try {
+        const nomeNormVis = (nome_pessoa || '').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        const item = await obterObservacaoVisitante(docLimpo, docLimpo, nomeNormVis);
+        if (item && (item.observacao || '').trim()) {
+          await registrarEventoHistorico(item, {
+            texto: 'Porteiro avisou o visitante sobre a observação cadastral na entrada.',
+            origem: 'aviso_portaria',
+            userId: req.user.id,
+          });
+          item.alerta_ativo = false;
+          await persistirObsVisitante(item);
+        }
+      } catch (e) {
+        console.warn('Falha ao registrar aviso da observação:', e.message);
+      }
+    })();
+  }
 
   res.status(201).json({ registro: data });
 });

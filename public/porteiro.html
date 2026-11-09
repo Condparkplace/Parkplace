@@ -1254,6 +1254,11 @@
           alertaObs.classList.add('hidden');
         }
       }
+      // Reseta o checkbox de "já avisei" e ajusta o estado do botão confirmar:
+      // quando há observação, o botão só libera depois que o porteiro marcar.
+      const chkAvisou = document.getElementById('popup-vis-avisou');
+      if (chkAvisou) chkAvisou.checked = false;
+      atualizarBotaoConfirmarPopupVis();
 
       const modal = document.getElementById('modal-entrada-visitante-encontrado');
       modal.classList.remove('hidden');
@@ -1303,9 +1308,35 @@
       }
     }
 
+    // Quando há observação cadastral, o botão "Confirmar entrada" só é liberado
+    // depois que o porteiro marcar "já avisei o visitante sobre esta observação".
+    // Sem observação, o botão fica sempre habilitado.
+    function atualizarBotaoConfirmarPopupVis() {
+      const btn = document.getElementById('btn-confirmar-popup-vis');
+      if (!btn) return;
+      const alertaObs = document.getElementById('popup-vis-alerta-obs');
+      const temObs = alertaObs && !alertaObs.classList.contains('hidden');
+      const chk = document.getElementById('popup-vis-avisou');
+      const avisou = !!(chk && chk.checked);
+      const liberado = !temObs || avisou;
+      btn.disabled = !liberado;
+      btn.style.opacity = liberado ? '1' : '0.5';
+      btn.style.cursor = liberado ? 'pointer' : 'not-allowed';
+      btn.title = liberado ? '' : 'Marque que avisou o visitante da observação para liberar.';
+    }
+
     async function confirmarEntradaPopupVisitante(ev) {
       if (ev) ev.preventDefault();
       if (!visitanteEncontradoAtual) return;
+
+      // Trava de segurança: se há observação, exige o aviso marcado.
+      const alertaObsEl = document.getElementById('popup-vis-alerta-obs');
+      const temObsEl = alertaObsEl && !alertaObsEl.classList.contains('hidden');
+      const chkAvisouEl = document.getElementById('popup-vis-avisou');
+      if (temObsEl && !(chkAvisouEl && chkAvisouEl.checked)) {
+        alert('Confirme que avisou o visitante sobre a observação cadastral antes de registrar a entrada.');
+        return;
+      }
 
       const destino = document.getElementById('popup-vis-destino').value.trim();
       if (!destino) {
@@ -1337,6 +1368,7 @@
         endereco_visitante: endereco,
         cep_visitante: cep,
         observacao_cadastro: visitanteEncontradoAtual.observacao_cadastro || '',
+        avisou_observacao: !!(chkAvisouEl && chkAvisouEl.checked),
       };
       fecharModalEntradaVisitanteEncontrado();
       abrirSeletorMorador(destino, {
@@ -1372,6 +1404,7 @@
             endereco_visitante: d.endereco_visitante,
             cep_visitante: d.cep_visitante,
             observacao: observacaoFinal || null,
+            avisou_observacao: !!d.avisou_observacao,
           }),
         });
         const complemento = morador && morador.nome ? ` (Falou com: ${morador.nome})` : '';
@@ -2841,6 +2874,12 @@
             <strong style="display:block; color:#991b1b; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;">Atenção — Observação cadastral</strong>
             <span id="popup-vis-alerta-obs-texto"
               style="color:#7f1d1d; font-size:14px; line-height:1.5; font-weight:600; white-space:pre-wrap; display:block;"></span>
+            <label for="popup-vis-avisou"
+              style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed #fca5a5; color:#991b1b; font-size:13px; font-weight:700; cursor:pointer;">
+              <input type="checkbox" id="popup-vis-avisou" onchange="atualizarBotaoConfirmarPopupVis()"
+                style="width:18px; height:18px; margin-top:1px; accent-color:#dc2626; cursor:pointer; flex-shrink:0;" />
+              <span>Já avisei o visitante sobre esta observação</span>
+            </label>
           </div>
         </div>
 
