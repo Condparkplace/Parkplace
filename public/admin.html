@@ -1889,6 +1889,9 @@
       document.getElementById('edit-vis-cep').value = v.cep_visitante || '';
       document.getElementById('edit-vis-msg-cep').textContent = '';
       document.getElementById('edit-vis-obs').value = v.observacao_cadastro || '';
+      // Estado do alerta: ligado por padrão quando há observação; respeita alerta_ativo do backend.
+      document.getElementById('edit-vis-obs-alerta').checked = (v.alerta_ativo !== false);
+      atualizarSwitchAlertaEdicao();
       atualizarCamposEdicaoPorTipo();
 
       const msg = document.getElementById('msg-edit-vis');
@@ -1972,6 +1975,7 @@
       const endereco = document.getElementById('edit-vis-endereco').value.trim();
       const cep = document.getElementById('edit-vis-cep').value.trim();
       const obs = document.getElementById('edit-vis-obs').value.trim();
+      const alertaAtivo = document.getElementById('edit-vis-obs-alerta').checked;
 
       if (!nome) {
         msg.textContent = 'Informe o nome do visitante.';
@@ -2008,6 +2012,7 @@
             endereco_visitante: endereco,
             cep_visitante: cep,
             observacao: obs,
+            alerta_ativo: alertaAtivo,
           }),
         });
 
@@ -2205,6 +2210,23 @@
       const chk = document.getElementById('modal-vis-nova-obs-alerta');
       const label = document.getElementById('modal-vis-switch-label');
       const texto = document.getElementById('modal-vis-switch-texto');
+      if (!chk || !label || !texto) return;
+      if (chk.checked) {
+        texto.textContent = '⚠️ Exibir alerta na portaria';
+        label.style.background = '#fef3c7';
+        label.style.color = '#92400e';
+      } else {
+        texto.textContent = '⚪ Alerta suspenso (não exibe na portaria)';
+        label.style.background = '#f1f5f9';
+        label.style.color = '#64748b';
+      }
+    }
+
+    // Mesmo comportamento do switch, para o modal de edição de visitante.
+    function atualizarSwitchAlertaEdicao() {
+      const chk = document.getElementById('edit-vis-obs-alerta');
+      const label = document.getElementById('edit-vis-switch-label');
+      const texto = document.getElementById('edit-vis-switch-texto');
       if (!chk || !label || !texto) return;
       if (chk.checked) {
         texto.textContent = '⚠️ Exibir alerta na portaria';
@@ -2546,6 +2568,15 @@
         <div style="margin-bottom:16px;">
           <label for="edit-vis-obs" style="font-size:13px; font-weight:600; display:block; margin-bottom:4px;">Observação Cadastral (alerta)</label>
           <textarea id="edit-vis-obs" rows="3" placeholder="Observação importante ou alerta exibido na portaria..." style="width:100%; box-sizing:border-box; resize:vertical;"></textarea>
+
+          <!-- Switch de suspender a notificação (não apaga o texto). -->
+          <label id="edit-vis-switch-label" style="display:inline-flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; font-weight:700; padding:6px 12px; border-radius:8px; background:#fef3c7; color:#92400e; margin-top:10px;">
+            <input type="checkbox" id="edit-vis-obs-alerta" checked style="width:16px; height:16px; cursor:pointer;" onchange="atualizarSwitchAlertaEdicao()" />
+            <span id="edit-vis-switch-texto">⚠️ Exibir alerta na portaria</span>
+          </label>
+          <p style="font-size:11px; color:#94a3b8; margin:8px 0 0;">
+            Desligue para <strong>suspender a notificação</strong> na portaria sem apagar o texto. O histórico de alterações fica na tela de detalhes do visitante.
+          </p>
         </div>
 
         <div id="msg-edit-vis" class="msg hidden" style="margin-bottom:12px;"></div>

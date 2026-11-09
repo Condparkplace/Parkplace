@@ -3497,6 +3497,7 @@ app.get('/api/admin/visitantes', requireAuth, requireRole('admin'), async (req, 
         ...limpo,
         observacao_cadastro: obsObj ? (obsObj.observacao || '') : '',
         observacao_atualizada_em: obsObj ? obsObj.atualizado_em : null,
+        alerta_ativo: obsObj ? (obsObj.alerta_ativo !== false) : false,
       };
     });
 
