@@ -546,6 +546,8 @@ async function notificarLote(bloco, titulo, mensagem) {
   if (!pushAtivo) return; // push não configurado: nada a enviar
   if (!bloco) return;
   const numeroBloco = bloco.replace(/lote\s*/i, '').trim();
+  // Destinos sem número (ex.: "Condomínio" = serviço do condomínio) não têm moradores a avisar.
+  if (!/\d/.test(numeroBloco)) return;
   const { data: moradores } = await supabaseAdmin
     .from('perfis')
     .select('push_subscription')
@@ -607,7 +609,8 @@ async function notificarWhatsappEntrada(registro) {
     // 2) Fallback: sem morador específico, avisa todos os moradores do lote.
     if (telefones.length === 0 && registro.destino_bloco) {
       const numeroBloco = registro.destino_bloco.replace(/lote\s*/i, '').trim();
-      if (numeroBloco) {
+      // Só avisa moradores quando o destino é um lote (tem número). "Condomínio" não avisa ninguém.
+      if (numeroBloco && /\d/.test(numeroBloco)) {
         const { data: moradores } = await supabaseAdmin
           .from('perfis')
           .select('telefone, tipo')

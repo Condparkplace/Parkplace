@@ -28,6 +28,11 @@
       background: #fff; color: #15803d; border: 2px solid #15803d; border-radius: 50%;
       font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center;
     }
+    /* Botão "Condomínio" (serviços do condomínio): ocupa 2 casas da grade */
+    .lote-chip.lote-chip-condominio { grid-column: span 2; font-size: 16px; }
+    .lote-chip.lote-chip-condominio:not(.selecionado) { border-color: #93c5fd; background: #eff6ff; color: #1e3a8a; }
+    .lote-chip.lote-chip-condominio:not(.selecionado):hover { border-color: #2563eb; background: #dbeafe; }
+    .lote-chip.lote-chip-condominio:not(.selecionado) small { color: #1d4ed8; }
     .lote-status { font-size: 12px; font-weight: 600; margin-top: 8px; min-height: 16px; color: #64748b; }
     .lote-input-grande { font-size: 20px !important; font-weight: 700 !important; padding: 12px 14px !important; }
   </style>
@@ -557,6 +562,8 @@
     function normalizarLoteDestino(el) {
       if (!el) return;
       const bruto = (el.value || '').trim();
+      // "cond", "condominio", "Condomínio"... -> "Condomínio"
+      if (ehDestinoCondominio(bruto)) { el.value = LOTE_CONDOMINIO; return; }
       const num = bruto.replace(/\D/g, '');
       if (num && /^\d+$/.test(bruto.replace(/\s|lote/gi, ''))) {
         el.value = 'Lote ' + String(parseInt(num, 10)).padStart(2, '0');
@@ -567,6 +574,14 @@
     // Seleção de lote em GRADE + pré-carregamento de moradores
     // ====================================================
     const LOTES_GRADE = Array.from({ length: 28 }, (_, i) => 'Lote ' + String(i + 1).padStart(2, '0'));
+
+    // "Condomínio": destino especial para prestadores que trabalham PARA o condomínio.
+    // Não é um lote e não tem morador: pula a escolha de morador e não avisa moradores.
+    const LOTE_CONDOMINIO = 'Condomínio';
+    function ehDestinoCondominio(valor) {
+      const n = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+      return n.length >= 4 && 'condominio'.startsWith(n);
+    }
     const MORADORES_CACHE_TTL_MS = 5 * 60 * 1000;
     const moradoresLoteCache = new Map(); // chave do lote -> { promise, ts }
     const timersLote = {};                // debounce do pré-carregamento ao digitar
@@ -589,6 +604,7 @@
 
     // Converte o que foi digitado ("14", "lote 14") para o formato da grade ("Lote 14").
     function loteDigitadoParaGrade(valor) {
+      if (ehDestinoCondominio(valor)) return LOTE_CONDOMINIO;
       const limpo = String(valor || '').replace(/lote/gi, '').trim();
       if (!/^\d{1,2}$/.test(limpo)) return null;
       const nome = 'Lote ' + String(parseInt(limpo, 10)).padStart(2, '0');
@@ -597,15 +613,31 @@
 
     // acao (opcional): nome de uma função global chamada logo após escolher o lote
     // (ex.: abrir o seletor de moradores no fluxo de iFood/encomenda).
-    function renderGradeLotes(gradeId, inputId, statusId, acao) {
+    // opcoes.condominio: acrescenta o botão "Condomínio" ao final da grade.
+    function renderGradeLotes(gradeId, inputId, statusId, acao, opcoes = {}) {
       const grade = document.getElementById(gradeId);
       if (!grade) return;
-      grade.innerHTML = LOTES_GRADE.map((lote) => {
+      let html = LOTES_GRADE.map((lote) => {
         const num = lote.replace(/\D/g, '');
         return `<button type="button" class="lote-chip" data-lote="${lote}" role="option" aria-selected="false"
                   aria-label="${lote}" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${lote}','${acao || ''}')">
                   <small>Lote</small>${num}</button>`;
       }).join('');
+      if (opcoes.condominio) {
+        html += `<button type="button" class="lote-chip lote-chip-condominio" data-lote="${LOTE_CONDOMINIO}" role="option" aria-selected="false"
+                  aria-label="Serviço do condomínio" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${LOTE_CONDOMINIO}','${acao || ''}')">
+                  <small>🏢 Serviço do</small>Condomínio</button>`;
+      }
+      grade.innerHTML = html;
+    }
+
+    // Mensagem de status do destino "Condomínio" (não há moradores a carregar).
+    function statusDestinoCondominio(statusId) {
+      const st = document.getElementById(statusId);
+      if (!st) return;
+      st.dataset.lote = LOTE_CONDOMINIO;
+      st.style.color = '#1d4ed8';
+      st.textContent = '🏢 Serviço do condomínio: não precisa escolher morador.';
     }
 
     function marcarLoteNaGrade(gradeId, lote) {
@@ -643,7 +675,8 @@
       const input = document.getElementById(inputId);
       if (input) input.value = lote;
       marcarLoteNaGrade(gradeId, lote);
-      preCarregarMoradoresLote(lote, statusId);
+      if (lote === LOTE_CONDOMINIO) statusDestinoCondominio(statusId);
+      else preCarregarMoradoresLote(lote, statusId);
       if (acao && typeof window[acao] === 'function') window[acao]();
     }
 
@@ -655,6 +688,7 @@
       clearTimeout(timersLote[inputId]);
       const st = document.getElementById(statusId);
       if (!lote) { if (st) { st.dataset.lote = ''; st.textContent = ''; } return; }
+      if (lote === LOTE_CONDOMINIO) { statusDestinoCondominio(statusId); return; }
       if (imediato) preCarregarMoradoresLote(lote, statusId);
       else timersLote[inputId] = setTimeout(() => preCarregarMoradoresLote(lote, statusId), 350);
     }
@@ -666,8 +700,9 @@
     }
 
     function iniciarGradesDeLote() {
-      renderGradeLotes('grade-lotes-entrada', 'destino_bloco', 'status-lote-entrada');
-      renderGradeLotes('grade-lotes-popup', 'popup-vis-destino', 'status-lote-popup');
+      // Entrada de visitante/prestador: inclui o botão "Condomínio".
+      renderGradeLotes('grade-lotes-entrada', 'destino_bloco', 'status-lote-entrada', '', { condominio: true });
+      renderGradeLotes('grade-lotes-popup', 'popup-vis-destino', 'status-lote-popup', '', { condominio: true });
       // iFood e Encomenda: ao tocar no lote, já abre o seletor de moradores.
       renderGradeLotes('grade-lotes-ifood', 'ifood-lote', 'status-lote-ifood', 'abrirSeletorMoradorIfood');
       renderGradeLotes('grade-lotes-encomenda', 'encomenda-lote', 'status-lote-encomenda', 'abrirSeletorMoradorEncomenda');
@@ -1484,6 +1519,12 @@
         avisou_observacao: !!(chkAvisouEl && chkAvisouEl.checked),
       };
       fecharModalEntradaVisitanteEncontrado();
+      // Serviço do condomínio: não há morador para escolher. Registra direto.
+      if (ehDestinoCondominio(destino)) {
+        dadosEntradaVisitanteEncontrado.destino_bloco = LOTE_CONDOMINIO;
+        registrarEntradaVisitanteComMorador(null);
+        return;
+      }
       abrirSeletorMorador(destino, {
         titulo: '👤 Com qual morador ' + visitanteEncontradoAtual.nome + ' vai falar?',
         corBotao: 'var(--verde)',
@@ -1931,6 +1972,13 @@
         observacaoOriginal: document.getElementById('observacao')?.value?.trim() || '',
       };
 
+      // Serviço do condomínio: não há morador para escolher. Registra direto.
+      if (ehDestinoCondominio(lote)) {
+        dadosEntradaPendente.destino_bloco = LOTE_CONDOMINIO;
+        await confirmarEntradaFinal(null, null);
+        return;
+      }
+
       abrirModalSelecionarMorador(lote);
     });
 
@@ -2168,9 +2216,15 @@
         carregarPrevistas();
         dadosEntradaPendente = null;
       } catch (err) {
-        msgModal.textContent = err.message || 'Erro ao registrar entrada.';
-        msgModal.className = 'msg erro';
-        msgModal.classList.remove('hidden');
+        const modalAberto = !document.getElementById('modal-selecionar-morador').classList.contains('hidden');
+        if (modalAberto) {
+          msgModal.textContent = err.message || 'Erro ao registrar entrada.';
+          msgModal.className = 'msg erro';
+          msgModal.classList.remove('hidden');
+        } else {
+          // Registro direto (ex.: Condomínio): o pop-up de morador não está aberto.
+          mostrarAlertaSistema(err.message || 'Erro ao registrar entrada.', 'Erro ao Registrar');
+        }
       }
     }
 

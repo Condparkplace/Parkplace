@@ -1808,6 +1808,15 @@
     let listaVisitantesRender = [];
     let visitanteEmEdicao = null;
     let visitanteEmExclusao = null;
+    // Ordenação pela coluna "Visitas": null (ordem original) | 'desc' (mais visitas primeiro) | 'asc'.
+    let ordemVisitas = null;
+
+    // Clique no cabeçalho "Visitas": alterna entre decrescente e crescente,
+    // mantendo a busca atual aplicada.
+    function alternarOrdemVisitas() {
+      ordemVisitas = ordemVisitas === 'desc' ? 'asc' : 'desc';
+      filtrarVisitantes();
+    }
 
     function renderizarVisitantes(lista) {
       const alvo = document.getElementById('lista-visitantes');
@@ -1823,6 +1832,20 @@
         return;
       }
 
+      // Aplica a ordenação por nº de visitas (empate: ordem alfabética pelo nome).
+      // A lista ordenada é a mesma usada pelos botões Editar/Excluir (por índice).
+      if (ordemVisitas) {
+        const sentido = ordemVisitas === 'asc' ? 1 : -1;
+        lista = [...lista].sort((a, b) =>
+          ((a.vezes || 1) - (b.vezes || 1)) * sentido ||
+          (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
+      }
+      const setaVisitas = ordemVisitas === 'desc' ? '▼' : (ordemVisitas === 'asc' ? '▲' : '↕');
+      const ariaOrdem = ordemVisitas === 'desc' ? 'descending' : (ordemVisitas === 'asc' ? 'ascending' : 'none');
+      const tituloOrdem = ordemVisitas === 'desc'
+        ? 'Ordenado do maior para o menor. Clique para inverter.'
+        : (ordemVisitas === 'asc' ? 'Ordenado do menor para o maior. Clique para inverter.' : 'Clique para ordenar pelo nº de visitas.');
+
       listaVisitantesRender = lista;
       alvo.innerHTML = `
         <table>
@@ -1832,7 +1855,12 @@
               <th>Documento</th>
               <th>Tipo</th>
               <th>Veículo</th>
-              <th>Visitas</th>
+              <th aria-sort="${ariaOrdem}">
+                <button type="button" onclick="alternarOrdemVisitas()" title="${tituloOrdem}"
+                  style="background:none; border:none; padding:0; margin:0; font:inherit; color:inherit; text-transform:inherit; letter-spacing:inherit; cursor:pointer; display:inline-flex; align-items:center; gap:4px;">
+                  Visitas <span style="font-size:11px; ${ordemVisitas ? 'color:#15803d;' : 'opacity:.5;'}">${setaVisitas}</span>
+                </button>
+              </th>
               <th>Última vez</th>
               <th>Observação</th>
               <th style="text-align:right;">Ações</th>
