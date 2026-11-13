@@ -9,32 +9,51 @@
   <link rel="stylesheet" href="/css/porteiro.css?v=6" />
   <style>
     /* Grade de seleção de lote (substitui o datalist nativo) */
-    .lote-grade { display: grid; grid-template-columns: repeat(auto-fill, minmax(58px, 1fr)); gap: 8px; margin-top: 10px; }
+    /* Versão COMPACTA: 7 colunas x 4 linhas (os 28 lotes) + 1 faixa para o Condomínio. */
+    .lote-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 8px; }
     .lote-chip {
-      min-height: 52px; border: 2px solid #cbd5e1; background: #fff; color: #0f172a;
-      border-radius: 10px; font-size: 19px; font-weight: 800; cursor: pointer;
-      display: flex; flex-direction: column; align-items: center; justify-content: center;
-      line-height: 1.05; padding: 4px 2px; position: relative;
+      min-height: 36px; border: 2px solid #cbd5e1; background: #fff; color: #0f172a;
+      border-radius: 8px; font-size: 16px; font-weight: 800; cursor: pointer;
+      display: flex; flex-direction: row; align-items: center; justify-content: center;
+      line-height: 1; padding: 2px; position: relative;
       transition: background .12s, border-color .12s, transform .08s;
       -webkit-tap-highlight-color: transparent; touch-action: manipulation;
     }
-    .lote-chip small { font-size: 9px; font-weight: 700; color: #64748b; text-transform: uppercase; letter-spacing: .4px; }
+    /* O rótulo "LOTE" some nos botões numerados (o título do campo já diz "Lote"). */
+    .lote-chip small { display: none; font-size: 11px; font-weight: 700; color: #64748b; margin-right: 5px; }
     .lote-chip:hover { border-color: #16a34a; background: #f0fdf4; }
     .lote-chip:active { transform: scale(.95); }
-    .lote-chip.selecionado { background: #15803d; border-color: #14532d; color: #fff; box-shadow: 0 0 0 3px rgba(22,163,74,.35); }
+    .lote-chip.selecionado { background: #15803d; border-color: #14532d; color: #fff; box-shadow: 0 0 0 2px rgba(22,163,74,.35); }
     .lote-chip.selecionado small { color: #dcfce7; }
     .lote-chip.selecionado::after {
-      content: '✓'; position: absolute; top: -7px; right: -7px; width: 20px; height: 20px;
+      content: '✓'; position: absolute; top: -6px; right: -5px; width: 16px; height: 16px;
       background: #fff; color: #15803d; border: 2px solid #15803d; border-radius: 50%;
-      font-size: 12px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+      font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center;
     }
-    /* Botão "Condomínio" (serviços do condomínio): ocupa 2 casas da grade */
-    .lote-chip.lote-chip-condominio { grid-column: span 2; font-size: 16px; }
+    /* Botão "Condomínio" (serviços do condomínio): faixa na largura toda, com o rótulo visível */
+    .lote-chip.lote-chip-condominio { grid-column: 1 / -1; font-size: 14px; }
+    .lote-chip.lote-chip-condominio small { display: inline; }
     .lote-chip.lote-chip-condominio:not(.selecionado) { border-color: #93c5fd; background: #eff6ff; color: #1e3a8a; }
     .lote-chip.lote-chip-condominio:not(.selecionado):hover { border-color: #2563eb; background: #dbeafe; }
     .lote-chip.lote-chip-condominio:not(.selecionado) small { color: #1d4ed8; }
-    .lote-status { font-size: 12px; font-weight: 600; margin-top: 8px; min-height: 16px; color: #64748b; }
-    .lote-input-grande { font-size: 20px !important; font-weight: 700 !important; padding: 12px 14px !important; }
+    .lote-status { font-size: 12px; font-weight: 600; margin-top: 6px; min-height: 16px; color: #64748b; }
+    .lote-input-grande { font-size: 18px !important; font-weight: 700 !important; padding: 9px 12px !important; }
+
+    /* Pop-up "Confirmar Entrada de Visitante": cabe na altura da tela.
+       O cabeçalho e os botões ficam fixos; só o meio rola. */
+    .popup-vis-card { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; overflow: hidden; }
+    .popup-vis-card form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .popup-vis-corpo { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 2px 3px 6px 0; -webkit-overflow-scrolling: touch; }
+    .popup-vis-rodape { flex-shrink: 0; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 6px; }
+
+    /* Telas baixas (notebooks da portaria): tudo um pouco mais enxuto. */
+    @media (max-height: 800px) {
+      .lote-chip { min-height: 32px; font-size: 15px; }
+      .lote-grade { gap: 4px; margin-top: 6px; }
+      .lote-input-grande { font-size: 16px !important; padding: 6px 10px !important; }
+      .lote-status { margin-top: 4px; min-height: 14px; }
+      .popup-vis-card { padding: 10px 14px !important; }
+    }
   </style>
 </head>
 
@@ -2977,9 +2996,9 @@
 
   <div id="modal-entrada-visitante-encontrado" class="hidden"
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
-    <div
-      style="background:#fff; border-radius:12px; width:100%; max-width:440px; padding:16px 20px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:5px solid var(--verde); box-sizing:border-box;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
+    <div class="popup-vis-card"
+      style="background:#fff; border-radius:12px; width:100%; max-width:420px; padding:16px 20px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:5px solid var(--verde); box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;">
         <h3 style="margin:0; font-size:17px; color:var(--verde-escuro); display:flex; align-items:center; gap:6px;">
           <span>👤</span> Confirmar Entrada de Visitante
         </h3>
@@ -2988,12 +3007,13 @@
       </div>
 
       <!-- Cabeçalho com dados fixos do visitante -->
-      <div style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+      <div style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; flex-shrink:0;">
         <div style="font-size:15px; font-weight:700; color:#0f172a;" id="popup-vis-nome">-</div>
         <div style="font-size:12px; color:#475569;" id="popup-vis-doc">-</div>
       </div>
 
       <form id="form-popup-visitante-encontrado" onsubmit="confirmarEntradaPopupVisitante(event)">
+       <div class="popup-vis-corpo">
         <!-- Tipo e Acesso -->
         <div class="grid grid-2" style="margin-bottom:10px; gap:8px;">
           <div>
@@ -3038,16 +3058,19 @@
           <input type="hidden" id="popup-vis-endereco" value="" />
         </div>
 
-        <!-- TARJA VERMELHA de alerta: observação cadastral do visitante/prestador. -->
+       </div><!-- /popup-vis-corpo (a única parte que rola) -->
+
+        <!-- TARJA VERMELHA de alerta: observação cadastral do visitante/prestador.
+             Fica FIXA logo acima dos botões (fora da rolagem), para nunca ficar escondida. -->
         <div id="popup-vis-alerta-obs" class="hidden"
-          style="background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:12px 14px; margin-bottom:12px; display:flex; align-items:flex-start; gap:10px; box-shadow:0 3px 10px rgba(220,38,38,0.18);">
-          <span style="font-size:24px; line-height:1;">⚠️</span>
+          style="background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:8px 12px; margin:8px 0 0; display:flex; align-items:flex-start; gap:10px; box-shadow:0 3px 10px rgba(220,38,38,0.18); flex-shrink:0; max-height:34vh; overflow-y:auto;">
+          <span style="font-size:20px; line-height:1;">⚠️</span>
           <div style="min-width:0;">
-            <strong style="display:block; color:#991b1b; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;">Atenção — Observação cadastral</strong>
+            <strong style="display:block; color:#991b1b; font-size:11px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:2px;">Atenção — Observação cadastral</strong>
             <span id="popup-vis-alerta-obs-texto"
-              style="color:#7f1d1d; font-size:14px; line-height:1.5; font-weight:600; white-space:pre-wrap; display:block;"></span>
+              style="color:#7f1d1d; font-size:14px; line-height:1.4; font-weight:600; white-space:pre-wrap; display:block;"></span>
             <label for="popup-vis-avisou"
-              style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed #fca5a5; color:#991b1b; font-size:13px; font-weight:700; cursor:pointer;">
+              style="display:flex; align-items:flex-start; gap:8px; margin-top:8px; padding-top:8px; border-top:1px dashed #fca5a5; color:#991b1b; font-size:13px; font-weight:700; cursor:pointer;">
               <input type="checkbox" id="popup-vis-avisou" onchange="atualizarBotaoConfirmarPopupVis()"
                 style="width:18px; height:18px; margin-top:1px; accent-color:#dc2626; cursor:pointer; flex-shrink:0;" />
               <span>Já avisei o visitante sobre esta observação</span>
@@ -3055,9 +3078,9 @@
           </div>
         </div>
 
-        <div id="msg-popup-vis" class="msg hidden" style="margin-bottom:10px;"></div>
+        <div id="msg-popup-vis" class="msg hidden" style="margin:8px 0 0; flex-shrink:0;"></div>
 
-        <div style="display:flex; justify-content:flex-end; gap:8px;">
+        <div class="popup-vis-rodape" style="display:flex; justify-content:flex-end; gap:8px;">
           <button type="button" class="secundario" onclick="fecharModalEntradaVisitanteEncontrado()" style="padding:8px 16px; font-size:14px;">Cancelar</button>
           <button type="submit" id="btn-confirmar-popup-vis"
             style="background:var(--verde); color:#fff; font-weight:700; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:14px;">

@@ -1,0 +1,215 @@
+<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="../public/css/style.css"><style>
+    /* Grade de seleção de lote (substitui o datalist nativo) */
+    /* Versão COMPACTA: 7 colunas x 4 linhas (os 28 lotes) + 1 faixa para o Condomínio. */
+    .lote-grade { display: grid; grid-template-columns: repeat(7, 1fr); gap: 5px; margin-top: 8px; }
+    .lote-chip {
+      min-height: 36px; border: 2px solid #cbd5e1; background: #fff; color: #0f172a;
+      border-radius: 8px; font-size: 16px; font-weight: 800; cursor: pointer;
+      display: flex; flex-direction: row; align-items: center; justify-content: center;
+      line-height: 1; padding: 2px; position: relative;
+      transition: background .12s, border-color .12s, transform .08s;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+    }
+    /* O rótulo "LOTE" some nos botões numerados (o título do campo já diz "Lote"). */
+    .lote-chip small { display: none; font-size: 11px; font-weight: 700; color: #64748b; margin-right: 5px; }
+    .lote-chip:hover { border-color: #16a34a; background: #f0fdf4; }
+    .lote-chip:active { transform: scale(.95); }
+    .lote-chip.selecionado { background: #15803d; border-color: #14532d; color: #fff; box-shadow: 0 0 0 2px rgba(22,163,74,.35); }
+    .lote-chip.selecionado small { color: #dcfce7; }
+    .lote-chip.selecionado::after {
+      content: '✓'; position: absolute; top: -6px; right: -5px; width: 16px; height: 16px;
+      background: #fff; color: #15803d; border: 2px solid #15803d; border-radius: 50%;
+      font-size: 10px; font-weight: 900; display: flex; align-items: center; justify-content: center;
+    }
+    /* Botão "Condomínio" (serviços do condomínio): faixa na largura toda, com o rótulo visível */
+    .lote-chip.lote-chip-condominio { grid-column: 1 / -1; font-size: 14px; }
+    .lote-chip.lote-chip-condominio small { display: inline; }
+    .lote-chip.lote-chip-condominio:not(.selecionado) { border-color: #93c5fd; background: #eff6ff; color: #1e3a8a; }
+    .lote-chip.lote-chip-condominio:not(.selecionado):hover { border-color: #2563eb; background: #dbeafe; }
+    .lote-chip.lote-chip-condominio:not(.selecionado) small { color: #1d4ed8; }
+    .lote-status { font-size: 12px; font-weight: 600; margin-top: 6px; min-height: 16px; color: #64748b; }
+    .lote-input-grande { font-size: 18px !important; font-weight: 700 !important; padding: 9px 12px !important; }
+
+    /* Pop-up "Confirmar Entrada de Visitante": cabe na altura da tela.
+       O cabeçalho e os botões ficam fixos; só o meio rola. */
+    .popup-vis-card { max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); display: flex; flex-direction: column; overflow: hidden; }
+    .popup-vis-card form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
+    .popup-vis-corpo { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 2px 3px 6px 0; -webkit-overflow-scrolling: touch; }
+    .popup-vis-rodape { flex-shrink: 0; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 6px; }
+
+    /* Telas baixas (notebooks da portaria): tudo um pouco mais enxuto. */
+    @media (max-height: 800px) {
+      .lote-chip { min-height: 32px; font-size: 15px; }
+      .lote-grade { gap: 4px; margin-top: 6px; }
+      .lote-input-grande { font-size: 16px !important; padding: 6px 10px !important; }
+      .lote-status { margin-top: 4px; min-height: 14px; }
+      .popup-vis-card { padding: 10px 14px !important; }
+    }
+  </style></head>
+<body style="margin:0;background:#64748b"><div id="modal-entrada-visitante-encontrado" 
+    style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
+    <div class="popup-vis-card"
+      style="background:#fff; border-radius:12px; width:100%; max-width:420px; padding:16px 20px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:5px solid var(--verde); box-sizing:border-box;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;">
+        <h3 style="margin:0; font-size:17px; color:var(--verde-escuro); display:flex; align-items:center; gap:6px;">
+          <span>👤</span> Confirmar Entrada de Visitante
+        </h3>
+        <button type="button" onclick="fecharModalEntradaVisitanteEncontrado()"
+          style="background:none; border:none; font-size:22px; line-height:1; padding:0 4px; cursor:pointer; color:#64748b;">&times;</button>
+      </div>
+
+      <!-- Cabeçalho com dados fixos do visitante -->
+      <div style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; flex-shrink:0;">
+        <div style="font-size:15px; font-weight:700; color:#0f172a;" id="popup-vis-nome">-</div>
+        <div style="font-size:12px; color:#475569;" id="popup-vis-doc">-</div>
+      </div>
+
+      <form id="form-popup-visitante-encontrado" onsubmit="confirmarEntradaPopupVisitante(event)">
+       <div class="popup-vis-corpo">
+        <!-- Tipo e Acesso -->
+        <div class="grid grid-2" style="margin-bottom:10px; gap:8px;">
+          <div>
+            <label for="popup-vis-tipo" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Tipo *</label>
+            <select id="popup-vis-tipo" required onchange="togglePopupEndereco()" style="padding:7px 10px; font-size:13px;">
+              <option value="Visitante">Visitante</option>
+              <option value="Prestador">Prestador de serviço</option>
+            </select>
+          </div>
+          <div>
+            <label for="popup-vis-acesso" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Acesso *</label>
+            <select id="popup-vis-acesso" onchange="togglePopupPlaca()" style="padding:7px 10px; font-size:13px;">
+              <option value="carro">🚗 Entrada de carro</option>
+              <option value="pe">🚶 Entrada a pé</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Placa do veículo (visível se acesso === carro) -->
+        <div id="popup-wrap-placa" style="margin-bottom:10px;">
+          <label for="popup-vis-placa" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Placa do veículo *</label>
+          <input type="text" id="popup-vis-placa" placeholder="Ex: ABC1D23" maxlength="8"
+            style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:14px; padding:7px 10px; border:2px solid #cbd5e1; border-radius:6px;" />
+        </div>
+
+        <!-- Lote de destino -->
+        <div style="margin-bottom:10px;">
+          <label for="popup-vis-destino" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Lote de destino *</label>
+          <input type="text" id="popup-vis-destino" class="lote-input-grande" placeholder="Toque no lote abaixo ou digite o número" required
+            autocomplete="off" inputmode="numeric"
+            oninput="aoDigitarLote('popup-vis-destino','grade-lotes-popup','status-lote-popup')"
+            onchange="normalizarLoteDestino(this); aoDigitarLote('popup-vis-destino','grade-lotes-popup','status-lote-popup', true)"
+            style="width:100%; box-sizing:border-box; border:2px solid #3b82f6; border-radius:8px;" />
+          <div id="grade-lotes-popup" class="lote-grade" role="listbox" aria-label="Lotes"></div>
+          <div id="status-lote-popup" class="lote-status" aria-live="polite"></div>
+        </div>
+
+        <!-- Endereço do Prestador REMOVIDO da portaria (só no cadastro do morador).
+             Campos mantidos como hidden para o JS existente não quebrar. -->
+        <div id="popup-area-endereco" class="hidden" style="display:none;">
+          <input type="hidden" id="popup-vis-cep" value="" />
+          <input type="hidden" id="popup-vis-endereco" value="" />
+        </div>
+
+        <!-- TARJA VERMELHA de alerta: observação cadastral do visitante/prestador. -->
+        <div id="popup-vis-alerta-obs"
+          style="background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:12px 14px; margin-bottom:12px; display:flex; align-items:flex-start; gap:10px; box-shadow:0 3px 10px rgba(220,38,38,0.18);">
+          <span style="font-size:24px; line-height:1;">⚠️</span>
+          <div style="min-width:0;">
+            <strong style="display:block; color:#991b1b; font-size:12px; text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px;">Atenção — Observação cadastral</strong>
+            <span id="popup-vis-alerta-obs-texto"
+              style="color:#7f1d1d; font-size:14px; line-height:1.5; font-weight:600; white-space:pre-wrap; display:block;"></span>
+            <label for="popup-vis-avisou"
+              style="display:flex; align-items:flex-start; gap:8px; margin-top:10px; padding-top:10px; border-top:1px dashed #fca5a5; color:#991b1b; font-size:13px; font-weight:700; cursor:pointer;">
+              <input type="checkbox" id="popup-vis-avisou" onchange="atualizarBotaoConfirmarPopupVis()"
+                style="width:18px; height:18px; margin-top:1px; accent-color:#dc2626; cursor:pointer; flex-shrink:0;" />
+              <span>Já avisei o visitante sobre esta observação</span>
+            </label>
+          </div>
+        </div>
+
+       </div><!-- /popup-vis-corpo (a única parte que rola) -->
+
+        <div id="msg-popup-vis" class="msg hidden" style="margin:8px 0 0; flex-shrink:0;"></div>
+
+        <div class="popup-vis-rodape" style="display:flex; justify-content:flex-end; gap:8px;">
+          <button type="button" class="secundario" onclick="fecharModalEntradaVisitanteEncontrado()" style="padding:8px 16px; font-size:14px;">Cancelar</button>
+          <button type="submit" id="btn-confirmar-popup-vis"
+            style="background:var(--verde); color:#fff; font-weight:700; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:14px;">
+            Confirmar entrada
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  
+<script>
+const LOTES_GRADE = Array.from({ length: 28 }, (_, i) => 'Lote ' + String(i + 1).padStart(2, '0'));
+
+    // "Condomínio": destino especial para prestadores que trabalham PARA o condomínio.
+    // Não é um lote e não tem morador: pula a escolha de morador e não avisa moradores.
+    const LOTE_CONDOMINIO = 'Condomínio';
+    function ehDestinoCondominio(valor) {
+      const n = String(valor || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+      return n.length >= 4 && 'condominio'.startsWith(n);
+    }
+    const MORADORES_CACHE_TTL_MS = 5 * 60 * 1000;
+    const moradoresLoteCache = new Map(); // chave do lote -> { promise, ts }
+    const timersLote = {};                // debounce do pré-carregamento ao digitar
+
+    // Busca (ou reaproveita) a lista de moradores de um lote. Devolve uma Promise.
+    function carregarMoradoresLote(lote, forcar = false) {
+      const chave = String(lote || '').trim().toLowerCase();
+      const existente = moradoresLoteCache.get(chave);
+      if (existente && !forcar && (Date.now() - existente.ts) < MORADORES_CACHE_TTL_MS) {
+        return existente.promise;
+      }
+      const promise = api('/api/portaria/moradores?lote=' + encodeURIComponent(lote))
+        .then((r) => (r && r.moradores) || []);
+      const entrada = { promise, ts: Date.now() };
+      moradoresLoteCache.set(chave, entrada);
+      // Se falhar, não deixa o erro preso no cache (a próxima tentativa busca de novo).
+      promise.catch(() => { if (moradoresLoteCache.get(chave) === entrada) moradoresLoteCache.delete(chave); });
+      return promise;
+    }
+
+    // Converte o que foi digitado ("14", "lote 14") para o formato da grade ("Lote 14").
+    function loteDigitadoParaGrade(valor) {
+      if (ehDestinoCondominio(valor)) return LOTE_CONDOMINIO;
+      const limpo = String(valor || '').replace(/lote/gi, '').trim();
+      if (!/^\d{1,2}$/.test(limpo)) return null;
+      const nome = 'Lote ' + String(parseInt(limpo, 10)).padStart(2, '0');
+      return LOTES_GRADE.includes(nome) ? nome : null;
+    }
+
+    // acao (opcional): nome de uma função global chamada logo após escolher o lote
+    // (ex.: abrir o seletor de moradores no fluxo de iFood/encomenda).
+    // opcoes.condominio: acrescenta o botão "Condomínio" ao final da grade.
+    
+function renderGradeLotes(gradeId, inputId, statusId, acao, opcoes = {}) {
+      const grade = document.getElementById(gradeId);
+      if (!grade) return;
+      let html = LOTES_GRADE.map((lote) => {
+        const num = lote.replace(/\D/g, '');
+        return `<button type="button" class="lote-chip" data-lote="${lote}" role="option" aria-selected="false"
+                  aria-label="${lote}" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${lote}','${acao || ''}')">
+                  <small>Lote</small>${num}</button>`;
+      }).join('');
+      if (opcoes.condominio) {
+        html += `<button type="button" class="lote-chip lote-chip-condominio" data-lote="${LOTE_CONDOMINIO}" role="option" aria-selected="false"
+                  aria-label="Serviço do condomínio" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${LOTE_CONDOMINIO}','${acao || ''}')">
+                  <small>🏢 Serviço do</small>Condomínio</button>`;
+      }
+      grade.innerHTML = html;
+    }
+
+    
+renderGradeLotes('grade-lotes-popup','popup-vis-destino','status-lote-popup','',{condominio:true});
+document.getElementById('popup-vis-nome').textContent='WILLIAN';
+document.getElementById('popup-vis-doc').textContent='Documento: 123.456.789-00';
+document.getElementById('popup-vis-destino').value='Lote 07';
+document.querySelector('[data-lote="Lote 07"]').classList.add('selecionado');
+document.getElementById('popup-vis-alerta-obs-texto').textContent="AVISAR QUE NÃO PODE JOGAR SUJEIRA DE PODA NO BOSQUE";
+
+document.getElementById('modal-entrada-visitante-encontrado').style.display='flex';
+</script></body></html>
