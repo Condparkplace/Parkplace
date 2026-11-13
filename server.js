@@ -4193,19 +4193,44 @@ app.post('/api/admin/visitantes/desbloquear', requireAuth, requireRole('admin'),
 
 // Relatorio resumido para o admin
 app.get('/api/admin/resumo', requireAuth, requireRole('admin'), async (req, res) => {
-  const [{ count: totalMoradores }, { count: totalPorteiros }, { count: presentes }, { count: avisosPendentes }] =
-    await Promise.all([
-      supabaseAdmin.from('perfis').select('*', { count: 'exact', head: true }).eq('tipo', 'morador'),
-      supabaseAdmin.from('perfis').select('*', { count: 'exact', head: true }).eq('tipo', 'porteiro'),
-      supabaseAdmin.from('registros_portaria').select('*', { count: 'exact', head: true }).is('saida', null),
-      supabaseAdmin.from('avisos_visitas').select('*', { count: 'exact', head: true }).in('status', ['Pendente', 'Autorizada']),
-    ]);
-  res.json({
-    totalMoradores: totalMoradores || 0,
-    totalPorteiros: totalPorteiros || 0,
-    presentes: presentes || 0,
-    avisosPendentes: avisosPendentes || 0,
-  });
+  try {
+    const [{ count: totalMoradores }, { count: totalPorteiros }, abertos, avisosRes, recsRes] =
+      await Promise.all([
+        supabaseAdmin.from('perfis').select('*', { count: 'exact', head: true }).eq('tipo', 'morador'),
+        supabaseAdmin.from('perfis').select('*', { count: 'exact', head: true }).eq('tipo', 'porteiro'),
+        // Tudo que está sem saída; separamos pessoas x encomendas abaixo.
+        supabaseAdmin.from('registros_portaria').select('nome_pessoa, tipo, observacao').is('saida', null),
+        supabaseAdmin.from('avisos_visitas').select('documento_visitante, data_prevista').in('status', ['Pendente', 'Autorizada']),
+        supabaseAdmin.from('visitas_recorrentes').select('documento_visitante, dias_semana').eq('ativo', true),
+      ]);
+
+    // Mesma regra da aba "No condomínio" da portaria: só PESSOAS (sem encomenda, sem morador).
+    const semSaida = abertos.data || [];
+    const encomendasPendentes = semSaida.filter((r) => r.nome_pessoa === 'Encomenda').length;
+    const presentes = semSaida.filter(
+      (r) => r.nome_pessoa !== 'Encomenda' && r.tipo !== 'Morador' && !(r.observacao || '').includes('[Entrada de Morador]')
+    ).length;
+
+    // Mesma regra da portaria: avisos de HOJE + visitas recorrentes (frequência) do dia da semana de hoje.
+    const avisosHoje = (avisosRes.data || []).filter((a) => ehDoDiaHoje(a.data_prevista));
+    const docsAvisos = new Set(avisosHoje.map((a) => (a.documento_visitante || '').replace(/\D/g, '')).filter(Boolean));
+    const hojeDOW = diaSemanaHojeBR();
+    const recorrentesHoje = (recsRes.data || []).filter((r) => {
+      if (!Array.isArray(r.dias_semana) || !r.dias_semana.includes(hojeDOW)) return false;
+      const d = (r.documento_visitante || '').replace(/\D/g, '');
+      return !(d && docsAvisos.has(d)); // já tem aviso específico hoje: não conta duas vezes
+    }).length;
+
+    res.json({
+      totalMoradores: totalMoradores || 0,
+      totalPorteiros: totalPorteiros || 0,
+      presentes,
+      encomendasPendentes,
+      avisosPendentes: avisosHoje.length + recorrentesHoje,
+    });
+  } catch (error) {
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // Relatório de Sessões / Acessos (só admin).

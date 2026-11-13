@@ -1,4 +1,4 @@
-:root {
+﻿:root {
   --verde: #1f7a4d;
   --verde-escuro: #155c39;
   --verde-claro: #e7f3ec;
@@ -132,8 +132,9 @@ body {
 .grid-2 { grid-template-columns: 1fr 1fr; }
 .grid-3 { grid-template-columns: repeat(3, 1fr); }
 .grid-4 { grid-template-columns: repeat(4, 1fr); }
+.grid-5 { grid-template-columns: repeat(5, 1fr); }
 @media (max-width: 860px) {
-  .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+  .grid-2, .grid-3, .grid-4, .grid-5 { grid-template-columns: 1fr; }
   .container { padding: 0 14px; margin: 16px auto; }
 }
 
@@ -764,7 +765,7 @@ tr:last-child td { border-bottom: none; }
   button.block { padding: 14px; }
 
   /* Cards de resumo (4 indicadores): 2 por linha aproveita melhor o espaço */
-  .grid-4 { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-4, .grid-5 { grid-template-columns: 1fr 1fr; gap: 12px; }
 
   /* ---------- Login / cadastro ---------- */
   .login-card { padding: 26px 20px; }
@@ -792,7 +793,7 @@ tr:last-child td { border-bottom: none; }
   .card { padding: 14px; }
 
   /* Stat cards do painel: 2 por linha em vez de 1, melhor aproveitamento */
-  .grid-4 { grid-template-columns: 1fr 1fr; gap: 12px; }
+  .grid-4, .grid-5 { grid-template-columns: 1fr 1fr; gap: 12px; }
   .stat { padding: 14px 10px; }
   .stat .num { font-size: 24px; }
   .stat .label { font-size: 12px; }

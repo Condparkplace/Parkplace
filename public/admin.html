@@ -1,11 +1,11 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-BR">
 
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Administração - Park Place</title>
-  <link rel="stylesheet" href="/css/style.css?v=4" />
+  <link rel="stylesheet" href="/css/style.css?v=5" />
 </head>
 
 <body>
@@ -21,7 +21,7 @@
 
   <div class="container">
     <!-- Resumo -->
-    <div class="grid grid-4" style="margin-bottom:18px;">
+    <div class="grid grid-5" style="margin-bottom:18px;">
       <div class="stat">
         <div class="num" id="st-moradores">-</div>
         <div class="label">Moradores</div>
@@ -30,13 +30,17 @@
         <div class="num" id="st-porteiros">-</div>
         <div class="label">Porteiros</div>
       </div>
-      <div class="stat">
+      <div class="stat" title="Pessoas dentro do condomínio agora (não conta encomendas)">
         <div class="num" id="st-presentes">-</div>
         <div class="label">No condomínio agora</div>
       </div>
-      <div class="stat">
+      <div class="stat" title="Encomendas na portaria aguardando retirada">
+        <div class="num" id="st-encomendas">-</div>
+        <div class="label">Encomendas pendentes</div>
+      </div>
+      <div class="stat" title="Visitas avisadas para hoje + frequências programadas para hoje">
         <div class="num" id="st-avisos">-</div>
-        <div class="label">Visitas previstas</div>
+        <div class="label">Visitas previstas hoje</div>
       </div>
     </div>
 
@@ -1063,6 +1067,7 @@
         document.getElementById('st-moradores').textContent = r.totalMoradores;
         document.getElementById('st-porteiros').textContent = r.totalPorteiros;
         document.getElementById('st-presentes').textContent = r.presentes;
+        document.getElementById('st-encomendas').textContent = r.encomendasPendentes ?? 0;
         document.getElementById('st-avisos').textContent = r.avisosPendentes;
       } catch (err) {
         console.error(err);
@@ -1499,9 +1504,12 @@
 
       const totalSpan = document.getElementById('total-usuarios-cadastrados');
       if (totalSpan) {
+        // A lista traz TODOS os perfis (moradores, porteiros e administradores).
+        const qtd = (t) => todosUsuarios.filter((u) => u.tipo === t).length;
+        const detalhe = `${qtd('morador')} moradores · ${qtd('porteiro')} porteiros · ${qtd('admin')} admin`;
         totalSpan.textContent = busca
-          ? `${filtrados.length} de ${todosUsuarios.length} morador(es)`
-          : `Total: ${todosUsuarios.length} morador(es)`;
+          ? `${filtrados.length} de ${todosUsuarios.length} usuário(s)`
+          : `Total: ${todosUsuarios.length} usuário(s) (${detalhe})`;
       }
 
       renderizarListaUsuarios(filtrados);
