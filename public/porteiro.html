@@ -690,7 +690,7 @@
       }).join('');
       if (opcoes.condominio) {
         html += `<button type="button" class="lote-chip lote-chip-condominio" data-lote="${LOTE_CONDOMINIO}" role="option" aria-selected="false"
-                  aria-label="Serviço do condomínio" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${LOTE_CONDOMINIO}','${acao || ''}')">
+                  aria-label="Serviço para o condomínio" onclick="escolherLoteNaGrade('${inputId}','${gradeId}','${statusId}','${LOTE_CONDOMINIO}','${acao || ''}')">
                   <small>🏢 Serviço do</small>Condomínio</button>`;
       }
       grade.innerHTML = html;
@@ -3130,7 +3130,7 @@
 
         <div id="msg-popup-vis" class="msg hidden" style="margin:8px 0 0; flex-shrink:0;"></div>
 
-        <div class="popup-vis-rodape" style="display:flex; justify-content:flex-end; gap:8px;">
+        <div class="popup-vis-rodape" style="display:flex; justify-content:center; gap:12px;">
           <button type="button" class="secundario" onclick="fecharModalEntradaVisitanteEncontrado()" style="padding:8px 16px; font-size:14px;">Cancelar</button>
           <button type="submit" id="btn-confirmar-popup-vis"
             style="background:var(--verde); color:#fff; font-weight:700; padding:8px 18px; border-radius:8px; border:none; cursor:pointer; font-size:14px;">
