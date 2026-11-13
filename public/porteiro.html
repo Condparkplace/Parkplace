@@ -45,6 +45,50 @@
     .popup-vis-card form { display: flex; flex-direction: column; flex: 1 1 auto; min-height: 0; }
     .popup-vis-corpo { overflow-y: auto; flex: 1 1 auto; min-height: 0; padding: 2px 3px 6px 0; -webkit-overflow-scrolling: touch; }
     .popup-vis-rodape { flex-shrink: 0; border-top: 1px solid #e2e8f0; padding-top: 10px; margin-top: 6px; }
+    /* A regra global de acessibilidade (style.css) dá 50px de altura mínima aos campos e 10px
+       de margem aos rótulos. Dentro deste pop-up, onde o espaço é curto, reduzimos um pouco. */
+    .popup-vis-card select, .popup-vis-card input[type="text"] { min-height: 40px; }
+    .popup-vis-card label { margin-top: 0; }
+
+    /* Telas LARGAS: pop-up em duas colunas.
+       Esquerda: título, visitante, tipo/acesso e placa.  Direita: lote de destino com a grade.
+       Embaixo (largura toda): aviso de observação (se houver) e botões. */
+    @media (min-width: 820px) {
+      .popup-vis-card {
+        max-width: 900px !important;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr);
+        grid-template-rows: auto auto 1fr auto auto auto;
+        grid-template-areas:
+          "head      dir"
+          "visitante dir"
+          "esq       dir"
+          "tarja     tarja"
+          "msg       msg"
+          "rodape    rodape";
+        column-gap: 28px;
+        overflow-y: auto;
+      }
+      /* O formulário e o miolo "somem" da estrutura: seus filhos entram direto na grade. */
+      .popup-vis-card form, .popup-vis-corpo { display: contents; }
+      .popup-vis-head { grid-area: head; }
+      .popup-vis-visitante { grid-area: visitante; }
+      .popup-vis-esq { grid-area: esq; align-self: start; }
+      .popup-vis-dir { grid-area: dir; align-self: start; }
+      .popup-vis-card #popup-vis-alerta-obs { grid-area: tarja; }
+      .popup-vis-card #msg-popup-vis { grid-area: msg; }
+      .popup-vis-rodape { grid-area: rodape; position: sticky; bottom: 0; background: #fff; }
+      /* Com mais espaço na horizontal, os botões dos lotes podem ser maiores (quase quadrados). */
+      .popup-vis-card .lote-chip { min-height: 46px; font-size: 18px; }
+      .popup-vis-card .lote-chip.lote-chip-condominio { min-height: 40px; font-size: 15px; }
+      .popup-vis-card .lote-grade { gap: 7px; }
+    }
+    /* Wide + muito baixa: volta a compactar os botões. */
+    @media (min-width: 820px) and (max-height: 600px) {
+      .popup-vis-card .lote-chip { min-height: 36px; font-size: 16px; }
+      .popup-vis-card .lote-chip.lote-chip-condominio { min-height: 34px; }
+      .popup-vis-card .lote-grade { gap: 5px; }
+    }
 
     /* Telas baixas (notebooks da portaria): tudo um pouco mais enxuto. */
     @media (max-height: 800px) {
@@ -53,6 +97,8 @@
       .lote-input-grande { font-size: 16px !important; padding: 6px 10px !important; }
       .lote-status { margin-top: 4px; min-height: 14px; }
       .popup-vis-card { padding: 10px 14px !important; }
+      .popup-vis-card select, .popup-vis-card input[type="text"] { min-height: 36px; }
+      .popup-vis-card .lote-input-grande { min-height: 36px; }
     }
   </style>
 </head>
@@ -2998,7 +3044,7 @@
     style="position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(15,23,42,0.6); backdrop-filter:blur(3px); z-index:10000; display:flex; align-items:center; justify-content:center; padding:12px; box-sizing:border-box;">
     <div class="popup-vis-card"
       style="background:#fff; border-radius:12px; width:100%; max-width:420px; padding:16px 20px; box-shadow:0 16px 36px rgba(0,0,0,0.25); border-top:5px solid var(--verde); box-sizing:border-box;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;">
+      <div class="popup-vis-head" style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-shrink:0;">
         <h3 style="margin:0; font-size:17px; color:var(--verde-escuro); display:flex; align-items:center; gap:6px;">
           <span>👤</span> Confirmar Entrada de Visitante
         </h3>
@@ -3007,15 +3053,16 @@
       </div>
 
       <!-- Cabeçalho com dados fixos do visitante -->
-      <div style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; flex-shrink:0;">
+      <div class="popup-vis-visitante" style="background:#f1f5f9; border-radius:8px; padding:8px 12px; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; flex-shrink:0;">
         <div style="font-size:15px; font-weight:700; color:#0f172a;" id="popup-vis-nome">-</div>
         <div style="font-size:12px; color:#475569;" id="popup-vis-doc">-</div>
       </div>
 
       <form id="form-popup-visitante-encontrado" onsubmit="confirmarEntradaPopupVisitante(event)">
        <div class="popup-vis-corpo">
+       <div class="popup-vis-esq"><!-- coluna esquerda: tipo, acesso e placa -->
         <!-- Tipo e Acesso -->
-        <div class="grid grid-2" style="margin-bottom:10px; gap:8px;">
+        <div class="grid grid-2 popup-vis-tipoacesso" style="margin-bottom:10px; gap:8px;">
           <div>
             <label for="popup-vis-tipo" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Tipo *</label>
             <select id="popup-vis-tipo" required onchange="togglePopupEndereco()" style="padding:7px 10px; font-size:13px;">
@@ -3038,11 +3085,13 @@
           <input type="text" id="popup-vis-placa" placeholder="Ex: ABC1D23" maxlength="8"
             style="text-transform:uppercase; width:100%; box-sizing:border-box; font-size:14px; padding:7px 10px; border:2px solid #cbd5e1; border-radius:6px;" />
         </div>
+       </div><!-- /popup-vis-esq -->
 
+       <div class="popup-vis-dir"><!-- coluna direita: lote de destino -->
         <!-- Lote de destino -->
         <div style="margin-bottom:10px;">
           <label for="popup-vis-destino" style="font-size:12px; font-weight:700; color:#1e293b; display:block; margin-bottom:3px;">Lote de destino *</label>
-          <input type="text" id="popup-vis-destino" class="lote-input-grande" placeholder="Toque no lote abaixo ou digite o número" required
+          <input type="text" id="popup-vis-destino" class="lote-input-grande" placeholder="Toque no lote ou digite o número" required
             autocomplete="off" inputmode="numeric"
             oninput="aoDigitarLote('popup-vis-destino','grade-lotes-popup','status-lote-popup')"
             onchange="normalizarLoteDestino(this); aoDigitarLote('popup-vis-destino','grade-lotes-popup','status-lote-popup', true)"
@@ -3057,6 +3106,7 @@
           <input type="hidden" id="popup-vis-cep" value="" />
           <input type="hidden" id="popup-vis-endereco" value="" />
         </div>
+       </div><!-- /popup-vis-dir -->
 
        </div><!-- /popup-vis-corpo (a única parte que rola) -->
 
@@ -3070,9 +3120,9 @@
             <span id="popup-vis-alerta-obs-texto"
               style="color:#7f1d1d; font-size:14px; line-height:1.4; font-weight:600; white-space:pre-wrap; display:block;"></span>
             <label for="popup-vis-avisou"
-              style="display:flex; align-items:flex-start; gap:8px; margin-top:8px; padding-top:8px; border-top:1px dashed #fca5a5; color:#991b1b; font-size:13px; font-weight:700; cursor:pointer;">
+              style="display:flex; align-items:center; gap:8px; margin:8px 0 0; padding-top:8px; border-top:1px dashed #fca5a5; color:#991b1b; font-size:14px; font-weight:700; cursor:pointer;">
               <input type="checkbox" id="popup-vis-avisou" onchange="atualizarBotaoConfirmarPopupVis()"
-                style="width:18px; height:18px; margin-top:1px; accent-color:#dc2626; cursor:pointer; flex-shrink:0;" />
+                style="width:20px; height:20px; min-height:0; padding:0; margin:0; accent-color:#dc2626; cursor:pointer; flex-shrink:0;" />
               <span>Já avisei o visitante sobre esta observação</span>
             </label>
           </div>
